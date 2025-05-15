@@ -1,7 +1,6 @@
 # Azure DevOps CLI
 
 [![Build](https://github.com/christianhelle/azdocli/actions/workflows/build.yml/badge.svg)](https://github.com/christianhelle/azdocli/actions/workflows/build.yml)
-[![PR Verification](https://github.com/christianhelle/azdocli/actions/workflows/pr-verification.yml/badge.svg)](https://github.com/christianhelle/azdocli/actions/workflows/pr-verification.yml)
 [![Security Audit](https://github.com/christianhelle/azdocli/actions/workflows/security-audit.yml/badge.svg)](https://github.com/christianhelle/azdocli/actions/workflows/security-audit.yml)
 
 CLI tool for interacting with Azure DevOps.
