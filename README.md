@@ -10,6 +10,26 @@ CLI tool for interacting with Azure DevOps.
 
 *This section will contain information about the features of the CLI tool as they are developed.*
 
+```sh
+CLI tool for interacting with Azure DevOps
+
+USAGE:
+    azdocli [SUBCOMMAND]
+
+OPTIONS:
+    -h, --help       Print help information
+    -V, --version    Print version information
+
+SUBCOMMANDS:
+    artifacts    Manage Azure DevOps artifacts
+    boards       Manage Azure DevOps boards
+    help         Print this message or the help of the given subcommand(s)
+    login        Login to Azure DevOps with a Personal Access Token (PAT)
+    logout       Logout from Azure DevOps
+    pipelines    Manage Azure DevOps pipelines
+    repos        Manage Azure DevOps repos
+```
+
 ## Installation
 
 *This section will contain information about installation methods once the tool is ready for distribution.*
