@@ -2,5 +2,18 @@
 name = "azdocli"
 version = "0.1.0"
 edition = "2021"
+authors = ["Christian Helle"]
+description = "CLI tool for interacting with Azure DevOps"
 
 [dependencies]
+clap = { version = "3.2", features = ["derive"] }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+anyhow = "1.0"
+dirs = "4.0"
+async-trait = "0.1"
+dialoguer = "0.10"
+colored = "2.0"
+base64 = "0.13"
