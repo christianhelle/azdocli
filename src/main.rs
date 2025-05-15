@@ -4,7 +4,7 @@ mod commands;
 mod utils;
 
 #[derive(Parser)]
-#[clap(author, version, about)]
+#[clap(about, version)]
 struct Cli {
     #[clap(subcommand)]
     command: Option<Commands>,
