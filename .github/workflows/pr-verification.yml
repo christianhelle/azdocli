@@ -1,0 +1,49 @@
+name: PR Verification
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+        
+      - name: Check with clippy
+        run: cargo clippy -- -D warnings
+
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        
+      - name: Build
+        run: cargo build --verbose
+        
+      - name: Run tests
+        run: cargo test --verbose
