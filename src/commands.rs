@@ -1,6 +1,5 @@
 use clap::Subcommand;
 use anyhow::Result;
-use crate::auth;
 
 #[derive(Subcommand, Clone)]
 pub enum SubCommands {
@@ -29,113 +28,17 @@ pub enum SubCommands {
 }
 
 pub async fn handle_pipelines_command(subcommand: &SubCommands) -> Result<()> {
-    // Ensure user is authenticated
-    let credentials = auth::get_credentials()?;
-    match subcommand {
-        SubCommands::Create => {
-            println!("Creating a pipeline...");
-            // Implementation would go here
-        }
-        SubCommands::List => {
-            println!("Listing all pipelines for organization: {}", credentials.organization);
-            // Implementation would go here
-        }
-        SubCommands::Delete { id } => {
-            println!("Deleting pipeline with id: {}", id);
-            // Implementation would go here
-        }
-        SubCommands::Show { id } => {
-            println!("Showing pipeline with id: {}", id);
-            // Implementation would go here
-        }
-        SubCommands::Update { id } => {
-            println!("Updating pipeline with id: {}", id);
-            // Implementation would go here
-        }
-    }
-    Ok(())
+    crate::pipelines::handle_command(subcommand).await
 }
 
 pub async fn handle_boards_command(subcommand: &SubCommands) -> Result<()> {
-    // Ensure user is authenticated
-    let credentials = auth::get_credentials()?;
-    match subcommand {
-        SubCommands::Create => {
-            println!("Creating a board...");
-            // Implementation would go here
-        }
-        SubCommands::List => {
-            println!("Listing all boards for organization: {}", credentials.organization);
-            // Implementation would go here
-        }
-        SubCommands::Delete { id } => {
-            println!("Deleting board with id: {}", id);
-            // Implementation would go here
-        }
-        SubCommands::Show { id } => {
-            println!("Showing board with id: {}", id);
-            // Implementation would go here
-        }
-        SubCommands::Update { id } => {
-            println!("Updating board with id: {}", id);
-            // Implementation would go here
-        }
-    }
-    Ok(())
+    crate::boards::handle_command(subcommand).await
 }
 
 pub async fn handle_repos_command(subcommand: &SubCommands) -> Result<()> {
-    // Ensure user is authenticated
-    let credentials = auth::get_credentials()?;
-    match subcommand {
-        SubCommands::Create => {
-            println!("Creating a repository...");
-            // Implementation would go here
-        }
-        SubCommands::List => {
-            println!("Listing all repos for organization: {}", credentials.organization);
-            // Implementation would go here
-        }
-        SubCommands::Delete { id } => {
-            println!("Deleting repo with id: {}", id);
-            // Implementation would go here
-        }
-        SubCommands::Show { id } => {
-            println!("Showing repo with id: {}", id);
-            // Implementation would go here
-        }
-        SubCommands::Update { id } => {
-            println!("Updating repo with id: {}", id);
-            // Implementation would go here
-        }
-    }
-    Ok(())
+    crate::repos::handle_command(subcommand).await
 }
 
 pub async fn handle_artifacts_command(subcommand: &SubCommands) -> Result<()> {
-    // Ensure user is authenticated
-    let credentials = auth::get_credentials()?;
-    match subcommand {
-        SubCommands::Create => {
-            println!("Creating an artifact...");
-            // Implementation would go here
-        }
-        SubCommands::List => {
-            println!("Listing all artifacts for organization: {}", credentials.organization);
-            // Implementation would go here
-        }
-        SubCommands::Delete { id } => {
-            println!("Deleting artifact with id: {}", id);
-            // Implementation would go here
-        }
-        SubCommands::Show { id } => {
-            println!("Showing artifact with id: {}", id);
-            // Implementation would go here
-        }
-        SubCommands::Update { id } => {
-            println!("Updating artifact with id: {}", id);
-            // Implementation would go here
-        }
-    }
-    Ok(())
+    crate::artifacts::handle_command(subcommand).await
 }

@@ -2,6 +2,10 @@ use clap::{Parser, Subcommand, CommandFactory};
 mod auth;
 mod commands;
 mod utils;
+mod pipelines;
+mod boards;
+mod repos;
+mod artifacts;
 
 #[derive(Parser)]
 #[clap(about, version)]
