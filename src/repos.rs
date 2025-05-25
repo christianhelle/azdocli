@@ -1,47 +1,45 @@
 use crate::auth;
-use crate::commands::SubCommands;
+use crate::commands::ReposSubCommands;
 use anyhow::Result;
 use azure_devops_rust_api::git::{self, ClientBuilder};
 
-pub async fn handle_command(subcommand: &SubCommands) -> Result<()> {
+pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
     // Ensure user is authenticated
-    let credentials = auth::get_credentials()?;
-    match subcommand {
-        SubCommands::Create => {
-            println!("Creating a repository...");
+    let credentials = auth::get_credentials()?;    match subcommand {
+        ReposSubCommands::Create { project } => {
+            println!("Creating a repository in project: {}", project);
             // Implementation would go here
         }
-        SubCommands::List => {
+        ReposSubCommands::List { project } => {
             println!(
-                "Listing all repos for organization: {}",
-                credentials.organization
+                "Listing all repos for organization: {}, project: {}",
+                credentials.organization, project
             );
 
-            let repos = list_repos().await?;
+            let repos = list_repos(project).await?;
             println!("{} repos found", repos.len());
         }
-        SubCommands::Delete { id } => {
-            println!("Deleting repo with id: {}", id);
+        ReposSubCommands::Delete { id, project } => {
+            println!("Deleting repo with id: {} in project: {}", id, project);
             // Implementation would go here
         }
-        SubCommands::Show { id } => {
-            println!("Showing repo with id: {}", id);
+        ReposSubCommands::Show { id, project } => {
+            println!("Showing repo with id: {} in project: {}", id, project);
             // Implementation would go here
         }
-        SubCommands::Update { id } => {
-            println!("Updating repo with id: {}", id);
+        ReposSubCommands::Update { id, project } => {
+            println!("Updating repo with id: {} in project: {}", id, project);
             // Implementation would go here
         }
     }
     Ok(())
 }
 
-async fn list_repos() -> Result<Vec<git::models::GitRepository>, anyhow::Error> {
+async fn list_repos(project: &str) -> Result<Vec<git::models::GitRepository>, anyhow::Error> {
     let result = auth::get_credentials();
     let creds = result.unwrap();
     let organization = creds.organization;
     let pat = creds.pat;
-    let project = "[team project name]";
     let credential = azure_devops_rust_api::Credential::Pat(pat);
     let repos = ClientBuilder::new(credential)
         .build()

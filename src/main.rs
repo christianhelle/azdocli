@@ -29,11 +29,10 @@ enum Commands {
     Boards {
         #[clap(subcommand)]
         subcommand: commands::SubCommands,
-    },
-    /// Manage Azure DevOps repos
+    },    /// Manage Azure DevOps repos
     Repos {
         #[clap(subcommand)]
-        subcommand: commands::SubCommands,
+        subcommand: commands::ReposSubCommands,
     },
     /// Manage Azure DevOps artifacts
     Artifacts {
