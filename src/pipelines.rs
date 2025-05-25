@@ -4,8 +4,7 @@ use crate::commands::SubCommands;
 
 pub async fn handle_command(subcommand: &SubCommands) -> Result<()> {
     // Ensure user is authenticated
-    let credentials = auth::get_credentials()?;
-    match subcommand {
+    let credentials = auth::get_credentials()?;    match subcommand {
         SubCommands::Create => {
             println!("Creating a pipeline...");
             // Implementation would go here
