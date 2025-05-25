@@ -1,10 +1,10 @@
 use anyhow::{anyhow, Result};
+use colored::Colorize;
 use dialoguer::{Input, Password};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
-use colored::Colorize;
 use std::io::Write;
+use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Credentials {
@@ -28,13 +28,13 @@ fn get_config_dir() -> Result<PathBuf> {
 fn save_organization(organization: &str) -> Result<()> {
     let config_dir = get_config_dir()?;
     let config_file = config_dir.join("config.json");
-    
+
     let config = serde_json::json!({
         "organization": organization
     });
 
     fs::write(config_file, serde_json::to_string_pretty(&config)?)?;
-    
+
     Ok(())
 }
 
@@ -42,18 +42,21 @@ fn save_organization(organization: &str) -> Result<()> {
 fn get_organization() -> Result<String> {
     let config_dir = get_config_dir()?;
     let config_file = config_dir.join("config.json");
-    
+
     if !config_file.exists() {
-        return Err(anyhow!("Not logged in. Please login first with 'azdocli login'"));
+        return Err(anyhow!(
+            "Not logged in. Please login first with 'azdocli login'"
+        ));
     }
-    
+
     let config_content = fs::read_to_string(config_file)?;
     let config: serde_json::Value = serde_json::from_str(&config_content)?;
-    
-    let organization = config["organization"].as_str()
+
+    let organization = config["organization"]
+        .as_str()
         .ok_or_else(|| anyhow!("Invalid config file format"))?
         .to_string();
-    
+
     Ok(organization)
 }
 
@@ -69,13 +72,13 @@ fn save_pat(pat: &str) -> Result<()> {
         organization: get_organization()?,
         pat: pat.to_string(),
     };
-    
+
     let creds_path = get_credentials_file_path()?;
     let credentials_json = serde_json::to_string_pretty(&credentials)?;
-    
+
     let mut file = std::fs::File::create(&creds_path)?;
     file.write_all(credentials_json.as_bytes())?;
-    
+
     // Set restrictive permissions on the file
     #[cfg(unix)]
     {
@@ -84,27 +87,29 @@ fn save_pat(pat: &str) -> Result<()> {
         perms.set_mode(0o600); // Read/write for owner only
         fs::set_permissions(&creds_path, perms)?;
     }
-    
+
     Ok(())
 }
 
 // Retrieves the PAT from the file
 fn get_pat() -> Result<String> {
     let creds_path = get_credentials_file_path()?;
-    
+
     if !creds_path.exists() {
-        return Err(anyhow!("Not logged in. Please login first with 'azdocli login'"));
+        return Err(anyhow!(
+            "Not logged in. Please login first with 'azdocli login'"
+        ));
     }
-    
+
     let credentials_json = fs::read_to_string(creds_path)?;
     let credentials: Credentials = serde_json::from_str(&credentials_json)?;
-    
+
     Ok(credentials.pat)
 }
 
 // Logs in with a PAT
 pub async fn login() -> Result<()> {
-    println!("{}","Login to Azure DevOps".bold());
+    println!("{}", "Login to Azure DevOps".bold());
 
     let organization: String = Input::new()
         .with_prompt("Azure DevOps organization name")
@@ -132,14 +137,15 @@ pub async fn login() -> Result<()> {
 pub fn logout() -> Result<()> {
     let config_dir = get_config_dir()?;
     let config_file = config_dir.join("config.json");
-    
+
     if config_file.exists() {
         fs::remove_file(config_file)?;
-    }    let creds_path = get_credentials_file_path()?;
+    }
+    let creds_path = get_credentials_file_path()?;
     if creds_path.exists() {
         fs::remove_file(creds_path)?;
     }
-    
+
     println!("{}", "Logged out successfully".green());
     Ok(())
 }
@@ -148,6 +154,6 @@ pub fn logout() -> Result<()> {
 pub fn get_credentials() -> Result<Credentials> {
     let organization = get_organization()?;
     let pat = get_pat()?;
-    
+
     Ok(Credentials { organization, pat })
 }

@@ -1,11 +1,11 @@
-use clap::{Parser, Subcommand, CommandFactory};
-mod auth;
-mod commands;
-mod utils;
-mod pipelines;
-mod boards;
-mod repos;
+use clap::{CommandFactory, Parser, Subcommand};
 mod artifacts;
+mod auth;
+mod boards;
+mod commands;
+mod pipelines;
+mod repos;
+mod utils;
 
 #[derive(Parser)]
 #[clap(about, version)]
