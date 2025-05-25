@@ -5,7 +5,6 @@ mod boards;
 mod commands;
 mod pipelines;
 mod repos;
-mod utils;
 
 #[derive(Parser)]
 #[clap(about, version)]
