@@ -5,7 +5,6 @@ use azure_devops_rust_api::git::{self, ClientBuilder};
 
 pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
     // Ensure user is authenticated
-    let credentials = auth::get_credentials()?;
     match subcommand {
         ReposSubCommands::Create { project } => {
             println!("Creating a repository in project: {}", project);
