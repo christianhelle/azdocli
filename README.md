@@ -7,13 +7,15 @@ CLI tool for interacting with Azure DevOps.
 
 ## Features
 
-- **Repository Management**: List, create, update, delete, and clone repositories
+- **Repository Management**: List, create, update, delete, clone, and view repositories
 - **Pipeline Management**: Manage Azure DevOps pipelines
 - **Board Management**: Manage Azure DevOps boards  
 - **Artifact Management**: Manage Azure DevOps artifacts
 - **Authentication**: Secure login using Personal Access Tokens (PAT)
 
-### Repository Clone Feature
+### Repository Management Features
+
+#### Repository Clone Feature
 
 The `repos clone` command allows you to clone all repositories from an Azure DevOps project:
 
@@ -37,7 +39,8 @@ azdocli repos clone --project MyProject --parallel --concurrency 6
 azdocli repos clone --project MyProject --target-dir ./repos --yes --parallel --concurrency 8
 ```
 
-**Features:**
+**Clone Features:**
+
 - **Bulk cloning**: Clone all repositories from a project with a single command
 - **Target directory**: Specify where to clone repositories (defaults to current directory)
 - **Confirmation prompts**: Interactive confirmation with repository listing before cloning
@@ -46,6 +49,23 @@ azdocli repos clone --project MyProject --target-dir ./repos --yes --parallel --
 - **Concurrency control**: Adjust the number of concurrent operations with `--concurrency` (1-8)
 - **Error handling**: Comprehensive error reporting for failed clones
 - **Progress tracking**: Real-time feedback on clone operations
+
+#### Repository Show Feature
+
+The `repos show` command displays detailed information about a specific repository:
+
+```sh
+# Show details of a repository by name
+azdocli repos show --id MyRepository --project MyProject
+```
+
+**Show Features:**
+
+- **Comprehensive details**: View repository name, ID, URLs, size, and metadata
+- **User-friendly formatting**: Emoji icons and formatted output for better readability
+- **Clone URLs**: Display both HTTPS and SSH clone URLs
+- **File size formatting**: Automatic conversion to KB/MB for better readability
+- **Error handling**: Helpful error messages with suggestions when repository not found
 
 ```sh
 CLI tool for interacting with Azure DevOps
