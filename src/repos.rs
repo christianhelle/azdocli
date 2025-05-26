@@ -11,10 +11,6 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
             // Implementation would go here
         }
         ReposSubCommands::List { project } => {
-            println!(
-                "Listing all repos for organization: {}, project: {}",
-                credentials.organization, project
-            );
             let repos = list_repos(project).await?;
             for repo in repos.iter() {
                 println!("{}", repo.name);
