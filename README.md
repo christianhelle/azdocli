@@ -26,7 +26,26 @@ azdocli repos clone --project MyProject --target-dir ./repos
 
 # Skip confirmation prompt (useful for automation)
 azdocli repos clone --project MyProject --yes
+
+# Clone repositories in parallel for faster execution
+azdocli repos clone --project MyProject --parallel
+
+# Control the number of concurrent clone operations (default: 4, max: 8)
+azdocli repos clone --project MyProject --parallel --concurrency 6
+
+# Combine all options for maximum efficiency
+azdocli repos clone --project MyProject --target-dir ./repos --yes --parallel --concurrency 8
 ```
+
+**Features:**
+- **Bulk cloning**: Clone all repositories from a project with a single command
+- **Target directory**: Specify where to clone repositories (defaults to current directory)
+- **Confirmation prompts**: Interactive confirmation with repository listing before cloning
+- **Automation support**: Skip prompts with `--yes` flag for CI/CD scenarios
+- **Parallel execution**: Use `--parallel` flag to clone multiple repositories simultaneously
+- **Concurrency control**: Adjust the number of concurrent operations with `--concurrency` (1-8)
+- **Error handling**: Comprehensive error reporting for failed clones
+- **Progress tracking**: Real-time feedback on clone operations
 
 ```sh
 CLI tool for interacting with Azure DevOps
