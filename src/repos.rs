@@ -99,10 +99,16 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
         ReposSubCommands::Delete { id, project } => {
             println!("Deleting repo with id: {} in project: {}", id, project);
             // Implementation would go here
-        }
-        ReposSubCommands::Show { id, project } => {
-            println!("Showing repo with id: {} in project: {}", id, project);
-            // Implementation would go here
+        }        ReposSubCommands::Show { id, project } => {
+            match get_repo(project, id).await {
+                Ok(repo) => {
+                    display_repo_details(&repo);
+                }
+                Err(e) => {
+                    println!("Error: {}", e);
+                    return Err(e);
+                }
+            }
         }
         ReposSubCommands::Update { id, project } => {
             println!("Updating repo with id: {} in project: {}", id, project);
@@ -117,8 +123,8 @@ async fn list_repos(project: &str) -> Result<Vec<git::models::GitRepository>, an
     match auth::get_credentials() {
         Ok(creds) => {
             let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
-            Ok(ClientBuilder::new(credential)
-                .build()
+            let client = ClientBuilder::new(credential).build();
+            Ok(client
                 .repositories_client()
                 .list(creds.organization, project)
                 .await?
@@ -128,6 +134,67 @@ async fn list_repos(project: &str) -> Result<Vec<git::models::GitRepository>, an
             println!("Unable to retrieve repositories");
             Err(e)
         }
+    }
+}
+
+/// Retrieves a single Git repository by ID from a specified Azure DevOps project
+///
+/// # Arguments
+/// * `project` - The name of the Azure DevOps project
+/// * `repository_id` - The ID of the repository to retrieve
+///
+/// # Returns
+/// * `Result<git::models::GitRepository>` - The repository details or error
+async fn get_repo(project: &str, repository_id: &str) -> Result<git::models::GitRepository> {
+    let repos = list_repos(project).await?;
+    
+    // Find the repository by name (since ID type is unclear, we'll match by name which is always a String)
+    let repo = repos.iter().find(|repo| repo.name == repository_id);
+
+    match repo {
+        Some(repo) => Ok(repo.clone()),
+        None => Err(anyhow::anyhow!("Repository '{}' not found in project '{}'", repository_id, project))
+    }
+}
+
+/// Displays detailed information about a repository
+///
+/// # Arguments
+/// * `repo` - The GitRepository object to display
+fn display_repo_details(repo: &git::models::GitRepository) {
+    println!("Repository Details:");
+    println!("==================");
+    println!("Name: {}", repo.name);
+    println!("ID: {}", repo.id);
+    
+    if let Some(url) = &repo.web_url {
+        println!("Web URL: {}", url);
+    }
+    
+    if let Some(remote_url) = &repo.remote_url {
+        println!("Remote URL (HTTPS): {}", remote_url);
+    }
+    
+    if let Some(ssh_url) = &repo.ssh_url {
+        println!("Clone URL (SSH): {}", ssh_url);
+    }
+    
+    if let Some(size) = &repo.size {
+        println!("Size: {} bytes", size);
+    }
+    
+    if let Some(default_branch) = &repo.default_branch {
+        println!("Default Branch: {}", default_branch);
+    }
+    
+    println!("Project: {}", repo.project.name);
+    
+    if let Some(is_fork) = repo.is_fork {
+        println!("Is Fork: {}", is_fork);
+    }
+    
+    if let Some(is_disabled) = repo.is_disabled {
+        println!("Is Disabled: {}", is_disabled);
     }
 }
 
