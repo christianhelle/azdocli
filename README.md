@@ -7,7 +7,26 @@ CLI tool for interacting with Azure DevOps.
 
 ## Features
 
-*This section will contain information about the features of the CLI tool as they are developed.*
+- **Repository Management**: List, create, update, delete, and clone repositories
+- **Pipeline Management**: Manage Azure DevOps pipelines
+- **Board Management**: Manage Azure DevOps boards  
+- **Artifact Management**: Manage Azure DevOps artifacts
+- **Authentication**: Secure login using Personal Access Tokens (PAT)
+
+### Repository Clone Feature
+
+The `repos clone` command allows you to clone all repositories from an Azure DevOps project:
+
+```sh
+# Clone all repositories from a project (with confirmation prompt)
+azdocli repos clone --project MyProject
+
+# Clone to a specific directory
+azdocli repos clone --project MyProject --target-dir ./repos
+
+# Skip confirmation prompt (useful for automation)
+azdocli repos clone --project MyProject --yes
+```
 
 ```sh
 CLI tool for interacting with Azure DevOps
