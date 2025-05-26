@@ -17,8 +17,7 @@ pub enum ReposSubCommands {
         /// Team project name
         #[clap(short, long)]
         project: String,
-    },
-    /// Clone all repositories from a project
+    },    /// Clone all repositories from a project
     Clone {
         /// Team project name
         #[clap(short, long)]
@@ -26,6 +25,9 @@ pub enum ReposSubCommands {
         /// Target directory to clone repositories into (optional, defaults to current directory)
         #[clap(short, long)]
         target_dir: Option<String>,
+        /// Skip confirmation prompt and proceed directly
+        #[clap(short = 'y', long)]
+        yes: bool,
     },
     /// Delete a repository
     Delete {
@@ -68,9 +70,8 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
             for repo in repos.iter() {
                 println!("{}", repo.name);
             }
-        }
-        ReposSubCommands::Clone { project, target_dir } => {
-            clone_all_repos(project, target_dir.as_deref()).await?;
+        }        ReposSubCommands::Clone { project, target_dir, yes } => {
+            clone_all_repos(project, target_dir.as_deref(), *yes).await?;
         }
         ReposSubCommands::Delete { id, project } => {
             println!("Deleting repo with id: {} in project: {}", id, project);
@@ -106,7 +107,7 @@ async fn list_repos(project: &str) -> Result<Vec<git::models::GitRepository>, an
     }
 }
 
-async fn clone_all_repos(project: &str, target_dir: Option<&str>) -> Result<()> {
+async fn clone_all_repos(project: &str, target_dir: Option<&str>, skip_confirmation: bool) -> Result<()> {
     let repos = list_repos(project).await?;
     let target_directory = target_dir.unwrap_or(".");
     
@@ -126,14 +127,18 @@ async fn clone_all_repos(project: &str, target_dir: Option<&str>) -> Result<()> 
         }
     }
     
-    // Ask for confirmation
-    if !Confirm::new()
-        .with_prompt("Do you want to proceed with cloning all repositories?")
-        .default(false)
-        .interact()?
-    {
-        println!("Clone operation cancelled.");
-        return Ok(());
+    // Ask for confirmation unless skipped
+    if !skip_confirmation {
+        if !Confirm::new()
+            .with_prompt("Do you want to proceed with cloning all repositories?")
+            .default(false)
+            .interact()?
+        {
+            println!("Clone operation cancelled.");
+            return Ok(());
+        }
+    } else {
+        println!("\nProceeding with clone operation (confirmation skipped)...");
     }
     
     // Create target directory if it doesn't exist
