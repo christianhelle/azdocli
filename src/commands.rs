@@ -1,8 +1,6 @@
 use clap::Subcommand;
 use anyhow::Result;
 
-use crate::pipelines::PipelinesSubCommands;
-
 #[derive(Subcommand, Clone)]
 pub enum SubCommands {
     /// Create a new resource
