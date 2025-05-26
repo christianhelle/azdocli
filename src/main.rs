@@ -22,13 +22,14 @@ enum Commands {
     /// Manage Azure DevOps pipelines
     Pipelines {
         #[clap(subcommand)]
-        subcommand: commands::SubCommands,
+        subcommand: pipelines::PipelinesSubCommands,
     },
     /// Manage Azure DevOps boards
     Boards {
         #[clap(subcommand)]
         subcommand: commands::SubCommands,
-    },    /// Manage Azure DevOps repos
+    },
+    /// Manage Azure DevOps repos
     Repos {
         #[clap(subcommand)]
         subcommand: repos::ReposSubCommands,
@@ -52,11 +53,12 @@ async fn main() -> anyhow::Result<()> {
             auth::logout()?;
         }
         Some(Commands::Pipelines { subcommand }) => {
-            commands::handle_pipelines_command(subcommand).await?;
+            pipelines::handle_command(subcommand).await?;
         }
         Some(Commands::Boards { subcommand }) => {
             commands::handle_boards_command(subcommand).await?;
-        }        Some(Commands::Repos { subcommand }) => {
+        }
+        Some(Commands::Repos { subcommand }) => {
             repos::handle_command(subcommand).await?;
         }
         Some(Commands::Artifacts { subcommand }) => {
