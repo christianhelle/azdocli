@@ -89,6 +89,7 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
     Ok(())
 }
 
+/// Retrieves a list of Git repositories from a specified Azure DevOps project
 async fn list_repos(project: &str) -> Result<Vec<git::models::GitRepository>, anyhow::Error> {
     match auth::get_credentials() {
         Ok(creds) => {
@@ -107,6 +108,15 @@ async fn list_repos(project: &str) -> Result<Vec<git::models::GitRepository>, an
     }
 }
 
+/// Clones all repositories from a specified Azure DevOps project to a target directory
+/// 
+/// # Arguments
+/// * `project` - The name of the Azure DevOps project
+/// * `target_dir` - Optional target directory (defaults to current directory)
+/// * `skip_confirmation` - Whether to skip the confirmation prompt
+/// 
+/// # Returns
+/// * `Result<()>` - Success or error result
 async fn clone_all_repos(project: &str, target_dir: Option<&str>, skip_confirmation: bool) -> Result<()> {
     let repos = list_repos(project).await?;
     let target_directory = target_dir.unwrap_or(".");
