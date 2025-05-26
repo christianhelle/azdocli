@@ -31,7 +31,7 @@ enum Commands {
     },    /// Manage Azure DevOps repos
     Repos {
         #[clap(subcommand)]
-        subcommand: commands::ReposSubCommands,
+        subcommand: repos::ReposSubCommands,
     },
     /// Manage Azure DevOps artifacts
     Artifacts {
@@ -56,9 +56,8 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Boards { subcommand }) => {
             commands::handle_boards_command(subcommand).await?;
-        }
-        Some(Commands::Repos { subcommand }) => {
-            commands::handle_repos_command(subcommand).await?;
+        }        Some(Commands::Repos { subcommand }) => {
+            repos::handle_command(subcommand).await?;
         }
         Some(Commands::Artifacts { subcommand }) => {
             commands::handle_artifacts_command(subcommand).await?;
