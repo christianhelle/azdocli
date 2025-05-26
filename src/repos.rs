@@ -105,7 +105,8 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
                     display_repo_details(&repo);
                 }
                 Err(e) => {
-                    println!("Error: {}", e);
+                    eprintln!("❌ Failed to retrieve repository '{}' from project '{}'", id, project);
+                    eprintln!("   {}", e);
                     return Err(e);
                 }
             }
@@ -146,14 +147,27 @@ async fn list_repos(project: &str) -> Result<Vec<git::models::GitRepository>, an
 /// # Returns
 /// * `Result<git::models::GitRepository>` - The repository details or error
 async fn get_repo(project: &str, repository_id: &str) -> Result<git::models::GitRepository> {
-    let repos = list_repos(project).await?;
+    let repos = match list_repos(project).await {
+        Ok(repos) => repos,
+        Err(e) => {
+            return Err(anyhow::anyhow!("Failed to list repositories in project '{}': {}", project, e));
+        }
+    };
     
     // Find the repository by name (since ID type is unclear, we'll match by name which is always a String)
     let repo = repos.iter().find(|repo| repo.name == repository_id);
 
     match repo {
         Some(repo) => Ok(repo.clone()),
-        None => Err(anyhow::anyhow!("Repository '{}' not found in project '{}'", repository_id, project))
+        None => {
+            let available_repos: Vec<&str> = repos.iter().map(|r| r.name.as_str()).collect();
+            if available_repos.is_empty() {
+                Err(anyhow::anyhow!("No repositories found in project '{}'", project))
+            } else {
+                Err(anyhow::anyhow!("Repository '{}' not found in project '{}'. Available repositories: {}", 
+                    repository_id, project, available_repos.join(", ")))
+            }
+        }
     }
 }
 
@@ -162,39 +176,45 @@ async fn get_repo(project: &str, repository_id: &str) -> Result<git::models::Git
 /// # Arguments
 /// * `repo` - The GitRepository object to display
 fn display_repo_details(repo: &git::models::GitRepository) {
-    println!("Repository Details:");
-    println!("==================");
-    println!("Name: {}", repo.name);
-    println!("ID: {}", repo.id);
+    println!("📋 Repository Details");
+    println!("=====================");
+    println!("📁 Name: {}", repo.name);
+    println!("🆔 ID: {}", repo.id);
     
     if let Some(url) = &repo.web_url {
-        println!("Web URL: {}", url);
+        println!("🌐 Web URL: {}", url);
     }
     
     if let Some(remote_url) = &repo.remote_url {
-        println!("Remote URL (HTTPS): {}", remote_url);
+        println!("🔗 Remote URL (HTTPS): {}", remote_url);
     }
     
     if let Some(ssh_url) = &repo.ssh_url {
-        println!("Clone URL (SSH): {}", ssh_url);
+        println!("🔑 Clone URL (SSH): {}", ssh_url);
     }
     
     if let Some(size) = &repo.size {
-        println!("Size: {} bytes", size);
+        let size_kb = *size as f64 / 1024.0;
+        let size_mb = size_kb / 1024.0;
+        if size_mb >= 1.0 {
+            println!("📦 Size: {:.2} MB ({} bytes)", size_mb, size);
+        } else {
+            println!("📦 Size: {:.2} KB ({} bytes)", size_kb, size);
+        }
     }
     
     if let Some(default_branch) = &repo.default_branch {
-        println!("Default Branch: {}", default_branch);
+        println!("🌿 Default Branch: {}", default_branch);
     }
     
-    println!("Project: {}", repo.project.name);
+    println!("🎯 Project: {}", repo.project.name);
     
     if let Some(is_fork) = repo.is_fork {
-        println!("Is Fork: {}", is_fork);
+        println!("🍴 Is Fork: {}", if is_fork { "Yes" } else { "No" });
     }
     
     if let Some(is_disabled) = repo.is_disabled {
-        println!("Is Disabled: {}", is_disabled);
+        println!("⚠️  Is Disabled: {}", if is_disabled { "Yes" } else { "No" });
     }
 }
 
