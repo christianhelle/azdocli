@@ -99,18 +99,20 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
         ReposSubCommands::Delete { id, project } => {
             println!("Deleting repo with id: {} in project: {}", id, project);
             // Implementation would go here
-        }        ReposSubCommands::Show { id, project } => {
-            match get_repo(project, id).await {
-                Ok(repo) => {
-                    display_repo_details(&repo);
-                }
-                Err(e) => {
-                    eprintln!("❌ Failed to retrieve repository '{}' from project '{}'", id, project);
-                    eprintln!("   {}", e);
-                    return Err(e);
-                }
-            }
         }
+        ReposSubCommands::Show { id, project } => match get_repo(project, id).await {
+            Ok(repo) => {
+                display_repo_details(&repo);
+            }
+            Err(e) => {
+                eprintln!(
+                    "❌ Failed to retrieve repository '{}' from project '{}'",
+                    id, project
+                );
+                eprintln!("   {}", e);
+                return Err(e);
+            }
+        },
         ReposSubCommands::Update { id, project } => {
             println!("Updating repo with id: {} in project: {}", id, project);
             // Implementation would go here
@@ -150,10 +152,14 @@ async fn get_repo(project: &str, repository_id: &str) -> Result<git::models::Git
     let repos = match list_repos(project).await {
         Ok(repos) => repos,
         Err(e) => {
-            return Err(anyhow::anyhow!("Failed to list repositories in project '{}': {}", project, e));
+            return Err(anyhow::anyhow!(
+                "Failed to list repositories in project '{}': {}",
+                project,
+                e
+            ));
         }
     };
-    
+
     // Find the repository by name (since ID type is unclear, we'll match by name which is always a String)
     let repo = repos.iter().find(|repo| repo.name == repository_id);
 
@@ -162,10 +168,17 @@ async fn get_repo(project: &str, repository_id: &str) -> Result<git::models::Git
         None => {
             let available_repos: Vec<&str> = repos.iter().map(|r| r.name.as_str()).collect();
             if available_repos.is_empty() {
-                Err(anyhow::anyhow!("No repositories found in project '{}'", project))
+                Err(anyhow::anyhow!(
+                    "No repositories found in project '{}'",
+                    project
+                ))
             } else {
-                Err(anyhow::anyhow!("Repository '{}' not found in project '{}'. Available repositories: {}", 
-                    repository_id, project, available_repos.join(", ")))
+                Err(anyhow::anyhow!(
+                    "Repository '{}' not found in project '{}'. Available repositories: {}",
+                    repository_id,
+                    project,
+                    available_repos.join(", ")
+                ))
             }
         }
     }
@@ -180,19 +193,19 @@ fn display_repo_details(repo: &git::models::GitRepository) {
     println!("=====================");
     println!("📁 Name: {}", repo.name);
     println!("🆔 ID: {}", repo.id);
-    
+
     if let Some(url) = &repo.web_url {
         println!("🌐 Web URL: {}", url);
     }
-    
+
     if let Some(remote_url) = &repo.remote_url {
         println!("🔗 Remote URL (HTTPS): {}", remote_url);
     }
-    
+
     if let Some(ssh_url) = &repo.ssh_url {
         println!("🔑 Clone URL (SSH): {}", ssh_url);
     }
-    
+
     if let Some(size) = &repo.size {
         let size_kb = *size as f64 / 1024.0;
         let size_mb = size_kb / 1024.0;
@@ -202,19 +215,22 @@ fn display_repo_details(repo: &git::models::GitRepository) {
             println!("📦 Size: {:.2} KB ({} bytes)", size_kb, size);
         }
     }
-    
+
     if let Some(default_branch) = &repo.default_branch {
         println!("🌿 Default Branch: {}", default_branch);
     }
-    
+
     println!("🎯 Project: {}", repo.project.name);
-    
+
     if let Some(is_fork) = repo.is_fork {
         println!("🍴 Is Fork: {}", if is_fork { "Yes" } else { "No" });
     }
-    
+
     if let Some(is_disabled) = repo.is_disabled {
-        println!("⚠️  Is Disabled: {}", if is_disabled { "Yes" } else { "No" });
+        println!(
+            "⚠️  Is Disabled: {}",
+            if is_disabled { "Yes" } else { "No" }
+        );
     }
 }
 
