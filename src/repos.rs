@@ -2,6 +2,7 @@ use crate::auth;
 use anyhow::Result;
 use azure_devops_rust_api::git::{self, ClientBuilder};
 use clap::Subcommand;
+use dialoguer::Confirm;
 
 #[derive(Subcommand, Clone)]
 pub enum ReposSubCommands {
@@ -115,7 +116,25 @@ async fn clone_all_repos(project: &str, target_dir: Option<&str>) -> Result<()> 
     }
     
     println!("Found {} repositories in project '{}'", repos.len(), project);
-    println!("Cloning repositories to directory: {}", target_directory);
+    println!("Target directory: {}", target_directory);
+    println!("\nRepositories to clone:");
+    for repo in repos.iter() {
+        if let Some(ssh_url) = &repo.ssh_url {
+            println!("  • {} ({})", repo.name, ssh_url);
+        } else {
+            println!("  • {} (⚠ No SSH URL)", repo.name);
+        }
+    }
+    
+    // Ask for confirmation
+    if !Confirm::new()
+        .with_prompt("Do you want to proceed with cloning all repositories?")
+        .default(false)
+        .interact()?
+    {
+        println!("Clone operation cancelled.");
+        return Ok(());
+    }
     
     // Create target directory if it doesn't exist
     if target_directory != "." {
@@ -124,6 +143,8 @@ async fn clone_all_repos(project: &str, target_dir: Option<&str>) -> Result<()> 
     
     let mut success_count = 0;
     let mut failed_count = 0;
+    
+    println!("\nStarting clone operations...");
     
     for repo in repos.iter() {
         if let Some(ssh_url) = &repo.ssh_url {
@@ -160,7 +181,7 @@ async fn clone_all_repos(project: &str, target_dir: Option<&str>) -> Result<()> 
                 }
             }
         } else {
-            println!("⚠ No SSH URL available for repository: {}", repo.name);
+            println!("⚠ Skipping {} (No SSH URL available)", repo.name);
             failed_count += 1;
         }
     }
@@ -168,7 +189,7 @@ async fn clone_all_repos(project: &str, target_dir: Option<&str>) -> Result<()> 
     println!("\nCloning completed:");
     println!("  ✓ Successfully cloned: {}", success_count);
     if failed_count > 0 {
-        println!("  ✗ Failed to clone: {}", failed_count);
+        println!("  ✗ Failed/Skipped: {}", failed_count);
     }
     
     Ok(())
