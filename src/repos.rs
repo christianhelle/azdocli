@@ -3,6 +3,8 @@ use anyhow::Result;
 use azure_devops_rust_api::git::{self, ClientBuilder};
 use clap::Subcommand;
 use dialoguer::Confirm;
+use std::sync::Arc;
+use tokio::sync::Semaphore;
 
 #[derive(Subcommand, Clone)]
 pub enum ReposSubCommands {
@@ -28,6 +30,9 @@ pub enum ReposSubCommands {
         /// Skip confirmation prompt and proceed directly
         #[clap(short = 'y', long)]
         yes: bool,
+        /// Clone repositories in parallel for faster execution
+        #[clap(short = 'j', long)]
+        parallel: bool,
     },
     /// Delete a repository
     Delete {
@@ -70,8 +75,8 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
             for repo in repos.iter() {
                 println!("{}", repo.name);
             }
-        }        ReposSubCommands::Clone { project, target_dir, yes } => {
-            clone_all_repos(project, target_dir.as_deref(), *yes).await?;
+        }        ReposSubCommands::Clone { project, target_dir, yes, parallel } => {
+            clone_all_repos(project, target_dir.as_deref(), *yes, *parallel).await?;
         }
         ReposSubCommands::Delete { id, project } => {
             println!("Deleting repo with id: {} in project: {}", id, project);
@@ -114,10 +119,11 @@ async fn list_repos(project: &str) -> Result<Vec<git::models::GitRepository>, an
 /// * `project` - The name of the Azure DevOps project
 /// * `target_dir` - Optional target directory (defaults to current directory)
 /// * `skip_confirmation` - Whether to skip the confirmation prompt
+/// * `parallel` - Whether to clone repositories in parallel
 /// 
 /// # Returns
 /// * `Result<()>` - Success or error result
-async fn clone_all_repos(project: &str, target_dir: Option<&str>, skip_confirmation: bool) -> Result<()> {
+async fn clone_all_repos(project: &str, target_dir: Option<&str>, skip_confirmation: bool, parallel: bool) -> Result<()> {
     let repos = list_repos(project).await?;
     let target_directory = target_dir.unwrap_or(".");
     
@@ -155,49 +161,66 @@ async fn clone_all_repos(project: &str, target_dir: Option<&str>, skip_confirmat
     if target_directory != "." {
         std::fs::create_dir_all(target_directory)?;
     }
-    
-    let mut success_count = 0;
+      let mut success_count = 0;
     let mut failed_count = 0;
     
-    println!("\nStarting clone operations...");
+    println!("\nStarting clone operations{}...", if parallel { " (parallel)" } else { "" });
     
-    for repo in repos.iter() {
-        if let Some(ssh_url) = &repo.ssh_url {
-            println!("Cloning repository: {} from {}", repo.name, ssh_url);
-            
-            let target_path = if target_directory == "." {
-                repo.name.clone()
-            } else {
-                format!("{}/{}", target_directory, repo.name)
-            };
-            
-            let output = std::process::Command::new("git")
-                .args(&["clone", ssh_url, &target_path])
-                .output();
-                
-            match output {
-                Ok(output) => {
-                    if output.status.success() {
-                        println!("✓ Successfully cloned {}", repo.name);
-                        success_count += 1;
-                    } else {
-                        let error = String::from_utf8_lossy(&output.stderr);
-                        println!("✗ Failed to clone {}: {}", repo.name, error.trim());
-                        failed_count += 1;
-                    }
+    if parallel {
+        // Parallel cloning implementation
+        let results = clone_repos_parallel(&repos, target_directory).await;
+        for result in results {
+            match result {
+                Ok(repo_name) => {
+                    println!("✓ Successfully cloned {}", repo_name);
+                    success_count += 1;
                 }
                 Err(e) => {
-                    println!("✗ Failed to execute git command for {}: {}", repo.name, e);
-                    if e.kind() == std::io::ErrorKind::NotFound {
-                        println!("  Git command not found. Please ensure Git is installed and in your PATH.");
-                        return Err(anyhow::anyhow!("Git command not found"));
-                    }
+                    println!("✗ {}", e);
                     failed_count += 1;
                 }
             }
-        } else {
-            println!("⚠ Skipping {} (No SSH URL available)", repo.name);
-            failed_count += 1;
+        }
+    } else {
+        // Sequential cloning implementation (existing logic)
+        for repo in repos.iter() {
+            if let Some(ssh_url) = &repo.ssh_url {
+                println!("Cloning repository: {} from {}", repo.name, ssh_url);
+                
+                let target_path = if target_directory == "." {
+                    repo.name.clone()
+                } else {
+                    format!("{}/{}", target_directory, repo.name)
+                };
+                
+                let output = std::process::Command::new("git")
+                    .args(&["clone", ssh_url, &target_path])
+                    .output();
+                    
+                match output {
+                    Ok(output) => {
+                        if output.status.success() {
+                            println!("✓ Successfully cloned {}", repo.name);
+                            success_count += 1;
+                        } else {
+                            let error = String::from_utf8_lossy(&output.stderr);
+                            println!("✗ Failed to clone {}: {}", repo.name, error.trim());
+                            failed_count += 1;
+                        }
+                    }
+                    Err(e) => {
+                        println!("✗ Failed to execute git command for {}: {}", repo.name, e);
+                        if e.kind() == std::io::ErrorKind::NotFound {
+                            println!("  Git command not found. Please ensure Git is installed and in your PATH.");
+                            return Err(anyhow::anyhow!("Git command not found"));
+                        }
+                        failed_count += 1;
+                    }
+                }
+            } else {
+                println!("⚠ Skipping {} (No SSH URL available)", repo.name);
+                failed_count += 1;
+            }
         }
     }
     
@@ -208,4 +231,79 @@ async fn clone_all_repos(project: &str, target_dir: Option<&str>, skip_confirmat
     }
     
     Ok(())
+}
+
+/// Clones repositories in parallel using tokio tasks
+/// 
+/// # Arguments
+/// * `repos` - Vector of GitRepository objects to clone
+/// * `target_directory` - Target directory for cloning
+/// 
+/// # Returns
+/// * `Vec<Result<String, String>>` - Results for each clone operation
+async fn clone_repos_parallel(repos: &[git::models::GitRepository], target_directory: &str) -> Vec<Result<String, String>> {
+    let semaphore = Arc::new(Semaphore::new(4)); // Limit to 4 concurrent clones
+    let mut tasks = Vec::new();
+    
+    for repo in repos {
+        if let Some(ssh_url) = &repo.ssh_url {
+            let repo_name = repo.name.clone();
+            let ssh_url = ssh_url.clone();
+            let target_path = if target_directory == "." {
+                repo_name.clone()
+            } else {
+                format!("{}/{}", target_directory, repo_name)
+            };
+            let semaphore = semaphore.clone();
+            
+            let task = tokio::spawn(async move {
+                let _permit = semaphore.acquire().await.unwrap();
+                
+                println!("Cloning repository: {} from {}", repo_name, ssh_url);
+                
+                let output = tokio::process::Command::new("git")
+                    .args(&["clone", &ssh_url, &target_path])
+                    .output()
+                    .await;
+                
+                match output {
+                    Ok(output) => {
+                        if output.status.success() {
+                            Ok(repo_name)
+                        } else {
+                            let error = String::from_utf8_lossy(&output.stderr);
+                            Err(format!("Failed to clone {}: {}", repo_name, error.trim()))
+                        }
+                    }
+                    Err(e) => {
+                        if e.kind() == std::io::ErrorKind::NotFound {
+                            Err(format!("Git command not found while cloning {}", repo_name))
+                        } else {
+                            Err(format!("Failed to execute git command for {}: {}", repo_name, e))
+                        }
+                    }
+                }
+            });
+            
+            tasks.push(task);
+        } else {
+            // For repos without SSH URLs, create a task that immediately returns an error
+            let repo_name = repo.name.clone();
+            let task = tokio::spawn(async move {
+                Err(format!("Skipping {} (No SSH URL available)", repo_name))
+            });
+            tasks.push(task);
+        }
+    }
+    
+    // Wait for all tasks to complete
+    let mut results = Vec::new();
+    for task in tasks {
+        match task.await {
+            Ok(result) => results.push(result),
+            Err(e) => results.push(Err(format!("Task failed: {}", e))),
+        }
+    }
+    
+    results
 }
