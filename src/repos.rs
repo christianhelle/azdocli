@@ -109,25 +109,66 @@ async fn clone_all_repos(project: &str, target_dir: Option<&str>) -> Result<()> 
     let repos = list_repos(project).await?;
     let target_directory = target_dir.unwrap_or(".");
     
+    if repos.is_empty() {
+        println!("No repositories found in project '{}'", project);
+        return Ok(());
+    }
+    
     println!("Found {} repositories in project '{}'", repos.len(), project);
     println!("Cloning repositories to directory: {}", target_directory);
     
+    // Create target directory if it doesn't exist
+    if target_directory != "." {
+        std::fs::create_dir_all(target_directory)?;
+    }
+    
+    let mut success_count = 0;
+    let mut failed_count = 0;
+    
     for repo in repos.iter() {
         if let Some(ssh_url) = &repo.ssh_url {
-            println!("Cloning repository: {}", repo.name);
-            let output = std::process::Command::new("git")
-                .args(&["clone", ssh_url, &format!("{}/{}", target_directory, repo.name)])
-                .output()?;
-                
-            if output.status.success() {
-                println!("✓ Successfully cloned {}", repo.name);
+            println!("Cloning repository: {} from {}", repo.name, ssh_url);
+            
+            let target_path = if target_directory == "." {
+                repo.name.clone()
             } else {
-                let error = String::from_utf8_lossy(&output.stderr);
-                println!("✗ Failed to clone {}: {}", repo.name, error);
+                format!("{}/{}", target_directory, repo.name)
+            };
+            
+            let output = std::process::Command::new("git")
+                .args(&["clone", ssh_url, &target_path])
+                .output();
+                
+            match output {
+                Ok(output) => {
+                    if output.status.success() {
+                        println!("✓ Successfully cloned {}", repo.name);
+                        success_count += 1;
+                    } else {
+                        let error = String::from_utf8_lossy(&output.stderr);
+                        println!("✗ Failed to clone {}: {}", repo.name, error.trim());
+                        failed_count += 1;
+                    }
+                }
+                Err(e) => {
+                    println!("✗ Failed to execute git command for {}: {}", repo.name, e);
+                    if e.kind() == std::io::ErrorKind::NotFound {
+                        println!("  Git command not found. Please ensure Git is installed and in your PATH.");
+                        return Err(anyhow::anyhow!("Git command not found"));
+                    }
+                    failed_count += 1;
+                }
             }
         } else {
             println!("⚠ No SSH URL available for repository: {}", repo.name);
+            failed_count += 1;
         }
+    }
+    
+    println!("\nCloning completed:");
+    println!("  ✓ Successfully cloned: {}", success_count);
+    if failed_count > 0 {
+        println!("  ✗ Failed to clone: {}", failed_count);
     }
     
     Ok(())
