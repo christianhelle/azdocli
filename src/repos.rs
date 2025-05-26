@@ -2,7 +2,6 @@ use crate::auth;
 use anyhow::Result;
 use azure_devops_rust_api::git::{self, ClientBuilder};
 use clap::Subcommand;
-use std::process::Command;
 
 #[derive(Subcommand, Clone)]
 pub enum ReposSubCommands {
@@ -116,7 +115,7 @@ async fn clone_all_repos(project: &str, target_dir: Option<&str>) -> Result<()> 
     for repo in repos.iter() {
         if let Some(ssh_url) = &repo.ssh_url {
             println!("Cloning repository: {}", repo.name);
-            let output = Command::new("git")
+            let output = std::process::Command::new("git")
                 .args(&["clone", ssh_url, &format!("{}/{}", target_directory, repo.name)])
                 .output()?;
                 
@@ -131,23 +130,5 @@ async fn clone_all_repos(project: &str, target_dir: Option<&str>) -> Result<()> 
         }
     }
     
-    Ok(())
-}
-
-async fn clone_all_repos(
-    project: &str,
-    target_dir: Option<&str>,
-) -> Result<(), anyhow::Error> {
-    let repos = list_repos(project).await?;
-    for repo in repos {
-        let repo_name = &repo.name;
-        let repo_url = &repo.remote_url;
-        let target = match target_dir {
-            Some(dir) => format!("{}/{}", dir, repo_name),
-            None => repo_name.clone(),
-        };
-        println!("Cloning {} into {}", repo_url, target);
-        // Here you would add the actual git clone command, e.g., using std::process::Command
-    }
     Ok(())
 }
