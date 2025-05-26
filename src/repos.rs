@@ -33,6 +33,9 @@ pub enum ReposSubCommands {
         /// Clone repositories in parallel for faster execution
         #[clap(short = 'j', long)]
         parallel: bool,
+        /// Number of concurrent clone operations (default: 4, max: 8)
+        #[clap(long, default_value = "4")]
+        concurrency: usize,
     },
     /// Delete a repository
     Delete {
@@ -75,8 +78,8 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
             for repo in repos.iter() {
                 println!("{}", repo.name);
             }
-        }        ReposSubCommands::Clone { project, target_dir, yes, parallel } => {
-            clone_all_repos(project, target_dir.as_deref(), *yes, *parallel).await?;
+        }        ReposSubCommands::Clone { project, target_dir, yes, parallel, concurrency } => {
+            clone_all_repos(project, target_dir.as_deref(), *yes, *parallel, *concurrency).await?;
         }
         ReposSubCommands::Delete { id, project } => {
             println!("Deleting repo with id: {} in project: {}", id, project);
@@ -120,10 +123,11 @@ async fn list_repos(project: &str) -> Result<Vec<git::models::GitRepository>, an
 /// * `target_dir` - Optional target directory (defaults to current directory)
 /// * `skip_confirmation` - Whether to skip the confirmation prompt
 /// * `parallel` - Whether to clone repositories in parallel
+/// * `concurrency` - Number of concurrent operations (only used if parallel is true)
 /// 
 /// # Returns
 /// * `Result<()>` - Success or error result
-async fn clone_all_repos(project: &str, target_dir: Option<&str>, skip_confirmation: bool, parallel: bool) -> Result<()> {
+async fn clone_all_repos(project: &str, target_dir: Option<&str>, skip_confirmation: bool, parallel: bool, concurrency: usize) -> Result<()> {
     let repos = list_repos(project).await?;
     let target_directory = target_dir.unwrap_or(".");
     
@@ -164,11 +168,21 @@ async fn clone_all_repos(project: &str, target_dir: Option<&str>, skip_confirmat
       let mut success_count = 0;
     let mut failed_count = 0;
     
-    println!("\nStarting clone operations{}...", if parallel { " (parallel)" } else { "" });
-    
-    if parallel {
+    println!("\nStarting clone operations{}...", if parallel { " (parallel)" } else { "" });    if parallel {
+        // Validate concurrency level
+        let concurrency_level = if concurrency > 8 {
+            println!("Warning: Concurrency level {} exceeds maximum of 8. Using 8 instead.", concurrency);
+            8
+        } else if concurrency < 1 {
+            println!("Warning: Concurrency level {} is invalid. Using 1 instead.", concurrency);
+            1
+        } else {
+            concurrency
+        };
+        
         // Parallel cloning implementation
-        let results = clone_repos_parallel(&repos, target_directory).await;
+        println!("Starting {} repositories in parallel (max {} concurrent)...", repos.len(), concurrency_level);
+        let results = clone_repos_parallel(&repos, target_directory, concurrency_level).await;
         for result in results {
             match result {
                 Ok(repo_name) => {
@@ -238,11 +252,12 @@ async fn clone_all_repos(project: &str, target_dir: Option<&str>, skip_confirmat
 /// # Arguments
 /// * `repos` - Vector of GitRepository objects to clone
 /// * `target_directory` - Target directory for cloning
+/// * `concurrency` - Number of concurrent clone operations
 /// 
 /// # Returns
 /// * `Vec<Result<String, String>>` - Results for each clone operation
-async fn clone_repos_parallel(repos: &[git::models::GitRepository], target_directory: &str) -> Vec<Result<String, String>> {
-    let semaphore = Arc::new(Semaphore::new(4)); // Limit to 4 concurrent clones
+async fn clone_repos_parallel(repos: &[git::models::GitRepository], target_directory: &str, concurrency: usize) -> Vec<Result<String, String>> {
+    let semaphore = Arc::new(Semaphore::new(concurrency)); // Use provided concurrency level
     let mut tasks = Vec::new();
     
     for repo in repos {
