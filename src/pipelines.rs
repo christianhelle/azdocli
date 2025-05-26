@@ -1,30 +1,50 @@
 use anyhow::Result;
-use crate::auth;
-use crate::commands::SubCommands;
+use clap::Subcommand;
 
-pub async fn handle_command(subcommand: &SubCommands) -> Result<()> {
-    // Ensure user is authenticated
-    let credentials = auth::get_credentials()?;    match subcommand {
-        SubCommands::Create => {
-            println!("Creating a pipeline...");
-            // Implementation would go here
+#[derive(Subcommand, Clone)]
+pub enum PipelinesSubCommands {
+    /// List all repositories
+    List {
+        /// Team project name
+        #[clap(short, long)]
+        project: String,
+    },
+    /// Show details of a repository
+    Show {
+        /// ID of the repository to show
+        #[clap(short, long)]
+        id: String,
+        /// Team project name
+        #[clap(short, long)]
+        project: String,
+    },
+    /// Update a repository
+    Run {
+        /// ID of the repository to update
+        #[clap(short, long)]
+        id: String,
+        /// Team project name
+        #[clap(short, long)]
+        project: String,
+    },
+}
+
+pub async fn handle_pipelines_command(subcommand: &PipelinesSubCommands) -> Result<()> {
+    crate::pipelines::handle_command(subcommand).await
+}
+
+pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
+    match subcommand {
+        PipelinesSubCommands::List { project } => {
+            // Call the function to list pipelines
         }
-        SubCommands::List => {
-            println!("Listing all pipelines for organization: {}", credentials.organization);
-            // Implementation would go here
+        PipelinesSubCommands::Show { id, project } => {
+            // Call the function to show pipeline details
         }
-        SubCommands::Delete { id } => {
-            println!("Deleting pipeline with id: {}", id);
-            // Implementation would go here
-        }
-        SubCommands::Show { id } => {
-            println!("Showing pipeline with id: {}", id);
-            // Implementation would go here
-        }
-        SubCommands::Update { id } => {
-            println!("Updating pipeline with id: {}", id);
-            // Implementation would go here
+        PipelinesSubCommands::Run { id, project } => {
+            // Call the function to run a pipeline
         }
     }
+
     Ok(())
 }

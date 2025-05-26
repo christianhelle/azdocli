@@ -1,6 +1,8 @@
 use clap::Subcommand;
 use anyhow::Result;
 
+use crate::pipelines::PipelinesSubCommands;
+
 #[derive(Subcommand, Clone)]
 pub enum SubCommands {
     /// Create a new resource
@@ -25,10 +27,6 @@ pub enum SubCommands {
         #[clap(short, long)]
         id: String,
     },
-}
-
-pub async fn handle_pipelines_command(subcommand: &SubCommands) -> Result<()> {
-    crate::pipelines::handle_command(subcommand).await
 }
 
 pub async fn handle_boards_command(subcommand: &SubCommands) -> Result<()> {
