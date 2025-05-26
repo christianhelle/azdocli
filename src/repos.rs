@@ -19,7 +19,8 @@ pub enum ReposSubCommands {
         /// Team project name
         #[clap(short, long)]
         project: String,
-    },    /// Clone all repositories from a project
+    },
+    /// Clone all repositories from a project
     Clone {
         /// Team project name
         #[clap(short, long)]
@@ -78,8 +79,22 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
             for repo in repos.iter() {
                 println!("{}", repo.name);
             }
-        }        ReposSubCommands::Clone { project, target_dir, yes, parallel, concurrency } => {
-            clone_all_repos(project, target_dir.as_deref(), *yes, *parallel, *concurrency).await?;
+        }
+        ReposSubCommands::Clone {
+            project,
+            target_dir,
+            yes,
+            parallel,
+            concurrency,
+        } => {
+            clone_all_repos(
+                project,
+                target_dir.as_deref(),
+                *yes,
+                *parallel,
+                *concurrency,
+            )
+            .await?;
         }
         ReposSubCommands::Delete { id, project } => {
             println!("Deleting repo with id: {} in project: {}", id, project);
@@ -117,26 +132,36 @@ async fn list_repos(project: &str) -> Result<Vec<git::models::GitRepository>, an
 }
 
 /// Clones all repositories from a specified Azure DevOps project to a target directory
-/// 
+///
 /// # Arguments
 /// * `project` - The name of the Azure DevOps project
 /// * `target_dir` - Optional target directory (defaults to current directory)
 /// * `skip_confirmation` - Whether to skip the confirmation prompt
 /// * `parallel` - Whether to clone repositories in parallel
 /// * `concurrency` - Number of concurrent operations (only used if parallel is true)
-/// 
+///
 /// # Returns
 /// * `Result<()>` - Success or error result
-async fn clone_all_repos(project: &str, target_dir: Option<&str>, skip_confirmation: bool, parallel: bool, concurrency: usize) -> Result<()> {
+async fn clone_all_repos(
+    project: &str,
+    target_dir: Option<&str>,
+    skip_confirmation: bool,
+    parallel: bool,
+    concurrency: usize,
+) -> Result<()> {
     let repos = list_repos(project).await?;
     let target_directory = target_dir.unwrap_or(".");
-    
+
     if repos.is_empty() {
         println!("No repositories found in project '{}'", project);
         return Ok(());
     }
-    
-    println!("Found {} repositories in project '{}'", repos.len(), project);
+
+    println!(
+        "Found {} repositories in project '{}'",
+        repos.len(),
+        project
+    );
     println!("Target directory: {}", target_directory);
     println!("\nRepositories to clone:");
     for repo in repos.iter() {
@@ -146,7 +171,7 @@ async fn clone_all_repos(project: &str, target_dir: Option<&str>, skip_confirmat
             println!("  • {} (⚠ No SSH URL)", repo.name);
         }
     }
-    
+
     // Ask for confirmation unless skipped
     if !skip_confirmation {
         if !Confirm::new()
@@ -160,28 +185,42 @@ async fn clone_all_repos(project: &str, target_dir: Option<&str>, skip_confirmat
     } else {
         println!("\nProceeding with clone operation (confirmation skipped)...");
     }
-    
+
     // Create target directory if it doesn't exist
     if target_directory != "." {
         std::fs::create_dir_all(target_directory)?;
     }
-      let mut success_count = 0;
+    let mut success_count = 0;
     let mut failed_count = 0;
-    
-    println!("\nStarting clone operations{}...", if parallel { " (parallel)" } else { "" });    if parallel {
+
+    println!(
+        "\nStarting clone operations{}...",
+        if parallel { " (parallel)" } else { "" }
+    );
+    if parallel {
         // Validate concurrency level
         let concurrency_level = if concurrency > 8 {
-            println!("Warning: Concurrency level {} exceeds maximum of 8. Using 8 instead.", concurrency);
+            println!(
+                "Warning: Concurrency level {} exceeds maximum of 8. Using 8 instead.",
+                concurrency
+            );
             8
         } else if concurrency < 1 {
-            println!("Warning: Concurrency level {} is invalid. Using 1 instead.", concurrency);
+            println!(
+                "Warning: Concurrency level {} is invalid. Using 1 instead.",
+                concurrency
+            );
             1
         } else {
             concurrency
         };
-        
+
         // Parallel cloning implementation
-        println!("Starting {} repositories in parallel (max {} concurrent)...", repos.len(), concurrency_level);
+        println!(
+            "Starting {} repositories in parallel (max {} concurrent)...",
+            repos.len(),
+            concurrency_level
+        );
         let results = clone_repos_parallel(&repos, target_directory, concurrency_level).await;
         for result in results {
             match result {
@@ -200,17 +239,17 @@ async fn clone_all_repos(project: &str, target_dir: Option<&str>, skip_confirmat
         for repo in repos.iter() {
             if let Some(ssh_url) = &repo.ssh_url {
                 println!("Cloning repository: {} from {}", repo.name, ssh_url);
-                
+
                 let target_path = if target_directory == "." {
                     repo.name.clone()
                 } else {
                     format!("{}/{}", target_directory, repo.name)
                 };
-                
+
                 let output = std::process::Command::new("git")
                     .args(&["clone", ssh_url, &target_path])
                     .output();
-                    
+
                 match output {
                     Ok(output) => {
                         if output.status.success() {
@@ -237,29 +276,33 @@ async fn clone_all_repos(project: &str, target_dir: Option<&str>, skip_confirmat
             }
         }
     }
-    
+
     println!("\nCloning completed:");
     println!("  ✓ Successfully cloned: {}", success_count);
     if failed_count > 0 {
         println!("  ✗ Failed/Skipped: {}", failed_count);
     }
-    
+
     Ok(())
 }
 
 /// Clones repositories in parallel using tokio tasks
-/// 
+///
 /// # Arguments
 /// * `repos` - Vector of GitRepository objects to clone
 /// * `target_directory` - Target directory for cloning
 /// * `concurrency` - Number of concurrent clone operations
-/// 
+///
 /// # Returns
 /// * `Vec<Result<String, String>>` - Results for each clone operation
-async fn clone_repos_parallel(repos: &[git::models::GitRepository], target_directory: &str, concurrency: usize) -> Vec<Result<String, String>> {
+async fn clone_repos_parallel(
+    repos: &[git::models::GitRepository],
+    target_directory: &str,
+    concurrency: usize,
+) -> Vec<Result<String, String>> {
     let semaphore = Arc::new(Semaphore::new(concurrency)); // Use provided concurrency level
     let mut tasks = Vec::new();
-    
+
     for repo in repos {
         if let Some(ssh_url) = &repo.ssh_url {
             let repo_name = repo.name.clone();
@@ -270,17 +313,17 @@ async fn clone_repos_parallel(repos: &[git::models::GitRepository], target_direc
                 format!("{}/{}", target_directory, repo_name)
             };
             let semaphore = semaphore.clone();
-            
+
             let task = tokio::spawn(async move {
                 let _permit = semaphore.acquire().await.unwrap();
-                
+
                 println!("Cloning repository: {} from {}", repo_name, ssh_url);
-                
+
                 let output = tokio::process::Command::new("git")
                     .args(&["clone", &ssh_url, &target_path])
                     .output()
                     .await;
-                
+
                 match output {
                     Ok(output) => {
                         if output.status.success() {
@@ -294,12 +337,15 @@ async fn clone_repos_parallel(repos: &[git::models::GitRepository], target_direc
                         if e.kind() == std::io::ErrorKind::NotFound {
                             Err(format!("Git command not found while cloning {}", repo_name))
                         } else {
-                            Err(format!("Failed to execute git command for {}: {}", repo_name, e))
+                            Err(format!(
+                                "Failed to execute git command for {}: {}",
+                                repo_name, e
+                            ))
                         }
                     }
                 }
             });
-            
+
             tasks.push(task);
         } else {
             // For repos without SSH URLs, create a task that immediately returns an error
@@ -310,7 +356,7 @@ async fn clone_repos_parallel(repos: &[git::models::GitRepository], target_direc
             tasks.push(task);
         }
     }
-    
+
     // Wait for all tasks to complete
     let mut results = Vec::new();
     for task in tasks {
@@ -319,6 +365,6 @@ async fn clone_repos_parallel(repos: &[git::models::GitRepository], target_direc
             Err(e) => results.push(Err(format!("Task failed: {}", e))),
         }
     }
-    
+
     results
 }
