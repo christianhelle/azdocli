@@ -1,7 +1,50 @@
 use crate::auth;
-use crate::commands::ReposSubCommands;
 use anyhow::Result;
 use azure_devops_rust_api::git::{self, ClientBuilder};
+use clap::Subcommand;
+
+#[derive(Subcommand, Clone)]
+pub enum ReposSubCommands {
+    /// Create a new repository
+    Create {
+        /// Team project name
+        #[clap(short, long)]
+        project: String,
+    },
+    /// List all repositories
+    List {
+        /// Team project name
+        #[clap(short, long)]
+        project: String,
+    },
+    /// Delete a repository
+    Delete {
+        /// ID of the repository to delete
+        #[clap(short, long)]
+        id: String,
+        /// Team project name
+        #[clap(short, long)]
+        project: String,
+    },
+    /// Show details of a repository
+    Show {
+        /// ID of the repository to show
+        #[clap(short, long)]
+        id: String,
+        /// Team project name
+        #[clap(short, long)]
+        project: String,
+    },
+    /// Update a repository
+    Update {
+        /// ID of the repository to update
+        #[clap(short, long)]
+        id: String,
+        /// Team project name
+        #[clap(short, long)]
+        project: String,
+    },
+}
 
 pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
     // Ensure user is authenticated
