@@ -3,24 +3,33 @@ use clap::Subcommand;
 
 #[derive(Subcommand, Clone)]
 pub enum PipelinesSubCommands {
-    /// List all repositories
+    /// List all pipelines in a project
     List {
         /// Team project name
         #[clap(short, long)]
         project: String,
     },
-    /// Show details of a repository
-    Show {
-        /// ID of the repository to show
+    /// Show builds of a pipeline
+    Runs {
+        /// ID of the pipeline to show runs for
         #[clap(short, long)]
         id: String,
         /// Team project name
         #[clap(short, long)]
         project: String,
     },
-    /// Update a repository
+    /// Show details of a pipeline
+    Show {
+        /// ID of the pipeline to show
+        #[clap(short, long)]
+        id: String,
+        /// Team project name
+        #[clap(short, long)]
+        project: String,
+    },
+    /// Run a pipeline
     Run {
-        /// ID of the repository to update
+        /// ID of the pipeline to start
         #[clap(short, long)]
         id: String,
         /// Team project name
@@ -38,10 +47,13 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
         PipelinesSubCommands::List { project } => {
             // Call the function to list pipelines
         }
-        PipelinesSubCommands::Show { id, project } => {
+        PipelinesSubCommands::Runs { id, project } => {
             // Call the function to show pipeline details
         }
         PipelinesSubCommands::Run { id, project } => {
+            // Call the function to run a pipeline
+        }
+        PipelinesSubCommands::Show { id, project } => {
             // Call the function to run a pipeline
         }
     }
