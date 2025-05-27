@@ -1,16 +1,20 @@
-use anyhow::Result;
 use crate::auth;
 use crate::commands::SubCommands;
+use anyhow::Result;
 
 pub async fn handle_command(subcommand: &SubCommands) -> Result<()> {
     // Ensure user is authenticated
-    let credentials = auth::get_credentials()?;    match subcommand {
+    let credentials = auth::get_credentials()?;
+    match subcommand {
         SubCommands::Create => {
             println!("Creating a board...");
             // Implementation would go here
         }
         SubCommands::List => {
-            println!("Listing all boards for organization: {}", credentials.organization);
+            println!(
+                "Listing all boards for organization: {}",
+                credentials.organization
+            );
             // Implementation would go here
         }
         SubCommands::Delete { id } => {
