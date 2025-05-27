@@ -1,8 +1,8 @@
+use crate::auth;
 use anyhow::{anyhow, Result};
-use azure_devops_rust_api::pipelines::{self, ClientBuilder, models};
+use azure_devops_rust_api::pipelines::{self, models, ClientBuilder};
 use clap::Subcommand;
 use colored::Colorize;
-use crate::auth;
 
 #[derive(Subcommand, Clone)]
 pub enum PipelinesSubCommands {
@@ -44,10 +44,6 @@ pub enum PipelinesSubCommands {
     },
 }
 
-pub async fn handle_pipelines_command(subcommand: &PipelinesSubCommands) -> Result<()> {
-    crate::pipelines::handle_command(subcommand).await
-}
-
 /// Creates a pipelines client for Azure DevOps API
 fn create_client() -> Result<pipelines::Client> {
     match auth::get_credentials() {
@@ -83,9 +79,10 @@ async fn get_pipeline_runs(project: &str, pipeline_id: &str) -> Result<Vec<model
     match auth::get_credentials() {
         Ok(creds) => {
             let client = create_client()?;
-            let pipeline_id_int = pipeline_id.parse::<i32>()
+            let pipeline_id_int = pipeline_id
+                .parse::<i32>()
                 .map_err(|_| anyhow!("Invalid pipeline ID, must be a number"))?;
-            
+
             Ok(client
                 .runs_client()
                 .list(creds.organization, project, pipeline_id_int)
@@ -104,16 +101,18 @@ async fn get_build(project: &str, pipeline_id: &str, build_id: &str) -> Result<m
     match auth::get_credentials() {
         Ok(creds) => {
             let client = create_client()?;
-            let pipeline_id_int = pipeline_id.parse::<i32>()
+            let pipeline_id_int = pipeline_id
+                .parse::<i32>()
                 .map_err(|_| anyhow!("Invalid pipeline ID, must be a number"))?;
-            let build_id_int = build_id.parse::<i32>()
+            let build_id_int = build_id
+                .parse::<i32>()
                 .map_err(|_| anyhow!("Invalid build ID, must be a number"))?;
-            
+
             let run = client
                 .runs_client()
                 .get(creds.organization, project, pipeline_id_int, build_id_int)
                 .await?;
-            
+
             Ok(run)
         }
         Err(e) => {
@@ -135,16 +134,13 @@ fn display_pipelines(pipelines: &[models::Pipeline]) {
         println!("No pipelines found.");
         return;
     }
-    
+
     println!("{:<10} {:<40}", "ID".bold(), "Name".bold());
     println!("{}", "-".repeat(50));
-    
+
     for pipeline in pipelines {
         // Use debug format for now
-        println!("{:<10} {:<40}", 
-            pipeline.id,
-            format!("{:?}", pipeline.name)
-        );
+        println!("{:<10} {:<40}", pipeline.id, format!("{:?}", pipeline.name));
     }
 }
 
@@ -154,17 +150,17 @@ fn display_pipeline_runs(runs: &[models::Run]) {
         println!("No runs found.");
         return;
     }
-    
+
     println!("Pipeline Runs:\n");
-    
+
     for (i, run) in runs.iter().enumerate() {
-        println!("Run #{}", i+1);
+        println!("Run #{}", i + 1);
         println!("State: {:?}", run.state);
-        
+
         if let Some(ref result) = run.result {
             println!("Result: {:?}", result);
         }
-        
+
         println!("");
     }
 }
@@ -173,15 +169,15 @@ fn display_pipeline_runs(runs: &[models::Run]) {
 fn display_build_details(run: &models::Run) {
     println!("📋 Pipeline Run Details");
     println!("=====================");
-    
+
     // Print state information
     println!("State: {:?}", run.state);
-    
+
     // Print result if available
     if let Some(ref result) = run.result {
         println!("Result: {:?}", result);
     }
-    
+
     // Use debug format for full details
     println!("\nFull details:");
     println!("{:#?}", run);
@@ -210,8 +206,15 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
                 }
             }
         }
-        PipelinesSubCommands::Show { id, project, build_id } => {
-            println!("Showing details for build {} of pipeline {} in project {}", build_id, id, project);
+        PipelinesSubCommands::Show {
+            id,
+            project,
+            build_id,
+        } => {
+            println!(
+                "Showing details for build {} of pipeline {} in project {}",
+                build_id, id, project
+            );
             match get_build(project, id, build_id).await {
                 Ok(build) => {
                     display_build_details(&build);

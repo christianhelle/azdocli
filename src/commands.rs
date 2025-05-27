@@ -1,5 +1,5 @@
-use clap::Subcommand;
 use anyhow::Result;
+use clap::Subcommand;
 
 #[derive(Subcommand, Clone)]
 pub enum SubCommands {
