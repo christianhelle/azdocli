@@ -350,7 +350,7 @@ async fn clone_all_repos(
                 };
 
                 let output = std::process::Command::new("git")
-                    .args(&["clone", ssh_url, &target_path])
+                    .args(["clone", ssh_url, &target_path])
                     .output();
 
                 match output {
@@ -423,7 +423,7 @@ async fn clone_repos_parallel(
                 println!("Cloning repository: {} from {}", repo_name, ssh_url);
 
                 let output = tokio::process::Command::new("git")
-                    .args(&["clone", &ssh_url, &target_path])
+                    .args(["clone", &ssh_url, &target_path])
                     .output()
                     .await;
 
