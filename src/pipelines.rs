@@ -161,7 +161,7 @@ fn display_pipeline_runs(runs: &[models::Run]) {
             println!("Result: {:?}", result);
         }
 
-        println!("");
+        println!();
     }
 }
 
