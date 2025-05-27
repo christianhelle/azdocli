@@ -18,4 +18,3 @@ dialoguer = "0.11"
 colored = "3.0"
 base64 = "0.22"
 azure_devops_rust_api = { version = "0.28.0", features = ["git", "pipelines"] }
-chrono = "0.4"
