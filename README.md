@@ -12,6 +12,31 @@ CLI tool for interacting with Azure DevOps.
 - **Board Management**: Manage Azure DevOps boards  
 - **Artifact Management**: Manage Azure DevOps artifacts
 - **Authentication**: Secure login using Personal Access Tokens (PAT)
+- **Default Project**: Set a default project to avoid specifying --project for every command
+
+### Default Project Management
+
+The `project` command allows you to set and view a default project, eliminating the need to specify `--project` for every command:
+
+```sh
+# Set a default project
+azdocli project MyDefaultProject
+
+# View the current default project
+azdocli project
+
+# All commands will now use the default project if --project is not specified
+azdocli repos list                    # Uses default project
+azdocli pipelines list               # Uses default project
+azdocli repos list --project Other  # Overrides default with "Other"
+```
+
+**Default Project Features:**
+
+- **Persistent storage**: Default project is saved in your user configuration
+- **Optional override**: Use `--project` to override the default for any command
+- **All modules supported**: Works with repos, pipelines, boards, and artifacts
+- **Helpful error messages**: Clear feedback when no default is set and no --project is provided
 
 ### Repository Management Features
 
@@ -20,23 +45,29 @@ CLI tool for interacting with Azure DevOps.
 The `repos clone` command allows you to clone all repositories from an Azure DevOps project:
 
 ```sh
-# Clone all repositories from a project (with confirmation prompt)
+# Set a default project first (optional but recommended)
+azdocli project MyProject
+
+# Clone all repositories from the default project (with confirmation prompt)
+azdocli repos clone
+
+# Or override with a specific project
 azdocli repos clone --project MyProject
 
 # Clone to a specific directory
-azdocli repos clone --project MyProject --target-dir ./repos
+azdocli repos clone --target-dir ./repos
 
 # Skip confirmation prompt (useful for automation)
-azdocli repos clone --project MyProject --yes
+azdocli repos clone --yes
 
 # Clone repositories in parallel for faster execution
-azdocli repos clone --project MyProject --parallel
+azdocli repos clone --parallel
 
 # Control the number of concurrent clone operations (default: 4, max: 8)
-azdocli repos clone --project MyProject --parallel --concurrency 6
+azdocli repos clone --parallel --concurrency 6
 
 # Combine all options for maximum efficiency
-azdocli repos clone --project MyProject --target-dir ./repos --yes --parallel --concurrency 8
+azdocli repos clone --target-dir ./repos --yes --parallel --concurrency 8
 ```
 
 **Clone Features:**
@@ -55,7 +86,10 @@ azdocli repos clone --project MyProject --target-dir ./repos --yes --parallel --
 The `repos show` command displays detailed information about a specific repository:
 
 ```sh
-# Show details of a repository by name
+# Show details of a repository by name (using default project)
+azdocli repos show --id MyRepository
+
+# Or specify a project explicitly
 azdocli repos show --id MyRepository --project MyProject
 ```
 
@@ -74,7 +108,10 @@ azdocli repos show --id MyRepository --project MyProject
 The `pipelines list` command allows you to list all pipelines in an Azure DevOps project:
 
 ```sh
-# List all pipelines in a project
+# List all pipelines in the default project
+azdocli pipelines list
+
+# Or specify a project explicitly
 azdocli pipelines list --project MyProject
 ```
 
@@ -89,7 +126,10 @@ azdocli pipelines list --project MyProject
 The `pipelines runs` command shows all builds (runs) of a specified pipeline:
 
 ```sh
-# Show all runs for a pipeline
+# Show all runs for a pipeline (using default project)
+azdocli pipelines runs --id 42
+
+# Or specify a project explicitly
 azdocli pipelines runs --id 42 --project MyProject
 ```
 
@@ -104,7 +144,10 @@ azdocli pipelines runs --id 42 --project MyProject
 The `pipelines show` command displays detailed information about a specific pipeline build:
 
 ```sh
-# Show details of a specific pipeline build
+# Show details of a specific pipeline build (using default project)
+azdocli pipelines show --id 42 --build-id 123
+
+# Or specify a project explicitly
 azdocli pipelines show --id 42 --project MyProject --build-id 123
 ```
 
@@ -119,7 +162,10 @@ azdocli pipelines show --id 42 --project MyProject --build-id 123
 The `pipelines run` command starts a new pipeline run:
 
 ```sh
-# Run a pipeline
+# Run a pipeline (using default project)
+azdocli pipelines run --id 42
+
+# Or specify a project explicitly
 azdocli pipelines run --id 42 --project MyProject
 ```
 
