@@ -279,7 +279,7 @@ async fn clone_all_repos(
         if let Some(ssh_url) = &repo.ssh_url {
             println!("  • {} ({})", repo.name, ssh_url);
         } else {
-            println!("  • {} (⚠ No SSH URL)", repo.name);
+            println!("  • {} (⚠  No SSH URL)", repo.name);
         }
     }
 
@@ -336,11 +336,11 @@ async fn clone_all_repos(
         for result in results {
             match result {
                 Ok(repo_name) => {
-                    println!("✓ Successfully cloned {}", repo_name);
+                    println!("✅ Successfully cloned {}", repo_name);
                     success_count += 1;
                 }
                 Err(e) => {
-                    println!("✗ {}", e);
+                    println!("❌ {}", e);
                     failed_count += 1;
                 }
             }
@@ -364,7 +364,7 @@ async fn clone_all_repos(
                 match output {
                     Ok(output) => {
                         if output.status.success() {
-                            println!("✓ Successfully cloned {}", repo.name);
+                            println!("✅ Successfully cloned {}", repo.name);
                             success_count += 1;
                         } else {
                             let error = String::from_utf8_lossy(&output.stderr);
@@ -382,16 +382,16 @@ async fn clone_all_repos(
                     }
                 }
             } else {
-                println!("⚠ Skipping {} (No SSH URL available)", repo.name);
+                println!("⚠  Skipping {} (No SSH URL available)", repo.name);
                 failed_count += 1;
             }
         }
     }
 
     println!("\nCloning completed:");
-    println!("  ✓ Successfully cloned: {}", success_count);
+    println!("  ✅ Successfully cloned: {}", success_count);
     if failed_count > 0 {
-        println!("  ✗ Failed/Skipped: {}", failed_count);
+        println!("  ❌ Failed/Skipped: {}", failed_count);
     }
 
     Ok(())
