@@ -153,8 +153,8 @@ fn display_pipeline_runs(runs: &[models::Run]) {
 
     println!("Pipeline Runs:\n");
 
-    for (i, run) in runs.iter().enumerate() {
-        println!("Run #{}", i + 1);
+    runs.iter().for_each(|run| {
+        println!("Run #{}", run.run_reference.id);
         println!("State: {:?}", run.state);
 
         if let Some(ref result) = run.result {
@@ -162,7 +162,7 @@ fn display_pipeline_runs(runs: &[models::Run]) {
         }
 
         println!();
-    }
+    });
 }
 
 /// Displays detailed information about a pipeline run with minimal formatting
