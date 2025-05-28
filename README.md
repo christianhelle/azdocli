@@ -185,25 +185,35 @@ The `boards work-item` commands allow you to manage work items in an Azure DevOp
 # Show details of a specific work item (using default project)
 azdocli boards work-item show --id 123
 
+# Open work item directly in web browser
+azdocli boards work-item show --id 123 --web
+
 # Or specify a project explicitly
 azdocli boards work-item show --id 123 --project MyProject
 
 # Create a new work item (using default project)
-azdocli boards work-item create
+# Supported types: bug, task, user-story, feature, epic
+azdocli boards work-item create bug --title "Fix login issue" --description "Users cannot login after password change"
 
 # Update a work item (using default project)
-azdocli boards work-item update --id 123
+azdocli boards work-item update --id 123 --title "New title" --state "Active" --priority 2
 
-# Delete a work item (using default project)
+# Delete a work item permanently (using default project)
 azdocli boards work-item delete --id 123
+
+# Soft delete a work item by changing state to "Removed"
+azdocli boards work-item delete --id 123 --soft-delete
 ```
 
 **Work Item Features:**
 
 - **Full CRUD operations**: Create, read, update, and delete work items
+- **Multiple work item types**: Support for bug, task, user story, feature, and epic
+- **Web integration**: Open work items directly in browser with `--web` option
+- **Soft delete**: Option to change state to "Removed" instead of permanent deletion
+- **Field updates**: Update title, description, state, and priority
 - **Default project support**: Use with default project or specify --project explicitly
 - **Error handling**: Clear feedback when work item not found or access denied
-- **Future expansion**: Framework ready for iteration and area commands
 
 ```sh
 CLI tool for interacting with Azure DevOps
