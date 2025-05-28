@@ -67,6 +67,68 @@ azdocli repos show --id MyRepository --project MyProject
 - **File size formatting**: Automatic conversion to KB/MB for better readability
 - **Error handling**: Helpful error messages with suggestions when repository not found
 
+### Pipeline Management Features
+
+#### Pipeline List Feature
+
+The `pipelines list` command allows you to list all pipelines in an Azure DevOps project:
+
+```sh
+# List all pipelines in a project
+azdocli pipelines list --project MyProject
+```
+
+**List Features:**
+
+- **Comprehensive listing**: View all pipelines in a project with IDs and names
+- **User-friendly formatting**: Easy-to-read table format
+- **Error handling**: Helpful error messages when project not found or access denied
+
+#### Pipeline Runs Feature
+
+The `pipelines runs` command shows all builds (runs) of a specified pipeline:
+
+```sh
+# Show all runs for a pipeline
+azdocli pipelines runs --id 42 --project MyProject
+```
+
+**Runs Features:**
+
+- **Run history**: View all runs for a specific pipeline
+- **Status visibility**: See current state and result of each pipeline run
+- **User-friendly formatting**: Clear display of run information
+
+#### Pipeline Show Feature
+
+The `pipelines show` command displays detailed information about a specific pipeline build:
+
+```sh
+# Show details of a specific pipeline build
+azdocli pipelines show --id 42 --project MyProject --build-id 123
+```
+
+**Show Features:**
+
+- **Detailed information**: Comprehensive details about a specific pipeline build
+- **Debug information**: Access to internal state for troubleshooting purposes
+- **Error handling**: Helpful error messages when build not found
+
+#### Pipeline Run Feature
+
+The `pipelines run` command starts a new pipeline run:
+
+```sh
+# Run a pipeline
+azdocli pipelines run --id 42 --project MyProject
+```
+
+**Run Features:**
+
+- **Pipeline execution**: Start a pipeline with a single command
+- **Live updates**: See details of the running build in real-time
+- **Error handling**: Clear feedback when pipeline cannot be started
+
 ```sh
 CLI tool for interacting with Azure DevOps
 

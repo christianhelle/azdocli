@@ -7,7 +7,7 @@ description = "CLI tool for interacting with Azure DevOps"
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = ">=0.12.7, <0.12.16", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.0", features = ["full"] }
@@ -17,4 +17,5 @@ async-trait = "0.1"
 dialoguer = "0.11"
 colored = "3.0"
 base64 = "0.22"
-azure_devops_rust_api = { version = "0.28.0", features = ["git", "pipelines"] }
+azure_devops_rust_api = { version = "0.28.0", features = ["git", "pipelines"], default-features = false }
+azure_core = { version = "0.24.0", features = ["reqwest_rustls"], default-features = false }
