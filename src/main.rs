@@ -32,7 +32,7 @@ enum Commands {
     /// Manage Azure DevOps boards
     Boards {
         #[clap(subcommand)]
-        subcommand: commands::SubCommands,
+        subcommand: boards::BoardsSubCommands,
     },
     /// Manage Azure DevOps repos
     Repos {
@@ -70,7 +70,7 @@ async fn main() -> anyhow::Result<()> {
             pipelines::handle_command(subcommand).await?;
         }
         Some(Commands::Boards { subcommand }) => {
-            commands::handle_boards_command(subcommand).await?;
+            boards::handle_command(subcommand).await?;
         }
         Some(Commands::Repos { subcommand }) => {
             repos::handle_command(subcommand).await?;
