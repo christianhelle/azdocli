@@ -175,6 +175,36 @@ azdocli pipelines run --id 42 --project MyProject
 - **Live updates**: See details of the running build in real-time
 - **Error handling**: Clear feedback when pipeline cannot be started
 
+### Board Management Features
+
+#### Work Item Management
+
+The `boards work-item` commands allow you to manage work items in an Azure DevOps project:
+
+```sh
+# Show details of a specific work item (using default project)
+azdocli boards work-item show --id 123
+
+# Or specify a project explicitly
+azdocli boards work-item show --id 123 --project MyProject
+
+# Create a new work item (using default project)
+azdocli boards work-item create
+
+# Update a work item (using default project)
+azdocli boards work-item update --id 123
+
+# Delete a work item (using default project)
+azdocli boards work-item delete --id 123
+```
+
+**Work Item Features:**
+
+- **Full CRUD operations**: Create, read, update, and delete work items
+- **Default project support**: Use with default project or specify --project explicitly
+- **Error handling**: Clear feedback when work item not found or access denied
+- **Future expansion**: Framework ready for iteration and area commands
+
 ```sh
 CLI tool for interacting with Azure DevOps
 

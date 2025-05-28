@@ -44,10 +44,6 @@ pub enum SubCommands {
     },
 }
 
-pub async fn handle_boards_command(subcommand: &SubCommands) -> Result<()> {
-    crate::boards::handle_command(subcommand).await
-}
-
 pub async fn handle_artifacts_command(subcommand: &SubCommands) -> Result<()> {
     crate::artifacts::handle_command(subcommand).await
 }
