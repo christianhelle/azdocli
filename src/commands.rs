@@ -4,26 +4,43 @@ use clap::Subcommand;
 #[derive(Subcommand, Clone)]
 pub enum SubCommands {
     /// Create a new resource
-    Create,
+    Create {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
     /// List all resources
-    List,
+    List {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
     /// Delete a resource
     Delete {
         /// ID of the resource to delete
         #[clap(short, long)]
         id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
     },
     /// Show details of a resource
     Show {
         /// ID of the resource to show
         #[clap(short, long)]
         id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
     },
     /// Update a resource
     Update {
         /// ID of the resource to update
         #[clap(short, long)]
         id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
     },
 }
 

@@ -10,21 +10,21 @@ use tokio::sync::Semaphore;
 pub enum ReposSubCommands {
     /// Create a new repository
     Create {
-        /// Team project name
+        /// Team project name (optional if default project is set)
         #[clap(short, long)]
-        project: String,
+        project: Option<String>,
     },
     /// List all repositories
     List {
-        /// Team project name
+        /// Team project name (optional if default project is set)
         #[clap(short, long)]
-        project: String,
+        project: Option<String>,
     },
     /// Clone all repositories from a project
     Clone {
-        /// Team project name
+        /// Team project name (optional if default project is set)
         #[clap(short, long)]
-        project: String,
+        project: Option<String>,
         /// Target directory to clone repositories into (optional, defaults to current directory)
         #[clap(short, long)]
         target_dir: Option<String>,
@@ -43,27 +43,27 @@ pub enum ReposSubCommands {
         /// ID of the repository to delete
         #[clap(short, long)]
         id: String,
-        /// Team project name
+        /// Team project name (optional if default project is set)
         #[clap(short, long)]
-        project: String,
+        project: Option<String>,
     },
     /// Show details of a repository
     Show {
         /// ID of the repository to show
         #[clap(short, long)]
         id: String,
-        /// Team project name
+        /// Team project name (optional if default project is set)
         #[clap(short, long)]
-        project: String,
+        project: Option<String>,
     },
     /// Update a repository
     Update {
         /// ID of the repository to update
         #[clap(short, long)]
         id: String,
-        /// Team project name
+        /// Team project name (optional if default project is set)
         #[clap(short, long)]
-        project: String,
+        project: Option<String>,
     },
 }
 
@@ -71,11 +71,13 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
     // Ensure user is authenticated
     match subcommand {
         ReposSubCommands::Create { project } => {
-            println!("Creating a repository in project: {}", project);
+            let project_name = auth::get_project_or_default(project.as_deref())?;
+            println!("Creating a repository in project: {}", project_name);
             // Implementation would go here
         }
         ReposSubCommands::List { project } => {
-            let repos = list_repos(project).await?;
+            let project_name = auth::get_project_or_default(project.as_deref())?;
+            let repos = list_repos(&project_name).await?;
             for repo in repos.iter() {
                 println!("{}", repo.name);
             }
@@ -87,8 +89,9 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
             parallel,
             concurrency,
         } => {
+            let project_name = auth::get_project_or_default(project.as_deref())?;
             clone_all_repos(
-                project,
+                &project_name,
                 target_dir.as_deref(),
                 *yes,
                 *parallel,
@@ -97,24 +100,29 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
             .await?;
         }
         ReposSubCommands::Delete { id, project } => {
-            println!("Deleting repo with id: {} in project: {}", id, project);
+            let project_name = auth::get_project_or_default(project.as_deref())?;
+            println!("Deleting repo with id: {} in project: {}", id, project_name);
             // Implementation would go here
         }
-        ReposSubCommands::Show { id, project } => match get_repo(project, id).await {
-            Ok(repo) => {
-                display_repo_details(&repo);
+        ReposSubCommands::Show { id, project } => {
+            let project_name = auth::get_project_or_default(project.as_deref())?;
+            match get_repo(&project_name, id).await {
+                Ok(repo) => {
+                    display_repo_details(&repo);
+                }
+                Err(e) => {
+                    eprintln!(
+                        "❌ Failed to retrieve repository '{}' from project '{}'",
+                        id, project_name
+                    );
+                    eprintln!("   {}", e);
+                    return Err(e);
+                }
             }
-            Err(e) => {
-                eprintln!(
-                    "❌ Failed to retrieve repository '{}' from project '{}'",
-                    id, project
-                );
-                eprintln!("   {}", e);
-                return Err(e);
-            }
-        },
+        }
         ReposSubCommands::Update { id, project } => {
-            println!("Updating repo with id: {} in project: {}", id, project);
+            let project_name = auth::get_project_or_default(project.as_deref())?;
+            println!("Updating repo with id: {} in project: {}", id, project_name);
             // Implementation would go here
         }
     }
