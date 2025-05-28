@@ -1,41 +1,88 @@
 use crate::auth;
-use crate::commands::SubCommands;
 use anyhow::Result;
+use clap::Subcommand;
 
-pub async fn handle_command(subcommand: &SubCommands) -> Result<()> {
+#[derive(Subcommand, Clone)]
+pub enum BoardsSubCommands {
+    /// Manage work items
+    WorkItem {
+        #[clap(subcommand)]
+        subcommand: WorkItemSubCommands,
+    },
+}
+
+#[derive(Subcommand, Clone)]
+pub enum WorkItemSubCommands {
+    /// Create a new work item
+    Create {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
+    /// Delete a work item
+    Delete {
+        /// ID of the work item to delete
+        #[clap(short, long)]
+        id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
+    /// Show details of a work item
+    Show {
+        /// ID of the work item to show
+        #[clap(short, long)]
+        id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
+    /// Update a work item
+    Update {
+        /// ID of the work item to update
+        #[clap(short, long)]
+        id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
+}
+
+pub async fn handle_command(subcommand: &BoardsSubCommands) -> Result<()> {
     // Ensure user is authenticated
-    let credentials = auth::get_credentials()?;
+    let _credentials = auth::get_credentials()?;
     match subcommand {
-        SubCommands::Create { project } => {
+        BoardsSubCommands::WorkItem { subcommand } => handle_work_item_command(subcommand).await,
+    }
+}
+
+async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()> {
+    match subcommand {
+        WorkItemSubCommands::Create { project } => {
             let project_name = auth::get_project_or_default(project.as_deref())?;
-            println!("Creating a board in project: {}", project_name);
+            println!("Creating a work item in project: {}", project_name);
             // Implementation would go here
         }
-        SubCommands::List { project } => {
+        WorkItemSubCommands::Delete { id, project } => {
             let project_name = auth::get_project_or_default(project.as_deref())?;
             println!(
-                "Listing all boards for organization: {} in project: {}",
-                credentials.organization, project_name
-            );
-            // Implementation would go here
-        }
-        SubCommands::Delete { id, project } => {
-            let project_name = auth::get_project_or_default(project.as_deref())?;
-            println!(
-                "Deleting board with id: {} in project: {}",
+                "Deleting work item with id: {} in project: {}",
                 id, project_name
             );
             // Implementation would go here
         }
-        SubCommands::Show { id, project } => {
-            let project_name = auth::get_project_or_default(project.as_deref())?;
-            println!("Showing board with id: {} in project: {}", id, project_name);
-            // Implementation would go here
-        }
-        SubCommands::Update { id, project } => {
+        WorkItemSubCommands::Show { id, project } => {
             let project_name = auth::get_project_or_default(project.as_deref())?;
             println!(
-                "Updating board with id: {} in project: {}",
+                "Showing work item with id: {} in project: {}",
+                id, project_name
+            );
+            // Implementation would go here
+        }
+        WorkItemSubCommands::Update { id, project } => {
+            let project_name = auth::get_project_or_default(project.as_deref())?;
+            println!(
+                "Updating work item with id: {} in project: {}",
                 id, project_name
             );
             // Implementation would go here
