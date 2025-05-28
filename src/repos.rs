@@ -1,6 +1,6 @@
-use crate::auth;
+use crate::auth::{self, get_credentials};
 use anyhow::Result;
-use azure_devops_rust_api::git::{self, ClientBuilder};
+use azure_devops_rust_api::git::{self, models::GitRepositoryCreateOptions, ClientBuilder};
 use clap::Subcommand;
 use dialoguer::Confirm;
 use std::sync::Arc;
@@ -13,6 +13,10 @@ pub enum ReposSubCommands {
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
+
+        /// Name of the repository to create
+        #[clap(short, long)]
+        name: Option<String>,
     },
     /// List all repositories
     List {
@@ -70,10 +74,21 @@ pub enum ReposSubCommands {
 pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
     // Ensure user is authenticated
     match subcommand {
-        ReposSubCommands::Create { project } => {
+        ReposSubCommands::Create { project, name } => {
             let project_name = auth::get_project_or_default(project.as_deref())?;
-            println!("Creating a repository in project: {}", project_name);
-            // Implementation would go here
+            match create_repo(&project_name, name).await {
+                Ok(repo) => {
+                    display_repo_details(&repo);
+                }
+                Err(e) => {
+                    eprintln!(
+                        "❌ Failed to create repository '{}' in project '{}'",
+                        name.as_deref().unwrap(),
+                        project_name
+                    );
+                    return Err(e);
+                }
+            }
         }
         ReposSubCommands::List { project } => {
             let project_name = auth::get_project_or_default(project.as_deref())?;
@@ -129,9 +144,34 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
     Ok(())
 }
 
+async fn create_repo(
+    project: &str,
+    name: &Option<String>,
+) -> Result<git::models::GitRepository, anyhow::Error> {
+    match get_credentials() {
+        Ok(creds) => {
+            let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
+            let client = ClientBuilder::new(credential).build();
+            Ok(client
+                .repositories_client()
+                .create(
+                    creds.organization,
+                    GitRepositoryCreateOptions {
+                        name: name.clone(),
+                        parent_repository: None,
+                        project: None,
+                    },
+                    project,
+                )
+                .await?)
+        }
+        Err(e) => Err(e),
+    }
+}
+
 /// Retrieves a list of Git repositories from a specified Azure DevOps project
 async fn list_repos(project: &str) -> Result<Vec<git::models::GitRepository>, anyhow::Error> {
-    match auth::get_credentials() {
+    match get_credentials() {
         Ok(creds) => {
             let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
             let client = ClientBuilder::new(credential).build();
