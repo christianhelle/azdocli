@@ -21,17 +21,26 @@ pub async fn handle_command(subcommand: &SubCommands) -> Result<()> {
         }
         SubCommands::Delete { id, project } => {
             let project_name = auth::get_project_or_default(project.as_deref())?;
-            println!("Deleting artifact with id: {} in project: {}", id, project_name);
+            println!(
+                "Deleting artifact with id: {} in project: {}",
+                id, project_name
+            );
             // Implementation would go here
         }
         SubCommands::Show { id, project } => {
             let project_name = auth::get_project_or_default(project.as_deref())?;
-            println!("Showing artifact with id: {} in project: {}", id, project_name);
+            println!(
+                "Showing artifact with id: {} in project: {}",
+                id, project_name
+            );
             // Implementation would go here
         }
         SubCommands::Update { id, project } => {
             let project_name = auth::get_project_or_default(project.as_deref())?;
-            println!("Updating artifact with id: {} in project: {}", id, project_name);
+            println!(
+                "Updating artifact with id: {} in project: {}",
+                id, project_name
+            );
             // Implementation would go here
         }
     }

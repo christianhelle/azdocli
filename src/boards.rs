@@ -21,7 +21,10 @@ pub async fn handle_command(subcommand: &SubCommands) -> Result<()> {
         }
         SubCommands::Delete { id, project } => {
             let project_name = auth::get_project_or_default(project.as_deref())?;
-            println!("Deleting board with id: {} in project: {}", id, project_name);
+            println!(
+                "Deleting board with id: {} in project: {}",
+                id, project_name
+            );
             // Implementation would go here
         }
         SubCommands::Show { id, project } => {
@@ -31,7 +34,10 @@ pub async fn handle_command(subcommand: &SubCommands) -> Result<()> {
         }
         SubCommands::Update { id, project } => {
             let project_name = auth::get_project_or_default(project.as_deref())?;
-            println!("Updating board with id: {} in project: {}", id, project_name);
+            println!(
+                "Updating board with id: {} in project: {}",
+                id, project_name
+            );
             // Implementation would go here
         }
     }
