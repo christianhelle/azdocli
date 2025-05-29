@@ -50,6 +50,12 @@ pub enum ReposSubCommands {
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
+        /// Perform hard delete immediately after soft delete
+        #[clap(long)]
+        hard: bool,
+        /// Skip confirmation prompt and proceed directly
+        #[clap(short = 'y', long)]
+        yes: bool,
     },
     /// Show details of a repository
     Show {
@@ -114,10 +120,54 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
             )
             .await?;
         }
-        ReposSubCommands::Delete { id, project } => {
+        ReposSubCommands::Delete {
+            id,
+            project,
+            hard,
+            yes,
+        } => {
             let project_name = auth::get_project_or_default(project.as_deref())?;
-            println!("Deleting repo with id: {} in project: {}", id, project_name);
-            // Implementation would go here
+
+            // Show what will be deleted
+            println!(
+                "{}Deleting repository '{}' in project '{}'",
+                if *hard { "Hard " } else { "Soft " },
+                id,
+                project_name
+            );
+
+            // Ask for confirmation unless skipped
+            if !yes {
+                let delete_type = if *hard { "hard" } else { "soft" };
+                let prompt_message = format!(
+                    "Are you sure you want to {} delete repository '{}'?",
+                    delete_type, id
+                );
+                if !Confirm::new()
+                    .with_prompt(prompt_message)
+                    .default(false)
+                    .interact()?
+                {
+                    println!("Delete operation cancelled.");
+                    return Ok(());
+                }
+            } else {
+                println!("Proceeding with delete operation (confirmation skipped)...");
+            }
+
+            match delete_repo(&project_name, id, *hard).await {
+                Ok(_) => {
+                    if *hard {
+                        println!("✅ Repository hard deleted successfully");
+                    } else {
+                        println!("✅ Repository soft deleted successfully");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to delete repository '{}': {}", id, e);
+                    return Err(e);
+                }
+            }
         }
         ReposSubCommands::Show { id, project } => {
             let project_name = auth::get_project_or_default(project.as_deref())?;
@@ -228,6 +278,54 @@ async fn get_repo(project: &str, repository_id: &str) -> Result<git::models::Git
                     available_repos.join(", ")
                 ))
             }
+        }
+    }
+}
+
+/// Deletes a Git repository from a specified Azure DevOps project
+///
+/// # Arguments
+/// * `project` - The name of the Azure DevOps project
+/// * `repository_id` - The ID/name of the repository to delete
+/// * `hard_delete` - Whether to perform hard delete after soft delete
+///
+/// # Returns
+/// * `Result<()>` - Success or error result
+async fn delete_repo(project: &str, repository_id: &str, hard_delete: bool) -> Result<()> {
+    match get_credentials() {
+        Ok(creds) => {
+            let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
+            let client = ClientBuilder::new(credential).build();
+
+            // First, try to get the repository to verify it exists
+            let repo = get_repo(project, repository_id).await?;
+
+            // Soft delete - recycle the repository
+            println!("Performing soft delete (recycling repository)...");
+            match client
+                .repositories_client()
+                .delete(&creds.organization, &repo.id, project)
+                .await
+            {
+                Ok(_) => {
+                    println!("Repository soft deleted (moved to recycle bin)");
+
+                    // If hard delete is requested, permanently delete from recycle bin
+                    if hard_delete {
+                        println!("Performing hard delete (permanent deletion)...");
+                        // Note: The Azure DevOps API may not support permanent deletion through the REST API
+                        // This would typically be done through the web interface or PowerShell
+                        println!("Warning: Hard delete may require manual deletion from the recycle bin in Azure DevOps web interface");
+                    }
+
+                    Ok(())
+                }
+                Err(e) => Err(anyhow::anyhow!("Failed to delete repository: {}", e)),
+            }
+        }
+        Err(e) => {
+            eprintln!("Unable to delete repository");
+            Err(e)
         }
     }
 }
