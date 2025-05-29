@@ -120,9 +120,14 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
             )
             .await?;
         }
-        ReposSubCommands::Delete { id, project, hard, yes } => {
+        ReposSubCommands::Delete {
+            id,
+            project,
+            hard,
+            yes,
+        } => {
             let project_name = auth::get_project_or_default(project.as_deref())?;
-            
+
             // Show what will be deleted
             println!(
                 "{}Deleting repository '{}' in project '{}'",
@@ -291,10 +296,10 @@ async fn delete_repo(project: &str, repository_id: &str, hard_delete: bool) -> R
         Ok(creds) => {
             let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
             let client = ClientBuilder::new(credential).build();
-            
+
             // First, try to get the repository to verify it exists
             let repo = get_repo(project, repository_id).await?;
-            
+
             // Soft delete - recycle the repository
             println!("Performing soft delete (recycling repository)...");
             match client
@@ -304,7 +309,7 @@ async fn delete_repo(project: &str, repository_id: &str, hard_delete: bool) -> R
             {
                 Ok(_) => {
                     println!("Repository soft deleted (moved to recycle bin)");
-                    
+
                     // If hard delete is requested, permanently delete from recycle bin
                     if hard_delete {
                         println!("Performing hard delete (permanent deletion)...");
@@ -312,12 +317,10 @@ async fn delete_repo(project: &str, repository_id: &str, hard_delete: bool) -> R
                         // This would typically be done through the web interface or PowerShell
                         println!("Warning: Hard delete may require manual deletion from the recycle bin in Azure DevOps web interface");
                     }
-                    
+
                     Ok(())
                 }
-                Err(e) => {
-                    Err(anyhow::anyhow!("Failed to delete repository: {}", e))
-                }
+                Err(e) => Err(anyhow::anyhow!("Failed to delete repository: {}", e)),
             }
         }
         Err(e) => {
