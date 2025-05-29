@@ -1,0 +1,5 @@
+{
+  "organization": "your-organization-name",
+  "pat": "your-personal-access-token",
+  "project": "your-test-project-name"
+}
