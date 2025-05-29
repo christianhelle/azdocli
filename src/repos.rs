@@ -670,7 +670,7 @@ mod tests {
         let creds = get_test_credentials()?;
         let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
         let client = ClientBuilder::new(credential).build();
-        
+
         client
             .repositories_client()
             .create(
@@ -702,7 +702,7 @@ mod tests {
         let creds = get_test_credentials()?;
         let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
         let client = ClientBuilder::new(credential).build();
-        
+
         client
             .repositories_client()
             .list(creds.organization, project)
@@ -711,10 +711,14 @@ mod tests {
             .map_err(|e| anyhow::anyhow!("Failed to list repositories: {}", e))
     }
 
-    async fn get_test_repo(project: &str, repository_name: &str) -> Result<git::models::GitRepository> {
+    async fn get_test_repo(
+        project: &str,
+        repository_name: &str,
+    ) -> Result<git::models::GitRepository> {
         let repos = list_test_repos(project).await?;
-        
-        repos.iter()
+
+        repos
+            .iter()
             .find(|repo| repo.name == repository_name)
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("Repository '{}' not found", repository_name))
@@ -726,7 +730,7 @@ mod tests {
         // Load test configuration
         let project = get_test_project()?;
         let test_repo_name = format!("test-repo-{}", chrono::Utc::now().timestamp());
-        
+
         println!("Testing with project: {}", project);
         println!("Test repository name: {}", test_repo_name);
 
@@ -746,7 +750,7 @@ mod tests {
         // Test 3: Clone repository (to a temporary directory)
         println!("3. Cloning repository...");
         let temp_dir = std::env::temp_dir().join(format!("azdocli_test_{}", test_repo_name));
-        
+
         if let Some(clone_url) = &retrieved_repo.ssh_url {
             let output = std::process::Command::new("git")
                 .args(["clone", clone_url, &temp_dir.to_string_lossy()])
@@ -756,18 +760,24 @@ mod tests {
                 Ok(output) => {
                     if output.status.success() {
                         println!("✅ Repository cloned successfully to: {:?}", temp_dir);
-                        
+
                         // Clean up cloned directory
                         if temp_dir.exists() {
                             std::fs::remove_dir_all(&temp_dir).ok();
                         }
                     } else {
                         let error = String::from_utf8_lossy(&output.stderr);
-                        eprintln!("⚠️  Clone failed (this may be expected for empty repos): {}", error.trim());
+                        eprintln!(
+                            "⚠️  Clone failed (this may be expected for empty repos): {}",
+                            error.trim()
+                        );
                     }
                 }
                 Err(e) => {
-                    eprintln!("⚠️  Git command failed: {} (Git may not be available in test environment)", e);
+                    eprintln!(
+                        "⚠️  Git command failed: {} (Git may not be available in test environment)",
+                        e
+                    );
                 }
             }
         } else {
@@ -782,7 +792,10 @@ mod tests {
         // Verify deletion
         println!("5. Verifying deletion...");
         let verification_result = get_test_repo(&project, &test_repo_name).await;
-        assert!(verification_result.is_err(), "Repository should not exist after deletion");
+        assert!(
+            verification_result.is_err(),
+            "Repository should not exist after deletion"
+        );
         println!("✅ Repository deletion verified");
 
         println!("🎉 All repository operations completed successfully!");
@@ -793,16 +806,24 @@ mod tests {
     #[ignore] // Requires test_config.json with valid credentials
     async fn test_list_repositories() -> Result<()> {
         let project = get_test_project()?;
-        
+
         println!("Testing repository listing for project: {}", project);
         let repos = list_test_repos(&project).await?;
-        
-        println!("Found {} repositories in project '{}'", repos.len(), project);
-        for repo in repos.iter().take(5) { // Show first 5 repos
+
+        println!(
+            "Found {} repositories in project '{}'",
+            repos.len(),
+            project
+        );
+        for repo in repos.iter().take(5) {
+            // Show first 5 repos
             println!("  - {}", repo.name);
         }
-        
-        assert!(!repos.is_empty() || repos.is_empty(), "Repository list should be valid (empty or not)");
+
+        assert!(
+            !repos.is_empty() || repos.is_empty(),
+            "Repository list should be valid (empty or not)"
+        );
         println!("✅ Repository listing test completed successfully");
         Ok(())
     }
