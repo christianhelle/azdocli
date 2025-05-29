@@ -293,4 +293,12 @@ cargo run -- <command>
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) for details on:
+
+- Code style and patterns
+- Development setup
+- Testing procedures  
+- PR description requirements
+- How to keep documentation updated
+
+Please ensure your PR descriptions are verbose and follow the guidelines in [CONTRIBUTING.md](CONTRIBUTING.md).
