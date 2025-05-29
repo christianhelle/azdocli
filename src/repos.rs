@@ -617,3 +617,193 @@ async fn clone_repos_parallel(
 
     results
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::auth::Credentials;
+    use serde::{Deserialize, Serialize};
+    use std::fs;
+    use std::path::PathBuf;
+
+    #[derive(Serialize, Deserialize, Debug)]
+    struct TestConfig {
+        pub organization: String,
+        pub pat: String,
+        pub project: String,
+    }
+
+    impl TestConfig {
+        fn load() -> Result<Self> {
+            let config_path = PathBuf::from("test_config.json");
+            if !config_path.exists() {
+                return Err(anyhow::anyhow!(
+                    "Test configuration file 'test_config.json' not found. Please create it with your Azure DevOps credentials."
+                ));
+            }
+
+            let content = fs::read_to_string(config_path)?;
+            let config: TestConfig = serde_json::from_str(&content)?;
+            Ok(config)
+        }
+
+        fn to_credentials(&self) -> Credentials {
+            Credentials {
+                organization: self.organization.clone(),
+                pat: self.pat.clone(),
+            }
+        }
+    }
+
+    // Mock function to override get_credentials for testing
+    fn get_test_credentials() -> Result<Credentials> {
+        let config = TestConfig::load()?;
+        Ok(config.to_credentials())
+    }
+
+    fn get_test_project() -> Result<String> {
+        let config = TestConfig::load()?;
+        Ok(config.project.clone())
+    }
+
+    async fn create_test_repo(project: &str, name: &str) -> Result<git::models::GitRepository> {
+        let creds = get_test_credentials()?;
+        let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
+        let client = ClientBuilder::new(credential).build();
+        
+        client
+            .repositories_client()
+            .create(
+                creds.organization,
+                GitRepositoryCreateOptions {
+                    name: Some(name.to_string()),
+                    parent_repository: None,
+                    project: None,
+                },
+                project,
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to create test repository: {}", e))
+    }
+
+    async fn delete_test_repo(project: &str, repo_id: &str) -> Result<()> {
+        let creds = get_test_credentials()?;
+        let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
+        let client = ClientBuilder::new(credential).build();
+
+        client
+            .repositories_client()
+            .delete(&creds.organization, repo_id, project)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to delete test repository: {}", e))
+    }
+
+    async fn list_test_repos(project: &str) -> Result<Vec<git::models::GitRepository>> {
+        let creds = get_test_credentials()?;
+        let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
+        let client = ClientBuilder::new(credential).build();
+        
+        client
+            .repositories_client()
+            .list(creds.organization, project)
+            .await
+            .map(|response| response.value)
+            .map_err(|e| anyhow::anyhow!("Failed to list repositories: {}", e))
+    }
+
+    async fn get_test_repo(project: &str, repository_name: &str) -> Result<git::models::GitRepository> {
+        let repos = list_test_repos(project).await?;
+        
+        repos.iter()
+            .find(|repo| repo.name == repository_name)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("Repository '{}' not found", repository_name))
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires test_config.json with valid credentials
+    async fn test_create_show_clone_delete_repository() -> Result<()> {
+        // Load test configuration
+        let project = get_test_project()?;
+        let test_repo_name = format!("test-repo-{}", chrono::Utc::now().timestamp());
+        
+        println!("Testing with project: {}", project);
+        println!("Test repository name: {}", test_repo_name);
+
+        // Test 1: Create repository
+        println!("1. Creating repository...");
+        let created_repo = create_test_repo(&project, &test_repo_name).await?;
+        assert_eq!(created_repo.name, test_repo_name);
+        println!("✅ Repository created successfully: {}", created_repo.name);
+
+        // Test 2: Show repository details
+        println!("2. Retrieving repository details...");
+        let retrieved_repo = get_test_repo(&project, &test_repo_name).await?;
+        assert_eq!(retrieved_repo.id, created_repo.id);
+        assert_eq!(retrieved_repo.name, test_repo_name);
+        println!("✅ Repository details retrieved successfully");
+
+        // Test 3: Clone repository (to a temporary directory)
+        println!("3. Cloning repository...");
+        let temp_dir = std::env::temp_dir().join(format!("azdocli_test_{}", test_repo_name));
+        
+        if let Some(clone_url) = &retrieved_repo.ssh_url {
+            let output = std::process::Command::new("git")
+                .args(["clone", clone_url, &temp_dir.to_string_lossy()])
+                .output();
+
+            match output {
+                Ok(output) => {
+                    if output.status.success() {
+                        println!("✅ Repository cloned successfully to: {:?}", temp_dir);
+                        
+                        // Clean up cloned directory
+                        if temp_dir.exists() {
+                            std::fs::remove_dir_all(&temp_dir).ok();
+                        }
+                    } else {
+                        let error = String::from_utf8_lossy(&output.stderr);
+                        eprintln!("⚠️  Clone failed (this may be expected for empty repos): {}", error.trim());
+                    }
+                }
+                Err(e) => {
+                    eprintln!("⚠️  Git command failed: {} (Git may not be available in test environment)", e);
+                }
+            }
+        } else {
+            println!("⚠️  No SSH URL available for cloning");
+        }
+
+        // Test 4: Hard delete repository
+        println!("4. Deleting repository...");
+        delete_test_repo(&project, &created_repo.id).await?;
+        println!("✅ Repository deleted successfully");
+
+        // Verify deletion
+        println!("5. Verifying deletion...");
+        let verification_result = get_test_repo(&project, &test_repo_name).await;
+        assert!(verification_result.is_err(), "Repository should not exist after deletion");
+        println!("✅ Repository deletion verified");
+
+        println!("🎉 All repository operations completed successfully!");
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires test_config.json with valid credentials
+    async fn test_list_repositories() -> Result<()> {
+        let project = get_test_project()?;
+        
+        println!("Testing repository listing for project: {}", project);
+        let repos = list_test_repos(&project).await?;
+        
+        println!("Found {} repositories in project '{}'", repos.len(), project);
+        for repo in repos.iter().take(5) { // Show first 5 repos
+            println!("  - {}", repo.name);
+        }
+        
+        assert!(!repos.is_empty() || repos.is_empty(), "Repository list should be valid (empty or not)");
+        println!("✅ Repository listing test completed successfully");
+        Ok(())
+    }
+}

@@ -291,6 +291,68 @@ cargo test
 cargo run -- <command>
 ```
 
+## Testing
+
+The project includes integration tests that verify the core repository management functionality against a real Azure DevOps instance.
+
+### Setting up Test Configuration
+
+To run the integration tests, you need to create a test configuration file with your Azure DevOps credentials:
+
+1. Copy the template file:
+   ```bash
+   cp test_config.json.template test_config.json
+   ```
+
+2. Edit `test_config.json` with your Azure DevOps details:
+   ```json
+   {
+     "organization": "your-organization-name",
+     "pat": "your-personal-access-token",
+     "project": "your-test-project-name"
+   }
+   ```
+
+3. Make sure you have:
+   - A valid Azure DevOps Personal Access Token (PAT) with repository permissions
+   - Access to an Azure DevOps project where you can create/delete test repositories
+   - Git installed and available in your PATH (for clone testing)
+
+### Running Tests
+
+The integration tests are marked with `#[ignore]` by default to prevent accidental execution without proper configuration.
+
+```bash
+# Run all tests including integration tests
+cargo test -- --ignored
+
+# Run only the repository smoke tests
+cargo test test_create_show_clone_delete_repository -- --ignored
+
+# Run the repository listing test
+cargo test test_list_repositories -- --ignored
+
+# Run regular unit tests only (currently none)
+cargo test
+```
+
+### Test Coverage
+
+The integration tests cover the following repository operations:
+- **Create**: Creates a new repository in your Azure DevOps project
+- **Show**: Retrieves and verifies repository details
+- **Clone**: Attempts to clone the repository (to temporary directory)
+- **Delete**: Performs hard delete to clean up test repositories
+
+⚠️ **Important**: The tests create and delete actual repositories in your Azure DevOps project. Make sure to use a test project and not a production environment.
+
+### Security Notes
+
+- The `test_config.json` file is automatically ignored by Git to prevent accidental credential commits
+- Store your PAT securely and never commit it to version control
+- Use a PAT with minimal required permissions (repository read/write)
+- Consider using a dedicated test organization or project for running these tests
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
