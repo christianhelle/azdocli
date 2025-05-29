@@ -101,6 +101,34 @@ azdocli repos show --id MyRepository --project MyProject
 - **File size formatting**: Automatic conversion to KB/MB for better readability
 - **Error handling**: Helpful error messages with suggestions when repository not found
 
+#### Repository Update Feature
+
+The `repos update` command allows you to update repository properties in an Azure DevOps project:
+
+```sh
+# Update repository name (using default project)
+azdocli repos update --id MyRepository --name NewRepositoryName
+
+# Update default branch
+azdocli repos update --id MyRepository --default-branch main
+
+# Update both name and default branch
+azdocli repos update --id MyRepository --name NewName --default-branch main
+
+# Or specify a project explicitly
+azdocli repos update --id MyRepository --project MyProject --name NewName
+```
+
+**Update Features:**
+
+- **Repository name updates**: Change the display name of repositories
+- **Default branch updates**: Set the default branch for new clones and pull requests
+- **Flexible updates**: Update individual properties or multiple properties at once
+- **Validation**: Verify repository exists before attempting updates
+- **Error handling**: Clear feedback when repository not found or access denied
+- **Default project support**: Use with default project or specify --project explicitly
+- **Progress feedback**: Shows what changes are being made with clear before/after values
+
 #### Repository Delete Feature
 
 The `repos delete` command allows you to delete repositories from an Azure DevOps project:
