@@ -101,6 +101,37 @@ azdocli repos show --id MyRepository --project MyProject
 - **File size formatting**: Automatic conversion to KB/MB for better readability
 - **Error handling**: Helpful error messages with suggestions when repository not found
 
+#### Repository Delete Feature
+
+The `repos delete` command allows you to delete repositories from an Azure DevOps project:
+
+```sh
+# Soft delete a repository by name (using default project) - moves to recycle bin
+azdocli repos delete --id MyRepository
+
+# Or specify a project explicitly
+azdocli repos delete --id MyRepository --project MyProject
+
+# Hard delete - permanently delete after soft delete (requires manual recycle bin cleanup)
+azdocli repos delete --id MyRepository --hard
+
+# Skip confirmation prompt (useful for automation)
+azdocli repos delete --id MyRepository --yes
+
+# Combine options for automated hard delete
+azdocli repos delete --id MyRepository --hard --yes
+```
+
+**Delete Features:**
+
+- **Soft delete by default**: Repositories are moved to recycle bin and can be restored
+- **Hard delete option**: Use `--hard` flag for permanent deletion (may require manual cleanup)
+- **Confirmation prompts**: Interactive confirmation before deletion to prevent accidents
+- **Automation support**: Skip prompts with `--yes` flag for CI/CD scenarios
+- **Repository validation**: Verify repository exists before attempting deletion
+- **Error handling**: Clear feedback when repository not found or access denied
+- **Default project support**: Use with default project or specify --project explicitly
+
 ### Pipeline Management Features
 
 #### Pipeline List Feature
