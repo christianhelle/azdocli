@@ -179,10 +179,8 @@ async fn update_work_item(
     let _id_int = id
         .parse::<i32>()
         .map_err(|_| anyhow!("Invalid work item ID, must be a number"))?;
-
     match auth::get_credentials() {
         Ok(_) => {
-            // Display what would be updated
             println!("Would update work item {} in project '{}':", id, project);
 
             if let Some(t) = title {
@@ -201,7 +199,6 @@ async fn update_work_item(
                 println!("New priority: {}", p);
             }
 
-            // Get the current work item to return it as if it were updated
             Ok(())
         }
         Err(e) => {
@@ -216,16 +213,13 @@ async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<
     let _id_int = id
         .parse::<i32>()
         .map_err(|_| anyhow!("Invalid work item ID, must be a number"))?;
-
     match auth::get_credentials() {
         Ok(_) => {
-            // For soft delete, we'll update the state to "Removed"
             if soft_delete {
                 update_work_item(project, id, None, None, Some("Removed"), None).await?;
                 return Ok(());
             }
 
-            // For hard delete, we'll use the delete API if available
             println!(
                 "Would permanently delete work item {} in project '{}'",
                 id, project
