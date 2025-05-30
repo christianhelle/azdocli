@@ -25,8 +25,8 @@ azdocli project MyDefaultProject
 azdocli project
 
 # All commands will now use the default project if --project is not specified
-azdocli repos list                    # Uses default project
-azdocli pipelines list               # Uses default project
+azdocli repos list                  # Uses default project
+azdocli pipelines list              # Uses default project
 azdocli repos list --project Other  # Overrides default with "Other"
 ```
 
@@ -298,12 +298,14 @@ The project includes integration tests that verify the core repository managemen
 To run the integration tests, you need to create a test configuration file with your Azure DevOps credentials:
 
 1. Copy the template file:
+
    ```bash
    cp test_config.json.template test_config.json
    ```
 
 2. Edit `test_config.json` with your Azure DevOps details:
-   ```json
+
+  ```json
    {
      "organization": "your-organization-name",
      "pat": "your-personal-access-token",
@@ -312,6 +314,7 @@ To run the integration tests, you need to create a test configuration file with 
    ```
 
 3. Make sure you have:
+
    - A valid Azure DevOps Personal Access Token (PAT) with repository permissions
    - Access to an Azure DevOps project where you can create/delete test repositories
    - Git installed and available in your PATH (for clone testing)
@@ -337,6 +340,7 @@ cargo test
 ### Test Coverage
 
 The integration tests cover the following repository operations:
+
 - **Create**: Creates a new repository in your Azure DevOps project
 - **Show**: Retrieves and verifies repository details
 - **Clone**: Attempts to clone the repository (to temporary directory)
