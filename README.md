@@ -9,8 +9,7 @@ CLI tool for interacting with Azure DevOps.
 
 - **Repository Management**: List, create, delete, clone, and view repositories
 - **Pipeline Management**: Manage Azure DevOps pipelines
-- **Board Management**: Manage Azure DevOps boards  
-- **Artifact Management**: Manage Azure DevOps artifacts
+- **Board Management**: Manage Azure DevOps boards
 - **Authentication**: Secure login using Personal Access Tokens (PAT)
 - **Default Project**: Set a default project to avoid specifying --project for every command
 
@@ -35,7 +34,7 @@ azdocli repos list --project Other  # Overrides default with "Other"
 
 - **Persistent storage**: Default project is saved in your user configuration
 - **Optional override**: Use `--project` to override the default for any command
-- **All modules supported**: Works with repos, pipelines, boards, and artifacts
+- **All modules supported**: Works with repos, pipelines, and boards
 - **Helpful error messages**: Clear feedback when no default is set and no --project is provided
 
 ### Repository Management Features
@@ -246,45 +245,6 @@ azdocli boards work-item delete --id 123 --soft-delete
 - **Default project support**: Use with default project or specify --project explicitly
 - **Error handling**: Clear feedback when work item not found or access denied
 
-### Artifact Management Features
-
-#### Universal Artifact Operations
-
-The `artifacts` commands allow you to download and publish universal artifacts to Azure DevOps:
-
-```sh
-# Set a default project first (optional but recommended)
-azdocli project MyProject
-
-# Download an artifact from the default project
-azdocli artifacts download --name MyPackage --version 1.0.0
-
-# Download an artifact to a specific directory
-azdocli artifacts download --name MyPackage --version 1.0.0 --output ./downloads
-
-# Download from a specific project (overrides default)
-azdocli artifacts download --name MyPackage --version 1.0.0 --project AnotherProject
-
-# Publish an artifact to the default project
-azdocli artifacts publish --name MyPackage --version 1.0.1 --file ./my-package.zip
-
-# Publish with a description
-azdocli artifacts publish --name MyPackage --version 1.0.1 --file ./my-package.zip --description "Bug fixes and improvements"
-
-# Publish to a specific project (overrides default)
-azdocli artifacts publish --name MyPackage --version 1.0.1 --file ./my-package.zip --project AnotherProject
-```
-
-**Artifact Features:**
-
-- **Universal artifact support**: Download and publish universal artifacts to Azure DevOps
-- **Version management**: Specify exact versions for download and publish operations
-- **Flexible file handling**: Support for both individual files and directories
-- **Custom output paths**: Specify where downloaded artifacts should be saved
-- **Optional descriptions**: Add descriptions when publishing artifacts
-- **Default project support**: Use with default project or specify --project explicitly
-- **Error handling**: Clear feedback when artifacts not found or access denied
-
 ```sh
 CLI tool for interacting with Azure DevOps
 
@@ -296,7 +256,6 @@ OPTIONS:
     -V, --version    Print version information
 
 SUBCOMMANDS:
-    artifacts    Manage Azure DevOps artifacts
     boards       Manage Azure DevOps boards
     help         Print this message or the help of the given subcommand(s)
     login        Login to Azure DevOps with a Personal Access Token (PAT)
