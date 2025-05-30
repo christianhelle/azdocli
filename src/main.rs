@@ -2,7 +2,6 @@ use clap::{CommandFactory, Parser, Subcommand};
 mod artifacts;
 mod auth;
 mod boards;
-mod commands;
 mod pipelines;
 mod repos;
 
@@ -42,7 +41,7 @@ enum Commands {
     /// Manage Azure DevOps artifacts
     Artifacts {
         #[clap(subcommand)]
-        subcommand: commands::SubCommands,
+        subcommand: artifacts::ArtifactsSubCommands,
     },
 }
 
@@ -76,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
             repos::handle_command(subcommand).await?;
         }
         Some(Commands::Artifacts { subcommand }) => {
-            commands::handle_artifacts_command(subcommand).await?;
+            artifacts::handle_command(subcommand).await?;
         }
         None => {
             // When no command is provided, print the help information like --help would do

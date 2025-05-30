@@ -246,6 +246,45 @@ azdocli boards work-item delete --id 123 --soft-delete
 - **Default project support**: Use with default project or specify --project explicitly
 - **Error handling**: Clear feedback when work item not found or access denied
 
+### Artifact Management Features
+
+#### Universal Artifact Operations
+
+The `artifacts` commands allow you to download and publish universal artifacts to Azure DevOps:
+
+```sh
+# Set a default project first (optional but recommended)
+azdocli project MyProject
+
+# Download an artifact from the default project
+azdocli artifacts download --name MyPackage --version 1.0.0
+
+# Download an artifact to a specific directory
+azdocli artifacts download --name MyPackage --version 1.0.0 --output ./downloads
+
+# Download from a specific project (overrides default)
+azdocli artifacts download --name MyPackage --version 1.0.0 --project AnotherProject
+
+# Publish an artifact to the default project
+azdocli artifacts publish --name MyPackage --version 1.0.1 --file ./my-package.zip
+
+# Publish with a description
+azdocli artifacts publish --name MyPackage --version 1.0.1 --file ./my-package.zip --description "Bug fixes and improvements"
+
+# Publish to a specific project (overrides default)
+azdocli artifacts publish --name MyPackage --version 1.0.1 --file ./my-package.zip --project AnotherProject
+```
+
+**Artifact Features:**
+
+- **Universal artifact support**: Download and publish universal artifacts to Azure DevOps
+- **Version management**: Specify exact versions for download and publish operations
+- **Flexible file handling**: Support for both individual files and directories
+- **Custom output paths**: Specify where downloaded artifacts should be saved
+- **Optional descriptions**: Add descriptions when publishing artifacts
+- **Default project support**: Use with default project or specify --project explicitly
+- **Error handling**: Clear feedback when artifacts not found or access denied
+
 ```sh
 CLI tool for interacting with Azure DevOps
 
