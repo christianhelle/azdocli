@@ -69,7 +69,6 @@ pub enum ReposSubCommands {
 }
 
 pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
-    // Ensure user is authenticated
     match subcommand {
         ReposSubCommands::Create { project, name } => {
             let project_name = auth::get_project_or_default(project.as_deref())?;
@@ -119,7 +118,6 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
         } => {
             let project_name = auth::get_project_or_default(project.as_deref())?;
 
-            // Show what will be deleted
             println!(
                 "{}Deleting repository '{}' in project '{}'",
                 if *hard { "Hard " } else { "Soft " },
@@ -127,7 +125,6 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
                 project_name
             );
 
-            // Ask for confirmation unless skipped
             if !yes {
                 let delete_type = if *hard { "hard" } else { "soft" };
                 let prompt_message = format!(
@@ -283,10 +280,8 @@ async fn delete_repo(project: &str, repository_id: &str, hard_delete: bool) -> R
             let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
             let client = ClientBuilder::new(credential).build();
 
-            // First, try to get the repository to verify it exists
             let repo = get_repo(project, repository_id).await?;
 
-            // Soft delete - recycle the repository
             println!("Performing soft delete (recycling repository)...");
             match client
                 .repositories_client()
@@ -296,7 +291,6 @@ async fn delete_repo(project: &str, repository_id: &str, hard_delete: bool) -> R
                 Ok(_) => {
                     println!("Repository soft deleted (moved to recycle bin)");
 
-                    // If hard delete is requested, permanently delete from recycle bin
                     if hard_delete {
                         println!("Performing hard delete (permanent deletion)...");
                         // Note: The Azure DevOps API may not support permanent deletion through the REST API
@@ -406,8 +400,6 @@ async fn clone_all_repos(
             println!("  • {} (⚠  No SSH URL)", repo.name);
         }
     }
-
-    // Ask for confirmation unless skipped
     if !skip_confirmation {
         if !Confirm::new()
             .with_prompt("Do you want to proceed with cloning all repositories?")
@@ -421,7 +413,6 @@ async fn clone_all_repos(
         println!("\nProceeding with clone operation (confirmation skipped)...");
     }
 
-    // Create target directory if it doesn't exist
     if target_directory != "." {
         std::fs::create_dir_all(target_directory)?;
     }
@@ -433,7 +424,6 @@ async fn clone_all_repos(
         if parallel { " (parallel)" } else { "" }
     );
     if parallel {
-        // Validate concurrency level
         let concurrency_level = if concurrency > 8 {
             println!(
                 "Warning: Concurrency level {} exceeds maximum of 8. Using 8 instead.",
@@ -450,7 +440,6 @@ async fn clone_all_repos(
             concurrency
         };
 
-        // Parallel cloning implementation
         println!(
             "Starting {} repositories in parallel (max {} concurrent)...",
             repos.len(),
@@ -470,7 +459,6 @@ async fn clone_all_repos(
             }
         }
     } else {
-        // Sequential cloning implementation (existing logic)
         for repo in repos.iter() {
             if let Some(ssh_url) = &repo.ssh_url {
                 println!("Cloning repository: {} from {}", repo.name, ssh_url);
@@ -591,8 +579,6 @@ async fn clone_repos_parallel(
             tasks.push(task);
         }
     }
-
-    // Wait for all tasks to complete
     let mut results = Vec::new();
     for task in tasks {
         match task.await {
@@ -640,8 +626,6 @@ mod tests {
             }
         }
     }
-
-    // Mock function to override get_credentials for testing
     fn get_test_credentials() -> Result<Credentials> {
         let config = TestConfig::load()?;
         Ok(config.to_credentials())
@@ -713,27 +697,21 @@ mod tests {
     #[tokio::test]
     #[ignore] // Requires test_config.json with valid credentials
     async fn test_create_show_clone_delete_repository() -> Result<()> {
-        // Load test configuration
         let project = get_test_project()?;
         let test_repo_name = format!("test-repo-{}", chrono::Utc::now().timestamp());
 
         println!("Testing with project: {}", project);
         println!("Test repository name: {}", test_repo_name);
-
-        // Test 1: Create repository
         println!("1. Creating repository...");
         let created_repo = create_test_repo(&project, &test_repo_name).await?;
         assert_eq!(created_repo.name, test_repo_name);
         println!("✅ Repository created successfully: {}", created_repo.name);
-
-        // Test 2: Show repository details
         println!("2. Retrieving repository details...");
         let retrieved_repo = get_test_repo(&project, &test_repo_name).await?;
         assert_eq!(retrieved_repo.id, created_repo.id);
         assert_eq!(retrieved_repo.name, test_repo_name);
         println!("✅ Repository details retrieved successfully");
 
-        // Test 3: Clone repository (to a temporary directory)
         println!("3. Cloning repository...");
         let temp_dir = std::env::temp_dir().join(format!("azdocli_test_{}", test_repo_name));
 
@@ -747,7 +725,6 @@ mod tests {
                     if output.status.success() {
                         println!("✅ Repository cloned successfully to: {:?}", temp_dir);
 
-                        // Clean up cloned directory
                         if temp_dir.exists() {
                             std::fs::remove_dir_all(&temp_dir).ok();
                         }
@@ -775,7 +752,6 @@ mod tests {
         delete_test_repo(&project, &created_repo.id).await?;
         println!("✅ Repository deleted successfully");
 
-        // Verify deletion
         println!("5. Verifying deletion...");
         let verification_result = get_test_repo(&project, &test_repo_name).await;
         assert!(
@@ -802,7 +778,6 @@ mod tests {
             project
         );
         for repo in repos.iter().take(5) {
-            // Show first 5 repos
             println!("  - {}", repo.name);
         }
 
