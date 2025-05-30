@@ -170,15 +170,12 @@ fn display_build_details(run: &models::Run) {
     println!("📋 Pipeline Run Details");
     println!("=====================");
 
-    // Print state information
     println!("State: {:?}", run.state);
 
-    // Print result if available
     if let Some(ref result) = run.result {
         println!("Result: {:?}", result);
     }
 
-    // Use debug format for full details
     println!("\nFull details:");
     println!("{:#?}", run);
 }
