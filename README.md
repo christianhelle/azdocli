@@ -7,7 +7,7 @@ CLI tool for interacting with Azure DevOps.
 
 ## Features
 
-- **Repository Management**: List, create, update, delete, clone, and view repositories
+- **Repository Management**: List, create, delete, clone, and view repositories
 - **Pipeline Management**: Manage Azure DevOps pipelines
 - **Board Management**: Manage Azure DevOps boards  
 - **Artifact Management**: Manage Azure DevOps artifacts
@@ -246,6 +246,45 @@ azdocli boards work-item delete --id 123 --soft-delete
 - **Default project support**: Use with default project or specify --project explicitly
 - **Error handling**: Clear feedback when work item not found or access denied
 
+### Artifact Management Features
+
+#### Universal Artifact Operations
+
+The `artifacts` commands allow you to download and publish universal artifacts to Azure DevOps:
+
+```sh
+# Set a default project first (optional but recommended)
+azdocli project MyProject
+
+# Download an artifact from the default project
+azdocli artifacts download --name MyPackage --version 1.0.0
+
+# Download an artifact to a specific directory
+azdocli artifacts download --name MyPackage --version 1.0.0 --output ./downloads
+
+# Download from a specific project (overrides default)
+azdocli artifacts download --name MyPackage --version 1.0.0 --project AnotherProject
+
+# Publish an artifact to the default project
+azdocli artifacts publish --name MyPackage --version 1.0.1 --file ./my-package.zip
+
+# Publish with a description
+azdocli artifacts publish --name MyPackage --version 1.0.1 --file ./my-package.zip --description "Bug fixes and improvements"
+
+# Publish to a specific project (overrides default)
+azdocli artifacts publish --name MyPackage --version 1.0.1 --file ./my-package.zip --project AnotherProject
+```
+
+**Artifact Features:**
+
+- **Universal artifact support**: Download and publish universal artifacts to Azure DevOps
+- **Version management**: Specify exact versions for download and publish operations
+- **Flexible file handling**: Support for both individual files and directories
+- **Custom output paths**: Specify where downloaded artifacts should be saved
+- **Optional descriptions**: Add descriptions when publishing artifacts
+- **Default project support**: Use with default project or specify --project explicitly
+- **Error handling**: Clear feedback when artifacts not found or access denied
+
 ```sh
 CLI tool for interacting with Azure DevOps
 
@@ -355,4 +394,12 @@ The integration tests cover the following repository operations:
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) for details on:
+
+- Code style and patterns
+- Development setup
+- Testing procedures  
+- PR description requirements
+- How to keep documentation updated
+
+Please ensure your PR descriptions are verbose and follow the guidelines in [CONTRIBUTING.md](CONTRIBUTING.md).
