@@ -45,7 +45,7 @@ Please be respectful and constructive in all interactions. We welcome contributi
 This project follows standard Rust conventions and established patterns. Please ensure your code is consistent with the existing codebase:
 
 #### Project Structure
-- **Modular design**: Each Azure DevOps service area has its own module (`auth.rs`, `boards.rs`, `pipelines.rs`, `repos.rs`, `artifacts.rs`)
+- **Modular design**: Each Azure DevOps service area has its own module (`auth.rs`, `boards.rs`, `pipelines.rs`, `repos.rs`)
 - **Command handling**: Each module has a `handle_command()` function that takes subcommands and delegates to specific functions
 - **Consistent imports**: Group imports by: standard library, external crates, internal modules
 
