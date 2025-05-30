@@ -66,15 +66,6 @@ pub enum ReposSubCommands {
         #[clap(short, long)]
         project: Option<String>,
     },
-    /// Update a repository
-    Update {
-        /// ID of the repository to update
-        #[clap(short, long)]
-        id: String,
-        /// Team project name (optional if default project is set)
-        #[clap(short, long)]
-        project: Option<String>,
-    },
 }
 
 pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
@@ -184,11 +175,6 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
                     return Err(e);
                 }
             }
-        }
-        ReposSubCommands::Update { id, project } => {
-            let project_name = auth::get_project_or_default(project.as_deref())?;
-            println!("Updating repo with id: {} in project: {}", id, project_name);
-            // Implementation would go here
         }
     }
     Ok(())
