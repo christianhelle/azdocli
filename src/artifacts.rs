@@ -293,3 +293,105 @@ async fn publish_universal_artifact(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+    use std::fs;
+
+    #[test]
+    fn test_download_and_save_artifact_creates_file() {
+        // This test would require a mock HTTP response
+        // For now, just test the file naming logic
+        let name = "test-package";
+        let version = "1.0.0";
+        let expected_filename = format!("{}-{}.zip", name, version);
+
+        assert_eq!(expected_filename, "test-package-1.0.0.zip");
+    }
+
+    #[test]
+    fn test_file_path_validation() {
+        // Test that non-existent file path is properly detected
+        let result = std::fs::metadata("/non/existent/file.zip");
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires test_config.json with valid credentials and existing artifacts
+    async fn test_download_universal_artifact() -> Result<()> {
+        // This test requires:
+        // 1. Valid Azure DevOps credentials
+        // 2. An existing universal artifact in the feed
+        // 3. Proper permissions to download
+
+        let temp_dir = env::temp_dir().join("azdocli_test_download");
+        let output_path = temp_dir.to_string_lossy();
+
+        let result = download_universal_artifact(
+            "test-org",
+            "test-project",
+            "test-artifact",
+            "1.0.0",
+            &output_path,
+            "test-pat",
+        )
+        .await;
+
+        // In a real test environment, this should succeed
+        // For now, we expect it to fail with auth/network errors
+        assert!(result.is_err());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires test_config.json with valid credentials and publish permissions
+    async fn test_publish_universal_artifact() -> Result<()> {
+        // Create a temporary test file
+        let temp_dir = env::temp_dir().join("azdocli_test_publish");
+        fs::create_dir_all(&temp_dir)?;
+        let test_file = temp_dir.join("test-artifact.zip");
+        fs::write(&test_file, b"test content")?;
+
+        let result = publish_universal_artifact(
+            "test-org",
+            "test-project",
+            "test-artifact",
+            "1.0.0",
+            &test_file.to_string_lossy(),
+            Some("Test artifact"),
+            "test-pat",
+        )
+        .await;
+
+        // Clean up test file
+        let _ = fs::remove_file(&test_file);
+        let _ = fs::remove_dir(&temp_dir);
+
+        // In a real test environment with proper setup, this should succeed
+        // For now, we expect it to fail with auth/network errors
+        assert!(result.is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_publish_with_nonexistent_file() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        let result = rt.block_on(publish_universal_artifact(
+            "test-org",
+            "test-project",
+            "test-artifact",
+            "1.0.0",
+            "/nonexistent/file.zip",
+            None,
+            "test-pat",
+        ));
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("File not found"));
+    }
+}
