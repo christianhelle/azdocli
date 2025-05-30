@@ -74,12 +74,6 @@ pub enum ReposSubCommands {
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
-        /// New name for the repository
-        #[clap(short, long)]
-        name: Option<String>,
-        /// New default branch for the repository
-        #[clap(short = 'b', long)]
-        default_branch: Option<String>,
     },
 }
 
@@ -191,34 +185,10 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
                 }
             }
         }
-        ReposSubCommands::Update {
-            id,
-            project,
-            name,
-            default_branch,
-        } => {
+        ReposSubCommands::Update { id, project } => {
             let project_name = auth::get_project_or_default(project.as_deref())?;
-            match update_repo(
-                &project_name,
-                id,
-                name.as_deref(),
-                default_branch.as_deref(),
-            )
-            .await
-            {
-                Ok(repo) => {
-                    println!("✅ Repository updated successfully");
-                    display_repo_details(&repo);
-                }
-                Err(e) => {
-                    eprintln!(
-                        "❌ Failed to update repository '{}' in project '{}'",
-                        id, project_name
-                    );
-                    eprintln!("   {}", e);
-                    return Err(e);
-                }
-            }
+            println!("Updating repo with id: {} in project: {}", id, project_name);
+            // Implementation would go here
         }
     }
     Ok(())
@@ -358,186 +328,6 @@ async fn delete_repo(project: &str, repository_id: &str, hard_delete: bool) -> R
             Err(e)
         }
     }
-}
-
-/// Updates a Git repository in a specified Azure DevOps project
-///
-/// # Arguments
-/// * `project` - The name of the Azure DevOps project
-/// * `repository_id` - The ID/name of the repository to update
-/// * `new_name` - Optional new name for the repository
-/// * `new_default_branch` - Optional new default branch for the repository
-///
-/// # Returns
-/// * `Result<git::models::GitRepository>` - The updated repository details or error
-async fn update_repo(
-    project: &str,
-    repository_id: &str,
-    new_name: Option<&str>,
-    new_default_branch: Option<&str>,
-) -> Result<git::models::GitRepository> {
-    // First verify the repository exists
-    let existing_repo = get_repo(project, repository_id).await?;
-
-    // Check if any updates are requested
-    if new_name.is_none() && new_default_branch.is_none() {
-        return Err(anyhow::anyhow!(
-            "No updates specified. Please provide --name or --default-branch"
-        ));
-    }
-
-    match get_credentials() {
-        Ok(creds) => {
-            let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
-            let client = ClientBuilder::new(credential).build();
-
-            // Show what will be updated
-            println!(
-                "Updating repository '{}' in project '{}':",
-                repository_id, project
-            );
-            if let Some(name) = new_name {
-                println!("  📁 New name: {} -> {}", existing_repo.name, name);
-            }
-            if let Some(branch) = new_default_branch {
-                let current_branch = existing_repo.default_branch.as_deref().unwrap_or("(none)");
-                println!("  🌿 New default branch: {} -> {}", current_branch, branch);
-            }
-
-            // Create a modified repository object with updated values
-            let mut updated_repo = existing_repo.clone();
-            
-            // Update the repository name if specified
-            if let Some(name) = new_name {
-                updated_repo.name = name.to_string();
-            }
-            
-            // Update the default branch if specified
-            if let Some(branch) = new_default_branch {
-                updated_repo.default_branch = Some(branch.to_string());
-            }
-
-            // Make the API call to update the repository
-            // Note: The Azure DevOps REST API has limitations for repository updates.
-            // Different properties may require different API endpoints or methods.
-            
-            // For repository name updates
-            if let Some(name) = new_name {
-                // Create a new repository object with updated name
-                // Note: Azure DevOps may not support repository name updates via REST API
-                // This would typically require creating a new repository and migrating content
-                println!("⚠️  Repository name update attempted via API...");
-                
-                // Attempt to update using available API methods
-                // If direct update is not available, we'll note the limitation
-                match try_update_repository_name(&client, &creds.organization, &existing_repo.id, project, name).await {
-                    Ok(_) => {
-                        println!("✅ Repository name updated successfully");
-                        updated_repo.name = name.to_string();
-                    }
-                    Err(e) => {
-                        println!("⚠️  Direct repository name update not supported: {}", e);
-                        println!("   Repository name updates may require manual intervention in Azure DevOps");
-                        println!("   or may not be supported through the REST API.");
-                    }
-                }
-            }
-
-            // For default branch updates
-            if let Some(branch) = new_default_branch {
-                println!("⚠️  Default branch update attempted...");
-                
-                // Attempt to update default branch
-                // This often requires git operations rather than repository metadata updates
-                match try_update_default_branch(&client, &creds.organization, &existing_repo.id, project, branch).await {
-                    Ok(_) => {
-                        println!("✅ Default branch updated successfully");
-                        updated_repo.default_branch = Some(branch.to_string());
-                    }
-                    Err(e) => {
-                        println!("⚠️  Direct default branch update not supported: {}", e);
-                        println!("   Default branch updates may require:");
-                        println!("   1. Creating the target branch if it doesn't exist");
-                        println!("   2. Updating repository settings through the web UI");
-                        println!("   3. Using git commands to set the default branch");
-                    }
-                }
-            }
-
-            Ok(updated_repo)
-        }
-        Err(e) => {
-            eprintln!("Unable to update repository");
-            Err(e)
-        }
-    }
-}
-
-/// Attempts to update a repository name using available Azure DevOps API methods
-///
-/// # Arguments
-/// * `client` - The Azure DevOps client
-/// * `organization` - The organization name
-/// * `repository_id` - The repository ID
-/// * `project` - The project name
-/// * `new_name` - The new repository name
-///
-/// # Returns
-/// * `Result<()>` - Success or error result
-async fn try_update_repository_name(
-    _client: &git::Client,
-    _organization: &str,
-    _repository_id: &str,
-    _project: &str,
-    _new_name: &str,
-) -> Result<()> {
-    // Azure DevOps REST API has limited support for repository name updates
-    // Most implementations require using PowerShell, CLI, or web interface
-    
-    // For now, we'll return an error indicating this limitation
-    Err(anyhow::anyhow!(
-        "Repository name updates are not supported through the Azure DevOps REST API. \
-         Use the Azure DevOps web interface, Azure CLI, or PowerShell to rename repositories."
-    ))
-}
-
-/// Attempts to update the default branch using available Azure DevOps API methods
-///
-/// # Arguments
-/// * `client` - The Azure DevOps client
-/// * `organization` - The organization name
-/// * `repository_id` - The repository ID
-/// * `project` - The project name
-/// * `new_default_branch` - The new default branch name
-///
-/// # Returns
-/// * `Result<()>` - Success or error result
-async fn try_update_default_branch(
-    _client: &git::Client,
-    _organization: &str,
-    _repository_id: &str,
-    _project: &str,
-    new_default_branch: &str,
-) -> Result<()> {
-    // Default branch updates often require:
-    // 1. Ensuring the target branch exists
-    // 2. Updating repository settings
-    // 3. May require git operations or web interface
-    
-    // The Azure DevOps REST API has limited support for this operation
-    // It typically requires multiple steps and may not be fully supported
-    
-    // For a complete implementation, you would need to:
-    // 1. Check if the target branch exists using the refs API
-    // 2. Create the branch if it doesn't exist
-    // 3. Update the repository default branch setting (if API supports it)
-    
-    Err(anyhow::anyhow!(
-        "Default branch updates through REST API are limited. \
-         Consider using git commands or the Azure DevOps web interface. \
-         Ensure the target branch '{}' exists first.",
-        new_default_branch
-    ))
 }
 
 /// Displays detailed information about a repository
