@@ -7,7 +7,7 @@ CLI tool for interacting with Azure DevOps.
 
 ## Features
 
-- **Repository Management**: List, create, update, delete, clone, and view repositories
+- **Repository Management**: List, create, delete, clone, and view repositories
 - **Pipeline Management**: Manage Azure DevOps pipelines
 - **Board Management**: Manage Azure DevOps boards  
 - **Artifact Management**: Manage Azure DevOps artifacts
