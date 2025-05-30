@@ -12,7 +12,6 @@ pub struct Credentials {
     pub pat: String,
 }
 
-// Gets the path to the config directory
 fn get_config_dir() -> Result<PathBuf> {
     let home_dir = dirs::home_dir().ok_or_else(|| anyhow!("Could not find home directory"))?;
     let config_dir = home_dir.join(".azdocli");
@@ -24,7 +23,6 @@ fn get_config_dir() -> Result<PathBuf> {
     Ok(config_dir)
 }
 
-// Saves the organization in a local config file
 fn save_organization(organization: &str) -> Result<()> {
     let config_dir = get_config_dir()?;
     let config_file = config_dir.join("config.json");
@@ -38,7 +36,6 @@ fn save_organization(organization: &str) -> Result<()> {
     Ok(())
 }
 
-// Retrieves the organization from the config file
 fn get_organization() -> Result<String> {
     let config_dir = get_config_dir()?;
     let config_file = config_dir.join("config.json");
@@ -60,13 +57,11 @@ fn get_organization() -> Result<String> {
     Ok(organization)
 }
 
-// Gets the path to credentials file
 fn get_credentials_file_path() -> Result<PathBuf> {
     let config_dir = get_config_dir()?;
     Ok(config_dir.join("credentials.json"))
 }
 
-// Saves the PAT in a secure file
 fn save_pat(pat: &str) -> Result<()> {
     let credentials = Credentials {
         organization: get_organization()?,
@@ -91,7 +86,6 @@ fn save_pat(pat: &str) -> Result<()> {
     Ok(())
 }
 
-// Retrieves the PAT from the file
 fn get_pat() -> Result<String> {
     let creds_path = get_credentials_file_path()?;
 
@@ -107,7 +101,6 @@ fn get_pat() -> Result<String> {
     Ok(credentials.pat)
 }
 
-// Logs in with a PAT
 pub async fn login() -> Result<()> {
     println!("{}", "Login to Azure DevOps".bold());
 
@@ -125,7 +118,6 @@ pub async fn login() -> Result<()> {
     // In a real implementation, you would validate the PAT with Azure DevOps API
     // For now, we'll just save the credentials
 
-    // Save the organization, the PAT will be saved in this function
     save_organization(&organization)?;
     save_pat(&pat)?;
 
@@ -133,7 +125,6 @@ pub async fn login() -> Result<()> {
     Ok(())
 }
 
-// Logs out by removing saved credentials
 pub fn logout() -> Result<()> {
     let config_dir = get_config_dir()?;
     let config_file = config_dir.join("config.json");
@@ -150,7 +141,6 @@ pub fn logout() -> Result<()> {
     Ok(())
 }
 
-// Gets the saved credentials (organization and PAT)
 pub fn get_credentials() -> Result<Credentials> {
     let organization = get_organization()?;
     let pat = get_pat()?;
@@ -158,12 +148,10 @@ pub fn get_credentials() -> Result<Credentials> {
     Ok(Credentials { organization, pat })
 }
 
-// Saves the default project in a local config file
 pub fn save_default_project(project: &str) -> Result<()> {
     let config_dir = get_config_dir()?;
     let config_file = config_dir.join("config.json");
 
-    // Read existing config or create new one
     let mut config = if config_file.exists() {
         let config_content = fs::read_to_string(&config_file)?;
         serde_json::from_str::<serde_json::Value>(&config_content)?
@@ -171,7 +159,6 @@ pub fn save_default_project(project: &str) -> Result<()> {
         serde_json::json!({})
     };
 
-    // Update the default project
     config["default_project"] = serde_json::Value::String(project.to_string());
 
     fs::write(config_file, serde_json::to_string_pretty(&config)?)?;
@@ -179,7 +166,6 @@ pub fn save_default_project(project: &str) -> Result<()> {
     Ok(())
 }
 
-// Retrieves the default project from the config file
 pub fn get_default_project() -> Result<String> {
     let config_dir = get_config_dir()?;
     let config_file = config_dir.join("config.json");
@@ -197,7 +183,6 @@ pub fn get_default_project() -> Result<String> {
     }
 }
 
-// Gets project from argument or default
 pub fn get_project_or_default(project_arg: Option<&str>) -> Result<String> {
     match project_arg {
         Some(project) => Ok(project.to_string()),

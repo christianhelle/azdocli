@@ -69,7 +69,6 @@ pub enum ReposSubCommands {
 }
 
 pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
-    // Ensure user is authenticated
     match subcommand {
         ReposSubCommands::Create { project, name } => {
             let project_name = auth::get_project_or_default(project.as_deref())?;
@@ -119,15 +118,12 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
         } => {
             let project_name = auth::get_project_or_default(project.as_deref())?;
 
-            // Show what will be deleted
             println!(
                 "{}Deleting repository '{}' in project '{}'",
                 if *hard { "Hard " } else { "Soft " },
                 id,
                 project_name
             );
-
-            // Ask for confirmation unless skipped
             if !yes {
                 let delete_type = if *hard { "hard" } else { "soft" };
                 let prompt_message = format!(
@@ -407,7 +403,6 @@ async fn clone_all_repos(
         }
     }
 
-    // Ask for confirmation unless skipped
     if !skip_confirmation {
         if !Confirm::new()
             .with_prompt("Do you want to proceed with cloning all repositories?")
@@ -421,7 +416,6 @@ async fn clone_all_repos(
         println!("\nProceeding with clone operation (confirmation skipped)...");
     }
 
-    // Create target directory if it doesn't exist
     if target_directory != "." {
         std::fs::create_dir_all(target_directory)?;
     }
@@ -713,27 +707,23 @@ mod tests {
     #[tokio::test]
     #[ignore] // Requires test_config.json with valid credentials
     async fn test_create_show_clone_delete_repository() -> Result<()> {
-        // Load test configuration
         let project = get_test_project()?;
         let test_repo_name = format!("test-repo-{}", chrono::Utc::now().timestamp());
 
         println!("Testing with project: {}", project);
         println!("Test repository name: {}", test_repo_name);
 
-        // Test 1: Create repository
         println!("1. Creating repository...");
         let created_repo = create_test_repo(&project, &test_repo_name).await?;
         assert_eq!(created_repo.name, test_repo_name);
         println!("✅ Repository created successfully: {}", created_repo.name);
 
-        // Test 2: Show repository details
         println!("2. Retrieving repository details...");
         let retrieved_repo = get_test_repo(&project, &test_repo_name).await?;
         assert_eq!(retrieved_repo.id, created_repo.id);
         assert_eq!(retrieved_repo.name, test_repo_name);
         println!("✅ Repository details retrieved successfully");
 
-        // Test 3: Clone repository (to a temporary directory)
         println!("3. Cloning repository...");
         let temp_dir = std::env::temp_dir().join(format!("azdocli_test_{}", test_repo_name));
 
@@ -747,7 +737,6 @@ mod tests {
                     if output.status.success() {
                         println!("✅ Repository cloned successfully to: {:?}", temp_dir);
 
-                        // Clean up cloned directory
                         if temp_dir.exists() {
                             std::fs::remove_dir_all(&temp_dir).ok();
                         }
@@ -770,12 +759,10 @@ mod tests {
             println!("⚠️  No SSH URL available for cloning");
         }
 
-        // Test 4: Hard delete repository
         println!("4. Deleting repository...");
         delete_test_repo(&project, &created_repo.id).await?;
         println!("✅ Repository deleted successfully");
 
-        // Verify deletion
         println!("5. Verifying deletion...");
         let verification_result = get_test_repo(&project, &test_repo_name).await;
         assert!(
@@ -802,7 +789,6 @@ mod tests {
             project
         );
         for repo in repos.iter().take(5) {
-            // Show first 5 repos
             println!("  - {}", repo.name);
         }
 

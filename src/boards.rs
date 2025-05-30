@@ -137,7 +137,6 @@ async fn create_work_item(
 ) -> Result<()> {
     match auth::get_credentials() {
         Ok(_) => {
-            // Map our enum to a string for the work item type
             let type_str = match work_item_type {
                 WorkItemType::Bug => "Bug",
                 WorkItemType::Task => "Task",
@@ -182,7 +181,6 @@ async fn update_work_item(
 
     match auth::get_credentials() {
         Ok(_) => {
-            // Display what would be updated
             println!("Would update work item {} in project '{}':", id, project);
 
             if let Some(t) = title {
@@ -201,7 +199,6 @@ async fn update_work_item(
                 println!("New priority: {}", p);
             }
 
-            // Get the current work item to return it as if it were updated
             Ok(())
         }
         Err(e) => {
@@ -219,13 +216,11 @@ async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<
 
     match auth::get_credentials() {
         Ok(_) => {
-            // For soft delete, we'll update the state to "Removed"
             if soft_delete {
                 update_work_item(project, id, None, None, Some("Removed"), None).await?;
                 return Ok(());
             }
 
-            // For hard delete, we'll use the delete API if available
             println!(
                 "Would permanently delete work item {} in project '{}'",
                 id, project
@@ -279,7 +274,6 @@ fn display_work_item(work_item: &models::WorkItem) {
         println!("📚 Revision: {}", rev);
     }
 
-    // Work with fields as a serde_json::Value
     if let Some(fields) = work_item.fields.as_object() {
         if let Some(title) = fields.get("System.Title").and_then(|v| v.as_str()) {
             println!("📝 Title: {}", title);
@@ -337,7 +331,6 @@ fn display_work_item(work_item: &models::WorkItem) {
 }
 
 pub async fn handle_command(subcommand: &BoardsSubCommands) -> Result<()> {
-    // Ensure user is authenticated
     let _credentials = auth::get_credentials()?;
     match subcommand {
         BoardsSubCommands::WorkItem { subcommand } => handle_work_item_command(subcommand).await,
@@ -408,7 +401,6 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
                 id, project_name
             );
 
-            // Open in browser if requested
             if *web {
                 match auth::get_credentials() {
                     Ok(creds) => {
@@ -424,7 +416,6 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
                 }
             }
 
-            // Otherwise show in terminal
             match get_work_item(&project_name, id).await {
                 Ok(work_item) => {
                     display_work_item(&work_item);

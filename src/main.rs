@@ -69,7 +69,6 @@ async fn main() -> anyhow::Result<()> {
             repos::handle_command(subcommand).await?;
         }
         None => {
-            // When no command is provided, print the help information like --help would do
             Cli::command().print_help()?;
         }
     }
