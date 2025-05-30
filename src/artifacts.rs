@@ -3,6 +3,8 @@ use anyhow::{anyhow, Result};
 use azure_devops_rust_api::{artifacts, Credential};
 use clap::Subcommand;
 use colored::Colorize;
+use reqwest;
+use std::fs;
 use std::path::Path;
 
 #[derive(Subcommand, Clone)]
@@ -88,31 +90,60 @@ async fn download_artifact(
     version: &str,
     output_dir: &str,
 ) -> Result<()> {
-    // For now, implement a placeholder that explains what's needed
+    let credentials = auth::get_credentials()?;
     println!(
-        "{}Note: Universal package download requires a feed to be configured.",
-        "ℹ️ ".yellow()
-    );
-    println!(
-        "{}This feature will download the artifact '{}' version '{}' from project '{}'",
-        "📋 ".blue(),
-        name,
-        version,
+        "{}Finding feed for universal packages in project '{}'...",
+        "🔍 ".blue(),
         project
     );
-    println!("{}Output directory: {}", "📂 ".blue(), output_dir);
 
-    // Try to get the feed
-    match get_or_create_feed(project).await {
-        Ok(feed_id) => {
-            println!("{}Using feed: {}", "🔑 ".blue(), feed_id);
-            // TODO: Implement actual download using the Universal Package REST API
-            Err(anyhow!(
-                "Universal package download not yet implemented. Found feed: {}",
-                feed_id
-            ))
-        }
-        Err(e) => Err(e),
+    // Get the feed ID
+    let feed_id = get_or_create_feed(project).await?;
+    println!("{}Using feed: {}", "🔑 ".blue(), feed_id);
+
+    // Build the download URL for Universal Package
+    let url = format!(
+        "https://pkgs.dev.azure.com/{}/_packaging/{}/upack/download/{}/{}",
+        credentials.organization, feed_id, name, version
+    );
+
+    println!("{}Downloading from: {}", "🌐 ".blue(), url);
+
+    // Create HTTP client with authentication
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .basic_auth("", Some(&credentials.pat))
+        .send()
+        .await?;
+
+    if response.status().is_success() {
+        // Create output directory if it doesn't exist
+        fs::create_dir_all(output_dir)?;
+
+        // Save the file
+        let filename = format!("{}-{}.zip", name, version);
+        let output_path = Path::new(output_dir).join(filename);
+
+        println!("{}Saving to: {}", "💾 ".blue(), output_path.display());
+
+        let bytes = response.bytes().await?;
+        fs::write(&output_path, bytes)?;
+
+        println!(
+            "{}Successfully downloaded {} bytes",
+            "✅ ".green(),
+            fs::metadata(&output_path)?.len()
+        );
+        Ok(())
+    } else {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        Err(anyhow!(
+            "Failed to download artifact: HTTP {} - {}",
+            status,
+            error_text
+        ))
     }
 }
 
@@ -146,17 +177,46 @@ async fn publish_artifact(
     }
 
     // Try to get the feed
-    match get_or_create_feed(project).await {
-        Ok(feed_id) => {
-            println!("{}Using feed: {}", "🔑 ".blue(), feed_id);
-            // TODO: Implement actual publish using the Universal Package REST API
-            Err(anyhow!(
-                "Universal package publish not yet implemented. Found feed: {}",
-                feed_id
-            ))
-        }
-        Err(e) => Err(e),
+    let _credentials = auth::get_credentials()?;
+    println!(
+        "{}Finding feed for universal packages in project '{}'...",
+        "🔍 ".blue(),
+        project
+    );
+
+    let feed_id = get_or_create_feed(project).await?;
+    println!("{}Using feed: {}", "🔑 ".blue(), feed_id);
+
+    // For now, implement a simplified version that explains the process
+    println!(
+        "{}Universal package publishing requires creating a .upack file and uploading via REST API",
+        "ℹ️ ".yellow()
+    );
+    println!(
+        "{}Would upload '{}' as package '{}' version '{}' to feed '{}'",
+        "📦 ".blue(),
+        file_path,
+        name,
+        version,
+        feed_id
+    );
+
+    // Implement basic validation
+    let path = Path::new(file_path);
+    if path.is_file() {
+        let size = fs::metadata(path)?.len();
+        println!("{}File size: {} bytes", "📊 ".blue(), size);
+    } else if path.is_dir() {
+        let entries = fs::read_dir(path)?;
+        let count = entries.count();
+        println!("{}Directory contains {} entries", "📊 ".blue(), count);
     }
+
+    // For now, return an informative error rather than implementing the full upload
+    Err(anyhow!(
+        "Universal package publishing is not yet fully implemented. Would publish to feed: {}",
+        feed_id
+    ))
 }
 
 pub async fn handle_command(subcommand: &ArtifactsSubCommands) -> Result<()> {
