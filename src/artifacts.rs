@@ -187,35 +187,51 @@ async fn publish_artifact(
     let feed_id = get_or_create_feed(project).await?;
     println!("{}Using feed: {}", "🔑 ".blue(), feed_id);
 
-    // For now, implement a simplified version that explains the process
-    println!(
-        "{}Universal package publishing requires creating a .upack file and uploading via REST API",
-        "ℹ️ ".yellow()
-    );
-    println!(
-        "{}Would upload '{}' as package '{}' version '{}' to feed '{}'",
-        "📦 ".blue(),
-        file_path,
-        name,
-        version,
-        feed_id
-    );
-
-    // Implement basic validation
+    // Implement basic validation and provide clear guidance
     let path = Path::new(file_path);
     if path.is_file() {
         let size = fs::metadata(path)?.len();
         println!("{}File size: {} bytes", "📊 ".blue(), size);
+
+        // For a single file, we could potentially upload it directly
+        // but Universal Packages typically expect .upack format
+        println!(
+            "{}Note: Single file upload would need to be packaged as .upack format",
+            "ℹ️ ".yellow()
+        );
     } else if path.is_dir() {
         let entries = fs::read_dir(path)?;
         let count = entries.count();
         println!("{}Directory contains {} entries", "📊 ".blue(), count);
+
+        println!(
+            "{}Note: Directory would need to be packaged as .upack (zip) format",
+            "ℹ️ ".yellow()
+        );
     }
 
-    // For now, return an informative error rather than implementing the full upload
+    // Show what the upload URL would be
+    let upload_url = format!(
+        "https://pkgs.dev.azure.com/{}/_packaging/{}/upack/upload",
+        _credentials.organization, feed_id
+    );
+    println!("{}Upload URL would be: {}", "🌐 ".blue(), upload_url);
+
+    // For now, provide clear guidance on what's needed for full implementation
+    println!(
+        "{}Universal Package publishing requires:",
+        "📋 ".yellow().bold()
+    );
+    println!("  • Creating a .upack file (zip format with manifest)");
+    println!("  • Uploading via HTTP PUT to the Azure DevOps REST API");
+    println!("  • Including package metadata in the manifest");
+
+    if let Some(desc) = description {
+        println!("{}Would include description: '{}'", "📝 ".blue(), desc);
+    }
+
     Err(anyhow!(
-        "Universal package publishing is not yet fully implemented. Would publish to feed: {}",
-        feed_id
+        "Universal package publishing implementation is pending. Use Azure CLI or manual upload for now."
     ))
 }
 
