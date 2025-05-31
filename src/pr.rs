@@ -1,11 +1,10 @@
-use crate::auth;
+use crate::{auth, repos};
 use anyhow::Result;
 use azure_devops_rust_api::git::{self, ClientBuilder};
 use clap::Subcommand;
 
 #[derive(Subcommand, Clone)]
-pub enum PullRequestsSubCommands {
-    /// Create new pull request
+pub enum PullRequestsSubCommands {    /// Create new pull request
     Create {
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
@@ -22,6 +21,14 @@ pub enum PullRequestsSubCommands {
         /// Description of the pull request
         #[clap(short, long)]
         description: Option<String>,
+
+        /// Source branch for the pull request (e.g., 'feature/my-feature')
+        #[clap(short, long)]
+        source: String,
+
+        /// Target branch for the pull request (defaults to 'main')
+        #[clap(long, default_value = "main")]
+        target: String,
     },
     /// List pull requests
     List {
@@ -62,12 +69,13 @@ fn create_client() -> Result<git::Client> {
 }
 
 pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Result<()> {
-    match subcommand {
-        PullRequestsSubCommands::Create {
+    match subcommand {        PullRequestsSubCommands::Create {
             project,
             repo,
             title,
             description,
+            source,
+            target,
         } => {
             let project_name = auth::get_project_or_default(project.as_deref())?;
             create_pull_request(
@@ -75,6 +83,8 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
                 repo,
                 title.as_deref(),
                 description.as_deref(),
+                source,
+                target,
             )
             .await?;
         }
@@ -93,26 +103,66 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
 /// Creates a new pull request
 async fn create_pull_request(
     project: &str,
-    _repo: &str,
+    repo: &str,
     title: Option<&str>,
     description: Option<&str>,
+    source: &str,
+    target: &str,
 ) -> Result<()> {
     match auth::get_credentials() {
-        Ok(_creds) => {
-            let _client = create_client()?;
-            // let pr_client = client.pull_requests_client();
+        Ok(creds) => {
+            let client = create_client()?;
+            
+            // First, validate that the repository exists
+            let repository = repos::get_repo(project, repo).await?;
+            
+            // Use the pull_requests_client
+            let pr_client = client.pull_requests_client();
 
-            // For now, just show that we're attempting to create
-            println!("✅ Would create pull request:");
-            println!("  Project: {}", project);
-            println!("  Title: {}", title.unwrap_or("Default title"));
-            println!(
-                "  Description: {}",
-                description.unwrap_or("Default description")
-            );
-            println!("  Note: Full implementation requires source/target branch specification");
-
-            Ok(())
+            // Format branch names with refs/heads/ prefix if not already present
+            let source_ref = if source.starts_with("refs/heads/") {
+                source.to_string()
+            } else {
+                format!("refs/heads/{}", source)
+            };
+            
+            let target_ref = if target.starts_with("refs/heads/") {
+                target.to_string()
+            } else {
+                format!("refs/heads/{}", target)
+            };            println!("Creating pull request:");
+            println!("  Repository: {}", repo);
+            println!("  Source branch: {}", source);
+            println!("  Target branch: {}", target);
+            println!("  Title: {}", title.unwrap_or("Default title"));            // Create pull request options with all required fields and correct types
+            let pr_options = git::models::GitPullRequestCreateOptions {
+                source_ref_name: source_ref.clone(),
+                target_ref_name: target_ref.clone(),
+                title: title.unwrap_or("Pull Request").to_string(),
+                description: description.map(|d| d.to_string()),
+                is_draft: Some(false),
+                labels: Vec::new(),
+                merge_options: None,
+                completion_options: None,
+                work_item_refs: Vec::new(),
+                reviewers: Vec::new(),
+            };            // Create the pull request with correct parameter order: organization, repository_id, project, create_options
+            match pr_client
+                .create(&creds.organization, &repository.id, project, pr_options)
+                .await
+            {
+                Ok(created_pr) => {
+                    println!("✅ Pull request created successfully!");
+                    println!("  ID: {}", created_pr.pull_request_id);
+                    println!("  Title: {}", created_pr.title.unwrap_or_default());
+                    println!("  URL: {}", created_pr.url);
+                    Ok(())
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to create pull request: {}", e);
+                    Err(anyhow::anyhow!("Failed to create pull request: {}", e))
+                }
+            }
         }
         Err(e) => {
             eprintln!("Unable to create pull request");
