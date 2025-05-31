@@ -213,7 +213,6 @@ async fn create_repo(
     }
 }
 
-/// Retrieves a list of Git repositories from a specified Azure DevOps project
 async fn list_repos(project: &str) -> Result<Vec<git::models::GitRepository>, anyhow::Error> {
     match get_credentials() {
         Ok(creds) => {
@@ -232,14 +231,6 @@ async fn list_repos(project: &str) -> Result<Vec<git::models::GitRepository>, an
     }
 }
 
-/// Retrieves a single Git repository by ID from a specified Azure DevOps project
-///
-/// # Arguments
-/// * `project` - The name of the Azure DevOps project
-/// * `repository_id` - The ID of the repository to retrieve
-///
-/// # Returns
-/// * `Result<git::models::GitRepository>` - The repository details or error
 pub async fn get_repo(project: &str, repository_id: &str) -> Result<git::models::GitRepository> {
     let repos = match list_repos(project).await {
         Ok(repos) => repos,
@@ -276,15 +267,6 @@ pub async fn get_repo(project: &str, repository_id: &str) -> Result<git::models:
     }
 }
 
-/// Deletes a Git repository from a specified Azure DevOps project
-///
-/// # Arguments
-/// * `project` - The name of the Azure DevOps project
-/// * `repository_id` - The ID/name of the repository to delete
-/// * `hard_delete` - Whether to perform hard delete after soft delete
-///
-/// # Returns
-/// * `Result<()>` - Success or error result
 async fn delete_repo(project: &str, repository_id: &str, hard_delete: bool) -> Result<()> {
     match get_credentials() {
         Ok(creds) => {
@@ -321,10 +303,6 @@ async fn delete_repo(project: &str, repository_id: &str, hard_delete: bool) -> R
     }
 }
 
-/// Displays detailed information about a repository
-///
-/// # Arguments
-/// * `repo` - The GitRepository object to display
 fn display_repo_details(repo: &git::models::GitRepository) {
     println!("📋 Repository Details");
     println!("=====================");
@@ -371,17 +349,6 @@ fn display_repo_details(repo: &git::models::GitRepository) {
     }
 }
 
-/// Clones all repositories from a specified Azure DevOps project to a target directory
-///
-/// # Arguments
-/// * `project` - The name of the Azure DevOps project
-/// * `target_dir` - Optional target directory (defaults to current directory)
-/// * `skip_confirmation` - Whether to skip the confirmation prompt
-/// * `parallel` - Whether to clone repositories in parallel
-/// * `concurrency` - Number of concurrent operations (only used if parallel is true)
-///
-/// # Returns
-/// * `Result<()>` - Success or error result
 async fn clone_all_repos(
     project: &str,
     target_dir: Option<&str>,
@@ -520,21 +487,12 @@ async fn clone_all_repos(
     Ok(())
 }
 
-/// Clones repositories in parallel using tokio tasks
-///
-/// # Arguments
-/// * `repos` - Vector of GitRepository objects to clone
-/// * `target_directory` - Target directory for cloning
-/// * `concurrency` - Number of concurrent clone operations
-///
-/// # Returns
-/// * `Vec<Result<String, String>>` - Results for each clone operation
 async fn clone_repos_parallel(
     repos: &[git::models::GitRepository],
     target_directory: &str,
     concurrency: usize,
 ) -> Vec<Result<String, String>> {
-    let semaphore = Arc::new(Semaphore::new(concurrency)); // Use provided concurrency level
+    let semaphore = Arc::new(Semaphore::new(concurrency));
     let mut tasks = Vec::new();
 
     for repo in repos {

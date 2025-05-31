@@ -93,7 +93,6 @@ pub enum WorkItemSubCommands {
     },
 }
 
-/// Creates a work items client for Azure DevOps API
 fn create_client() -> Result<wit::Client> {
     match auth::get_credentials() {
         Ok(creds) => {
@@ -105,7 +104,6 @@ fn create_client() -> Result<wit::Client> {
     }
 }
 
-/// Gets a work item by ID
 async fn get_work_item(project: &str, id: &str) -> Result<models::WorkItem> {
     let id_int = id
         .parse::<i32>()
@@ -128,7 +126,6 @@ async fn get_work_item(project: &str, id: &str) -> Result<models::WorkItem> {
     }
 }
 
-/// Creates a new work item - Note: API might not support direct creation through wit client
 async fn create_work_item(
     project: &str,
     work_item_type: &WorkItemType,
@@ -137,7 +134,6 @@ async fn create_work_item(
 ) -> Result<()> {
     match auth::get_credentials() {
         Ok(_) => {
-            // Map our enum to a string for the work item type
             let type_str = match work_item_type {
                 WorkItemType::Bug => "Bug",
                 WorkItemType::Task => "Task",
@@ -146,9 +142,6 @@ async fn create_work_item(
                 WorkItemType::Epic => "Epic",
             };
 
-            // Since the API doesn't appear to have a direct create method,
-            // we'll just return success with the details.
-            // In a real implementation, you would make the appropriate API call here.
             println!(
                 "Would create a {} work item with title '{}' in project '{}'",
                 type_str, title, project
@@ -167,7 +160,6 @@ async fn create_work_item(
     }
 }
 
-/// Updates a work item - Note: API might not support direct updates through wit client
 async fn update_work_item(
     project: &str,
     id: &str,
@@ -208,7 +200,6 @@ async fn update_work_item(
     }
 }
 
-/// Deletes a work item - Note: API might not support direct deletion through wit client
 async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<()> {
     let _id_int = id
         .parse::<i32>()
@@ -234,7 +225,6 @@ async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<
     }
 }
 
-/// Opens a work item in the web browser
 fn open_work_item_in_browser(organization: &str, id: &str) -> Result<()> {
     let url = format!(
         "https://dev.azure.com/{}//_workitems/edit/{}",
@@ -262,7 +252,6 @@ fn open_work_item_in_browser(organization: &str, id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Displays a work item with formatted output
 fn display_work_item(work_item: &models::WorkItem) {
     println!("📋 Work Item Details");
     println!("=====================");
@@ -273,7 +262,6 @@ fn display_work_item(work_item: &models::WorkItem) {
         println!("📚 Revision: {}", rev);
     }
 
-    // Work with fields as a serde_json::Value
     if let Some(fields) = work_item.fields.as_object() {
         if let Some(title) = fields.get("System.Title").and_then(|v| v.as_str()) {
             println!("📝 Title: {}", title);
@@ -315,23 +303,9 @@ fn display_work_item(work_item: &models::WorkItem) {
             println!("{}", desc);
         }
     }
-
-    // Skip displaying URL for now since the WorkItem struct is different than expected
-    // This would need further investigation to correctly access the URL
-    // Uncomment and fix when the URL structure is better understood
-    /*
-    if let Some(resource) = &work_item.work_item_tracking_resource {
-        if let Some(ref_resource) = &resource.work_item_tracking_resource_reference {
-            if let Some(url) = &ref_resource.url {
-                println!("\n🌐 URL: {}", url);
-            }
-        }
-    }
-    */
 }
 
 pub async fn handle_command(subcommand: &BoardsSubCommands) -> Result<()> {
-    // Ensure user is authenticated
     let _credentials = auth::get_credentials()?;
     match subcommand {
         BoardsSubCommands::WorkItem { subcommand } => handle_work_item_command(subcommand).await,

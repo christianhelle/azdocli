@@ -44,7 +44,6 @@ pub enum PipelinesSubCommands {
     },
 }
 
-/// Creates a pipelines client for Azure DevOps API
 fn create_client() -> Result<pipelines::Client> {
     match auth::get_credentials() {
         Ok(creds) => {
@@ -56,7 +55,6 @@ fn create_client() -> Result<pipelines::Client> {
     }
 }
 
-/// Retrieves a list of pipelines from a specified Azure DevOps project
 async fn list_pipelines(project: &str) -> Result<Vec<models::Pipeline>> {
     match auth::get_credentials() {
         Ok(creds) => {
@@ -74,7 +72,6 @@ async fn list_pipelines(project: &str) -> Result<Vec<models::Pipeline>> {
     }
 }
 
-/// Retrieves a list of runs for a specific pipeline
 async fn get_pipeline_runs(project: &str, pipeline_id: &str) -> Result<Vec<models::Run>> {
     match auth::get_credentials() {
         Ok(creds) => {
@@ -96,7 +93,6 @@ async fn get_pipeline_runs(project: &str, pipeline_id: &str) -> Result<Vec<model
     }
 }
 
-/// Retrieves the details of a specific build
 async fn get_build(project: &str, pipeline_id: &str, build_id: &str) -> Result<models::Run> {
     match auth::get_credentials() {
         Ok(creds) => {
@@ -122,13 +118,11 @@ async fn get_build(project: &str, pipeline_id: &str, build_id: &str) -> Result<m
     }
 }
 
-/// Starts a pipeline run - not fully implemented
 async fn run_pipeline(_project: &str, _pipeline_id: &str) -> Result<models::Run> {
     // Not yet implemented
     Err(anyhow!("Running pipelines is not yet fully implemented"))
 }
 
-/// Displays a table of pipelines
 fn display_pipelines(pipelines: &[models::Pipeline]) {
     if pipelines.is_empty() {
         println!("No pipelines found.");
@@ -139,12 +133,10 @@ fn display_pipelines(pipelines: &[models::Pipeline]) {
     println!("{}", "-".repeat(50));
 
     for pipeline in pipelines {
-        // Use debug format for now
         println!("{:<10} {:<40}", pipeline.id, format!("{:?}", pipeline.name));
     }
 }
 
-/// Displays a table of pipeline runs with minimal formatting
 fn display_pipeline_runs(runs: &[models::Run]) {
     if runs.is_empty() {
         println!("No runs found.");
@@ -165,7 +157,6 @@ fn display_pipeline_runs(runs: &[models::Run]) {
     });
 }
 
-/// Displays detailed information about a pipeline run with minimal formatting
 fn display_build_details(run: &models::Run) {
     println!("📋 Pipeline Run Details");
     println!("=====================");

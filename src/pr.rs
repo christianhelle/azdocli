@@ -56,7 +56,6 @@ pub enum PullRequestsSubCommands {    /// Create new pull request
     },
 }
 
-/// Creates a git client for Azure DevOps API
 fn create_client() -> Result<git::Client> {
     match auth::get_credentials() {
         Ok(creds) => {
@@ -100,7 +99,6 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
     Ok(())
 }
 
-/// Creates a new pull request
 async fn create_pull_request(
     project: &str,
     repo: &str,
@@ -109,17 +107,13 @@ async fn create_pull_request(
     source: &str,
     target: &str,
 ) -> Result<()> {
-    match auth::get_credentials() {
-        Ok(creds) => {
+    match auth::get_credentials() {        Ok(creds) => {
             let client = create_client()?;
             
-            // First, validate that the repository exists
             let repository = repos::get_repo(project, repo).await?;
             
-            // Use the pull_requests_client
             let pr_client = client.pull_requests_client();
 
-            // Format branch names with refs/heads/ prefix if not already present
             let source_ref = if source.starts_with("refs/heads/") {
                 source.to_string()
             } else {
@@ -129,12 +123,13 @@ async fn create_pull_request(
             let target_ref = if target.starts_with("refs/heads/") {
                 target.to_string()
             } else {
-                format!("refs/heads/{}", target)
-            };            println!("Creating pull request:");
+                format!("refs/heads/{}", target)            };
+            println!("Creating pull request:");
             println!("  Repository: {}", repo);
             println!("  Source branch: {}", source);
             println!("  Target branch: {}", target);
-            println!("  Title: {}", title.unwrap_or("Default title"));            // Create pull request options with all required fields and correct types
+            println!("  Title: {}", title.unwrap_or("Default title"));
+            
             let pr_options = git::models::GitPullRequestCreateOptions {
                 source_ref_name: source_ref.clone(),
                 target_ref_name: target_ref.clone(),
@@ -144,9 +139,9 @@ async fn create_pull_request(
                 labels: Vec::new(),
                 merge_options: None,
                 completion_options: None,
-                work_item_refs: Vec::new(),
-                reviewers: Vec::new(),
-            };            // Create the pull request with correct parameter order: organization, repository_id, project, create_options
+                work_item_refs: Vec::new(),                reviewers: Vec::new(),
+            };
+            
             match pr_client
                 .create(&creds.organization, &repository.id, project, pr_options)
                 .await
@@ -171,21 +166,15 @@ async fn create_pull_request(
     }
 }
 
-/// Lists all pull requests for a repository
 async fn list_pull_requests(project: &str, repo: &str) -> Result<()> {
     match auth::get_credentials() {
-        Ok(creds) => {
-            let client = create_client()?;
-
-            // Use the pull_requests_client
+        Ok(creds) => {            let client = create_client()?;
             let pr_client = client.pull_requests_client();
 
-            // Get all pull requests in the project
             let pull_requests = pr_client
                 .get_pull_requests_by_project(creds.organization, project)
                 .await?;
 
-            // Filter by repository name
             let filtered_prs: Vec<_> = pull_requests
                 .value
                 .into_iter()
@@ -220,7 +209,6 @@ async fn list_pull_requests(project: &str, repo: &str) -> Result<()> {
     }
 }
 
-/// Shows details of a specific pull request
 async fn show_pull_request(project: &str, _repo: &str, id: &str) -> Result<()> {
     match auth::get_credentials() {
         Ok(creds) => {
