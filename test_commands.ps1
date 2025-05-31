@@ -1,7 +1,7 @@
-# Test script for azdocli commands
+# Test script for ado commands
 # This script tests the command-line interface without requiring actual Azure DevOps authentication
 
-Write-Host "Testing azdocli command-line interface..." -ForegroundColor Green
+Write-Host "Testing ado command-line interface..." -ForegroundColor Green
 
 # Build the project first
 Write-Host "`nBuilding project..." -ForegroundColor Yellow
@@ -11,7 +11,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-$exe = ".\target\debug\azdocli.exe"
+$exe = ".\target\debug\ado.exe"
 
 Write-Host "`nTesting main help..." -ForegroundColor Yellow
 & $exe --help
