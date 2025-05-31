@@ -19,15 +19,15 @@ The `project` command allows you to set and view a default project, eliminating 
 
 ```sh
 # Set a default project
-azdocli project MyDefaultProject
+ado project MyDefaultProject
 
 # View the current default project
-azdocli project
+ado project
 
 # All commands will now use the default project if --project is not specified
-azdocli repos list                  # Uses default project
-azdocli pipelines list              # Uses default project
-azdocli repos list --project Other  # Overrides default with "Other"
+ado repos list                  # Uses default project
+ado pipelines list              # Uses default project
+ado repos list --project Other  # Overrides default with "Other"
 ```
 
 **Default Project Features:**
@@ -45,28 +45,28 @@ The `repos clone` command allows you to clone all repositories from an Azure Dev
 
 ```sh
 # Set a default project first (optional but recommended)
-azdocli project MyProject
+ado project MyProject
 
 # Clone all repositories from the default project (with confirmation prompt)
-azdocli repos clone
+ado repos clone
 
 # Or override with a specific project
-azdocli repos clone --project MyProject
+ado repos clone --project MyProject
 
 # Clone to a specific directory
-azdocli repos clone --target-dir ./repos
+ado repos clone --target-dir ./repos
 
 # Skip confirmation prompt (useful for automation)
-azdocli repos clone --yes
+ado repos clone --yes
 
 # Clone repositories in parallel for faster execution
-azdocli repos clone --parallel
+ado repos clone --parallel
 
 # Control the number of concurrent clone operations (default: 4, max: 8)
-azdocli repos clone --parallel --concurrency 6
+ado repos clone --parallel --concurrency 6
 
 # Combine all options for maximum efficiency
-azdocli repos clone --target-dir ./repos --yes --parallel --concurrency 8
+ado repos clone --target-dir ./repos --yes --parallel --concurrency 8
 ```
 
 **Clone Features:**
@@ -86,10 +86,10 @@ The `repos show` command displays detailed information about a specific reposito
 
 ```sh
 # Show details of a repository by name (using default project)
-azdocli repos show --id MyRepository
+ado repos show --id MyRepository
 
 # Or specify a project explicitly
-azdocli repos show --id MyRepository --project MyProject
+ado repos show --id MyRepository --project MyProject
 ```
 
 **Show Features:**
@@ -106,19 +106,19 @@ The `repos delete` command allows you to delete repositories from an Azure DevOp
 
 ```sh
 # Soft delete a repository by name (using default project) - moves to recycle bin
-azdocli repos delete --id MyRepository
+ado repos delete --id MyRepository
 
 # Or specify a project explicitly
-azdocli repos delete --id MyRepository --project MyProject
+ado repos delete --id MyRepository --project MyProject
 
 # Hard delete - permanently delete after soft delete (requires manual recycle bin cleanup)
-azdocli repos delete --id MyRepository --hard
+ado repos delete --id MyRepository --hard
 
 # Skip confirmation prompt (useful for automation)
-azdocli repos delete --id MyRepository --yes
+ado repos delete --id MyRepository --yes
 
 # Combine options for automated hard delete
-azdocli repos delete --id MyRepository --hard --yes
+ado repos delete --id MyRepository --hard --yes
 ```
 
 **Delete Features:**
@@ -139,10 +139,10 @@ The `pipelines list` command allows you to list all pipelines in an Azure DevOps
 
 ```sh
 # List all pipelines in the default project
-azdocli pipelines list
+ado pipelines list
 
 # Or specify a project explicitly
-azdocli pipelines list --project MyProject
+ado pipelines list --project MyProject
 ```
 
 **List Features:**
@@ -157,10 +157,10 @@ The `pipelines runs` command shows all builds (runs) of a specified pipeline:
 
 ```sh
 # Show all runs for a pipeline (using default project)
-azdocli pipelines runs --id 42
+ado pipelines runs --id 42
 
 # Or specify a project explicitly
-azdocli pipelines runs --id 42 --project MyProject
+ado pipelines runs --id 42 --project MyProject
 ```
 
 **Runs Features:**
@@ -175,10 +175,10 @@ The `pipelines show` command displays detailed information about a specific pipe
 
 ```sh
 # Show details of a specific pipeline build (using default project)
-azdocli pipelines show --id 42 --build-id 123
+ado pipelines show --id 42 --build-id 123
 
 # Or specify a project explicitly
-azdocli pipelines show --id 42 --project MyProject --build-id 123
+ado pipelines show --id 42 --project MyProject --build-id 123
 ```
 
 **Show Features:**
@@ -193,10 +193,10 @@ The `pipelines run` command starts a new pipeline run:
 
 ```sh
 # Run a pipeline (using default project)
-azdocli pipelines run --id 42
+ado pipelines run --id 42
 
 # Or specify a project explicitly
-azdocli pipelines run --id 42 --project MyProject
+ado pipelines run --id 42 --project MyProject
 ```
 
 **Run Features:**
@@ -213,26 +213,26 @@ The `boards work-item` commands allow you to manage work items in an Azure DevOp
 
 ```sh
 # Show details of a specific work item (using default project)
-azdocli boards work-item show --id 123
+ado boards work-item show --id 123
 
 # Open work item directly in web browser
-azdocli boards work-item show --id 123 --web
+ado boards work-item show --id 123 --web
 
 # Or specify a project explicitly
-azdocli boards work-item show --id 123 --project MyProject
+ado boards work-item show --id 123 --project MyProject
 
 # Create a new work item (using default project)
 # Supported types: bug, task, user-story, feature, epic
-azdocli boards work-item create bug --title "Fix login issue" --description "Users cannot login after password change"
+ado boards work-item create bug --title "Fix login issue" --description "Users cannot login after password change"
 
 # Update a work item (using default project)
-azdocli boards work-item update --id 123 --title "New title" --state "Active" --priority 2
+ado boards work-item update --id 123 --title "New title" --state "Active" --priority 2
 
 # Delete a work item permanently (using default project)
-azdocli boards work-item delete --id 123
+ado boards work-item delete --id 123
 
 # Soft delete a work item by changing state to "Removed"
-azdocli boards work-item delete --id 123 --soft-delete
+ado boards work-item delete --id 123 --soft-delete
 ```
 
 **Work Item Features:**
@@ -249,7 +249,7 @@ azdocli boards work-item delete --id 123 --soft-delete
 CLI tool for interacting with Azure DevOps
 
 USAGE:
-    azdocli [SUBCOMMAND]
+    ado [SUBCOMMAND]
 
 OPTIONS:
     -h, --help       Print help information
