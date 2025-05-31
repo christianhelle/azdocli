@@ -4,7 +4,8 @@ use azure_devops_rust_api::git::{self, ClientBuilder};
 use clap::Subcommand;
 
 #[derive(Subcommand, Clone)]
-pub enum PullRequestsSubCommands {    /// Create new pull request
+pub enum PullRequestsSubCommands {
+    /// Create new pull request
     Create {
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
@@ -68,7 +69,8 @@ fn create_client() -> Result<git::Client> {
 }
 
 pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Result<()> {
-    match subcommand {        PullRequestsSubCommands::Create {
+    match subcommand {
+        PullRequestsSubCommands::Create {
             project,
             repo,
             title,
@@ -107,11 +109,12 @@ async fn create_pull_request(
     source: &str,
     target: &str,
 ) -> Result<()> {
-    match auth::get_credentials() {        Ok(creds) => {
+    match auth::get_credentials() {
+        Ok(creds) => {
             let client = create_client()?;
-            
+
             let repository = repos::get_repo(project, repo).await?;
-            
+
             let pr_client = client.pull_requests_client();
 
             let source_ref = if source.starts_with("refs/heads/") {
@@ -119,17 +122,18 @@ async fn create_pull_request(
             } else {
                 format!("refs/heads/{}", source)
             };
-            
+
             let target_ref = if target.starts_with("refs/heads/") {
                 target.to_string()
             } else {
-                format!("refs/heads/{}", target)            };
+                format!("refs/heads/{}", target)
+            };
             println!("Creating pull request:");
             println!("  Repository: {}", repo);
             println!("  Source branch: {}", source);
             println!("  Target branch: {}", target);
             println!("  Title: {}", title.unwrap_or("Default title"));
-            
+
             let pr_options = git::models::GitPullRequestCreateOptions {
                 source_ref_name: source_ref.clone(),
                 target_ref_name: target_ref.clone(),
@@ -139,9 +143,10 @@ async fn create_pull_request(
                 labels: Vec::new(),
                 merge_options: None,
                 completion_options: None,
-                work_item_refs: Vec::new(),                reviewers: Vec::new(),
+                work_item_refs: Vec::new(),
+                reviewers: Vec::new(),
             };
-            
+
             match pr_client
                 .create(&creds.organization, &repository.id, project, pr_options)
                 .await
@@ -168,7 +173,8 @@ async fn create_pull_request(
 
 async fn list_pull_requests(project: &str, repo: &str) -> Result<()> {
     match auth::get_credentials() {
-        Ok(creds) => {            let client = create_client()?;
+        Ok(creds) => {
+            let client = create_client()?;
             let pr_client = client.pull_requests_client();
 
             let pull_requests = pr_client
