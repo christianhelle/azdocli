@@ -240,7 +240,7 @@ async fn list_repos(project: &str) -> Result<Vec<git::models::GitRepository>, an
 ///
 /// # Returns
 /// * `Result<git::models::GitRepository>` - The repository details or error
-async fn get_repo(project: &str, repository_id: &str) -> Result<git::models::GitRepository> {
+pub async fn get_repo(project: &str, repository_id: &str) -> Result<git::models::GitRepository> {
     let repos = match list_repos(project).await {
         Ok(repos) => repos,
         Err(e) => {
