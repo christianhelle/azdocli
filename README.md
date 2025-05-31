@@ -158,26 +158,30 @@ ado repos pr show --repo MyRepository --id 123 --project MyProject
 ##### Create Pull Request
 
 ```sh
-# Create a new pull request with title and description (using default project)
-ado repos pr create --repo MyRepository --title "My Feature" --description "Description"
+# Create a new pull request with source and target branches (using default project)
+ado repos pr create --repo MyRepository --source "feature/my-feature" --target "main" --title "My Feature" --description "Description"
+
+# Create with minimal information - target defaults to 'main'
+ado repos pr create --repo MyRepository --source "feature/my-feature" --title "My Feature"
 
 # Or specify a project explicitly
-ado repos pr create --repo MyRepository --title "My Feature" --description "Description" --project MyProject
+ado repos pr create --repo MyRepository --source "feature/my-feature" --target "develop" --title "My Feature" --description "Description" --project MyProject
 
-# Create with minimal information (title and description optional)
-ado repos pr create --repo MyRepository
+# Source branch is required, target defaults to 'main' if not specified
+ado repos pr create --repo MyRepository --source "bugfix/fix-login"
 ```
 
 **Pull Request Features:**
 
 - **Repository filtering**: List shows only pull requests for the specified repository
 - **Comprehensive details**: Show command displays ID, title, description, status, branches, and creation date
+- **Branch specification**: Specify source branch (required) and target branch (defaults to 'main')
 - **Flexible creation**: Create pull requests with or without title/description
+- **Branch validation**: Automatic formatting of branch names with refs/heads/ prefix
+- **Repository validation**: Verify repository exists before creating pull request
 - **Authentication handling**: Proper error messages when not logged in
 - **Default project support**: Use with default project or specify --project explicitly
 - **Error handling**: Clear feedback for invalid pull request IDs or missing repositories
-
-**Note:** The create function provides a framework for pull request creation. For full functionality, additional parameters for source and target branches may be required depending on your workflow.
 
 ### Pipeline Management Features
 
@@ -339,7 +343,7 @@ ado repos clone                          # Clone all repositories
 # Pull request management
 ado repos pr list --repo MyRepo          # List pull requests for a repository
 ado repos pr show --repo MyRepo --id 123 # Show pull request details
-ado repos pr create --repo MyRepo --title "My Feature" # Create a new pull request
+ado repos pr create --repo MyRepo --source "feature/my-feature" --title "My Feature" # Create a new pull request
 
 # Pipeline management
 ado pipelines list                       # List all pipelines
