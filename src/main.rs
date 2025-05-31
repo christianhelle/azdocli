@@ -2,6 +2,7 @@ use clap::{CommandFactory, Parser, Subcommand};
 mod auth;
 mod boards;
 mod pipelines;
+mod pr;
 mod repos;
 
 #[derive(Parser)]

@@ -1,4 +1,7 @@
-use crate::auth::{self, get_credentials};
+use crate::{
+    auth::{self, get_credentials},
+    pr::{self, PullRequestsSubCommands},
+};
 use anyhow::Result;
 use azure_devops_rust_api::git::{self, models::GitRepositoryCreateOptions, ClientBuilder};
 use clap::Subcommand;
@@ -65,6 +68,11 @@ pub enum ReposSubCommands {
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
+    },
+    /// Manage pull requests in repositories
+    PR {
+        #[clap(subcommand)]
+        subcommand: PullRequestsSubCommands,
     },
 }
 
@@ -172,6 +180,9 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
                     return Err(e);
                 }
             }
+        }
+        ReposSubCommands::PR { subcommand } => {
+            pr::handle_command(subcommand).await?;
         }
     }
     Ok(())
