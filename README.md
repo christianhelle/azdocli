@@ -7,7 +7,7 @@ CLI tool for interacting with Azure DevOps.
 
 ## Features
 
-- **Repository Management**: List, create, delete, clone, and view repositories
+- **Repository Management**: List, create, delete, clone, view, and manage pull requests in repositories
 - **Pipeline Management**: Manage Azure DevOps pipelines
 - **Board Management**: Manage Azure DevOps boards
 - **Authentication**: Secure login using Personal Access Tokens (PAT)
@@ -130,6 +130,54 @@ ado repos delete --id MyRepository --hard --yes
 - **Repository validation**: Verify repository exists before attempting deletion
 - **Error handling**: Clear feedback when repository not found or access denied
 - **Default project support**: Use with default project or specify --project explicitly
+
+#### Pull Request Management Features
+
+The `repos pr` commands allow you to manage pull requests within repositories:
+
+##### List Pull Requests
+
+```sh
+# List all pull requests for a repository (using default project)
+ado repos pr list --repo MyRepository
+
+# Or specify a project explicitly
+ado repos pr list --repo MyRepository --project MyProject
+```
+
+##### Show Pull Request Details
+
+```sh
+# Show details of a specific pull request (using default project)
+ado repos pr show --repo MyRepository --id 123
+
+# Or specify a project explicitly
+ado repos pr show --repo MyRepository --id 123 --project MyProject
+```
+
+##### Create Pull Request
+
+```sh
+# Create a new pull request with title and description (using default project)
+ado repos pr create --repo MyRepository --title "My Feature" --description "Description"
+
+# Or specify a project explicitly
+ado repos pr create --repo MyRepository --title "My Feature" --description "Description" --project MyProject
+
+# Create with minimal information (title and description optional)
+ado repos pr create --repo MyRepository
+```
+
+**Pull Request Features:**
+
+- **Repository filtering**: List shows only pull requests for the specified repository
+- **Comprehensive details**: Show command displays ID, title, description, status, branches, and creation date
+- **Flexible creation**: Create pull requests with or without title/description
+- **Authentication handling**: Proper error messages when not logged in
+- **Default project support**: Use with default project or specify --project explicitly
+- **Error handling**: Clear feedback for invalid pull request IDs or missing repositories
+
+**Note:** The create function provides a framework for pull request creation. For full functionality, additional parameters for source and target branches may be required depending on your workflow.
 
 ### Pipeline Management Features
 
@@ -270,7 +318,36 @@ SUBCOMMANDS:
 
 ## Usage
 
-*This section will contain usage examples once the tool's functionality is implemented.*
+First, login to Azure DevOps:
+
+```sh
+# Login with your Personal Access Token
+ado login
+
+# Set a default project (optional but recommended)
+ado project MyProject
+```
+
+### Basic Examples
+
+```sh
+# Repository management
+ado repos list                           # List all repositories
+ado repos show --id MyRepo               # Show repository details
+ado repos clone                          # Clone all repositories
+
+# Pull request management
+ado repos pr list --repo MyRepo          # List pull requests for a repository
+ado repos pr show --repo MyRepo --id 123 # Show pull request details
+ado repos pr create --repo MyRepo --title "My Feature" # Create a new pull request
+
+# Pipeline management
+ado pipelines list                       # List all pipelines
+ado pipelines runs --id 42               # Show pipeline runs
+ado pipelines show --id 42 --build-id 123 # Show build details
+```
+
+For detailed examples and features, see the respective sections below.
 
 ## Building from Source
 
