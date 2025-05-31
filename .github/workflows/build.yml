@@ -42,5 +42,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: azdocli-${{ matrix.target }}
-        path: target/debug/azdocli*
+        path: target/debug/ado*
         if-no-files-found: error
