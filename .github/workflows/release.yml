@@ -130,7 +130,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create-release.outputs.upload_url }}
-        asset_path: artifacts/x86_64-linux-gnu/x86_64-linux-gnu.zip
+        asset_path: artifacts/x86_64-unknown-linux-gnu/x86_64-unknown-linux-gnu.zip
         asset_name: linux-x64.zip
         asset_content_type: application/zip
     - name: Upload Linux ARM64 asset
@@ -139,6 +139,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create-release.outputs.upload_url }}
-        asset_path: artifacts/aarch64-linux-gnu/aarch64-linux-gnu.zip
+        asset_path: artifacts/aarch64-unknown-linux-gnu/aarch64-unknown-linux-gnu.zip
         asset_name: linux-arm64.zip
         asset_content_type: application/zip
