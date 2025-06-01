@@ -99,3 +99,4 @@ jobs:
         name: azdocli ${{ github.ref_name }}
         draft: false
         prerelease: false
+        tag_name: ${{ env.VERSION }}
