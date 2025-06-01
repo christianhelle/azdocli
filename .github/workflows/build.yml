@@ -19,13 +19,13 @@ jobs:
           - os: windows-11-arm
             target: arm64-windows
           - os: ubuntu-latest
-            target: x64-linux
+            target: x86_64-linux
           - os: ubuntu-24.04-arm
             target: arm64-linux
           - os: macos-latest
             target: arm64-apple-darwin
           - os: macos-13
-            target: x64-apple-darwin
+            target: x86_64-apple-darwin
 
     steps:
     - uses: actions/checkout@v4
