@@ -89,13 +89,7 @@ jobs:
     - name: Upload Release Asset
       uses: christianhelle/action-gh-release@v1
       with:
-        files: |
-          artifacts/azdocli-windows-x86_64.exe
-          artifacts/azdocli-windows-arm64.exe
-          artifacts/azdocli-linux-x86_64
-          artifacts/azdocli-linux-arm64
-          artifacts/azdocli-macos-x86_64
-          artifacts/azdocli-macos-arm64
+        files: artifacts/**/*
         name: azdocli ${{ github.ref_name }}
         draft: false
         prerelease: false
