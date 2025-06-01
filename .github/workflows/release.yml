@@ -15,16 +15,28 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact_name: azdocli.exe
+            target: x64-pc-windows-msvc
+            artifact_name: ado.exe
             asset_name: azdocli-windows-x86_64.exe
+          - os: windows-11-arm
+            target: arm64-pc-windows-msvc
+            artifact_name: ado.exe
+            asset_name: azdocli-windows-arm64.exe
           - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact_name: azdocli
+            target: x64-linux-gnu
+            artifact_name: ado
             asset_name: azdocli-linux-x86_64
+          - os: ubuntu-24.04-arm
+            target: x64-linux-gnu
+            artifact_name: ado
+            asset_name: azdocli-linux-arm64
           - os: macos-latest
-            target: x86_64-apple-darwin
-            artifact_name: azdocli
+            target: arm64-apple-darwin
+            artifact_name: ado
+            asset_name: azdocli-macos-x86_64
+          - os: macos-13
+            target: x64-apple-darwin
+            artifact_name: ado
             asset_name: azdocli-macos-x86_64
 
     steps:
