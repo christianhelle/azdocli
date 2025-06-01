@@ -111,6 +111,15 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create-release.outputs.upload_url }}
-        asset_path: artifacts/aarch64-pc-windows-msvc/ado.exe
+        asset_path: artifacts/azdocli-aarch64-pc-windows-msvc/ado.exe
         asset_name: windows-arm64.zip
+        asset_content_type: application/zip
+    - name: Upload MacOS ARM64 asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create-release.outputs.upload_url }}
+        asset_path: artifacts/azdocli-aarch64-apple-darwin/ado
+        asset_name: macos-arm64.zip
         asset_content_type: application/zip
