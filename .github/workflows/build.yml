@@ -58,6 +58,6 @@ jobs:
       with:
         name: ${{ matrix.target }}
         path: |
-          target/release/ado*
+          ado*
           README.md
           LICENSE
