@@ -47,9 +47,10 @@ jobs:
     - name: Build
       run: cargo build --release
     - name: Zip artifacts
+      shell: pwsh
       run: |
         mv target/release/ado* ./
-        zip -r ${{ matrix.target }}.zip ado* README.md LICENSE
+        Compress-Archive ado*, README.md, LICENSE ${{ matrix.target }}.zip
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
