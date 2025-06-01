@@ -46,12 +46,14 @@ jobs:
       uses: christianhelle/rust-cache@v2      
     - name: Build
       run: cargo build --release
+    - name: Move binaries
+      run: mv target/release/ado* ./
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.target }}
+        name: ${{ matrix.target }}        
         path: |
-          target/release/ado*
+          ado*
           README.md
           LICENSE
 

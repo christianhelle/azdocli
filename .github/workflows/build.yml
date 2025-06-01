@@ -50,7 +50,9 @@ jobs:
     - name: Build
       run: cargo build --release --verbose
     - name: Run tests
-      run: cargo test --verbose      
+      run: cargo test --verbose
+    - name: Move binaries
+      run: mv target/release/ado* ./
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
