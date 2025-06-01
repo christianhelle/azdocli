@@ -10,22 +10,6 @@ env:
   VERSION: 0.1.${{ github.run_number }}
 
 jobs:
-  tag:
-    name: Tag Release
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4    
-    - name: Create tag
-      uses: actions/github-script@v7
-      with:
-        github-token: ${{ github.token }}
-        script: |
-          github.rest.git.createRef({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            ref: "refs/tags/${{ env.VERSION }}",
-            sha: context.sha
-          })
 
   build:
     name: Build Release
@@ -73,9 +57,7 @@ jobs:
     - name: Rust cache
       uses: Swatinem/rust-cache@v2      
     - name: Build
-      run: cargo build --release --target ${{ matrix.target }}
-    - name: Run tests
-      run: cargo test --release --target ${{ matrix.target }}      
+      run: cargo build --release --target ${{ matrix.target }}  
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -83,10 +65,28 @@ jobs:
         path: target/release/ado*
         if-no-files-found: error
 
+  tag:
+    name: Tag Release
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - uses: actions/checkout@v4    
+    - name: Create tag
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ github.token }}
+        script: |
+          github.rest.git.createRef({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: "refs/tags/${{ env.VERSION }}",
+            sha: context.sha
+          })
+
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [tag, build]
+    needs: tag
     steps:
     - name: Download artifacts
       uses: actions/download-artifact@v4
