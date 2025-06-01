@@ -15,11 +15,17 @@ jobs:
         os: [windows-latest, ubuntu-latest, macos-latest]
         include:
           - os: windows-latest
-            target: x86_64-pc-windows-msvc
+            target: x86_64-windows
+          - os: windows-11-arm
+            target: arm64-windows
           - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
+            target: x64-linux
+          - os: ubuntu-24.04-arm
+            target: arm64-linux
           - os: macos-latest
-            target: x86_64-apple-darwin
+            target: arm64-apple-darwin
+          - os: macos-13
+            target: x64-apple-darwin
 
     steps:
     - uses: actions/checkout@v4
