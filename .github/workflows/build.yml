@@ -54,6 +54,8 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: azdocli-${{ matrix.target }}
-        path: target/release/ado*
-        if-no-files-found: error
+        name: ${{ matrix.target }}
+        path: |
+          target/release/ado*
+          README.md
+          LICENSE
