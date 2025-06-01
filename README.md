@@ -15,7 +15,8 @@ CLI tool for interacting with Azure DevOps.
 
 ### Default Project Management
 
-The `project` command allows you to set and view a default project, eliminating the need to specify `--project` for every command:
+The `project` command allows you to set and view a default project,
+eliminating the need to specify `--project` for every command:
 
 ```sh
 # Set a default project
@@ -427,7 +428,9 @@ The integration tests cover the following repository operations:
 - **Clone**: Attempts to clone the repository (to temporary directory)
 - **Delete**: Performs hard delete to clean up test repositories
 
-⚠️ **Important**: The tests create and delete actual repositories in your Azure DevOps project. Make sure to use a test project and not a production environment.
+⚠️ **Important**:
+The tests create and delete actual repositories in your Azure DevOps project.
+Make sure to use a test project and not a production environment.
 
 ### Security Notes
 
