@@ -20,28 +20,16 @@ jobs:
         include:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact_name: ado.exe
-            asset_name: azdocli-windows-x86_64.exe
           - os: windows-11-arm
             target: aarch64-pc-windows-msvc
-            artifact_name: ado.exe
-            asset_name: azdocli-windows-arm64.exe
           - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact_name: ado
-            asset_name: azdocli-linux-x86_64
+            target: x86_64-linux-gnu
           - os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
-            artifact_name: ado
-            asset_name: azdocli-linux-arm64
+            target: aarch64-linux-gnu
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact_name: ado
-            asset_name: azdocli-macos-arm64
           - os: macos-13
             target: x86_64-apple-darwin
-            artifact_name: ado
-            asset_name: azdocli-macos-x86_64
 
     steps:
     - uses: actions/checkout@v4    
@@ -61,9 +49,11 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: azdocli-${{ matrix.target }}
-        path: target/release/ado*
-        if-no-files-found: error
+        name: ${{ matrix.target }}
+        path: |
+          target/release/ado*
+          README.md
+          LICENSE
 
   release:
     name: Release
@@ -102,7 +92,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create-release.outputs.upload_url }}
-        asset_path: artifacts/azdocli-x86_64-pc-windows-msvc/ado.exe
+        asset_path: artifacts/x86_64-pc-windows-msvc.zip
         asset_name: windows-x64.zip
         asset_content_type: application/zip
     - name: Upload Windows ARM64 asset
@@ -111,7 +101,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create-release.outputs.upload_url }}
-        asset_path: artifacts/azdocli-aarch64-pc-windows-msvc/ado.exe
+        asset_path: artifacts/aarch64-pc-windows-msvc.zip
         asset_name: windows-arm64.zip
         asset_content_type: application/zip
     - name: Upload MacOS ARM64 asset
@@ -120,7 +110,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create-release.outputs.upload_url }}
-        asset_path: artifacts/azdocli-aarch64-apple-darwin/ado
+        asset_path: artifacts/aarch64-apple-darwin.zip
         asset_name: macos-arm64.zip
         asset_content_type: application/zip
     - name: Upload MacOS x64 asset
@@ -129,7 +119,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create-release.outputs.upload_url }}
-        asset_path: artifacts/azdocli-x86_64-apple-darwin/ado
+        asset_path: artifacts/x86_64-apple-darwin.zip
         asset_name: macos-x64.zip
         asset_content_type: application/zip
     - name: Upload Linux x64 asset
@@ -138,7 +128,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create-release.outputs.upload_url }}
-        asset_path: artifacts/azdocli-x86_64-unknown-linux-gnu/ado
+        asset_path: artifacts/x86_64-linux-gnu.zip
         asset_name: linux-x64.zip
         asset_content_type: application/zip
     - name: Upload Linux ARM64 asset
@@ -147,6 +137,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create-release.outputs.upload_url }}
-        asset_path: artifacts/azdocli-aarch64-unknown-linux-gnu/ado
+        asset_path: artifacts/aarch64-linux-gnu.zip
         asset_name: linux-arm64.zip
         asset_content_type: application/zip
