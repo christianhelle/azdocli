@@ -141,3 +141,12 @@ jobs:
         asset_path: artifacts/azdocli-x86_64-unknown-linux-gnu/ado
         asset_name: linux-x64.zip
         asset_content_type: application/zip
+    - name: Upload Linux ARM64 asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create-release.outputs.upload_url }}
+        asset_path: artifacts/azdocli-aarch64-unknown-linux-gnu/ado
+        asset_name: linux-arm64.zip
+        asset_content_type: application/zip
