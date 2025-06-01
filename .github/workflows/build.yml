@@ -15,15 +15,15 @@ jobs:
         os: [windows-latest, ubuntu-latest, macos-latest]
         include:
           - os: windows-latest
-            target: x86_64-windows
+            target: x86_64-pc-windows-msvc
           - os: windows-11-arm
-            target: arm64-windows
+            target: aarch64-pc-windows-msvc
           - os: ubuntu-latest
-            target: x86_64-linux
+            target: x86_64-unknown-linux-gnu
           - os: ubuntu-24.04-arm
-            target: arm64-linux
+            target: aarch64-unknown-linux-gnu
           - os: macos-latest
-            target: arm64-apple-darwin
+            target: aarch64-apple-darwin
           - os: macos-13
             target: x86_64-apple-darwin
 
