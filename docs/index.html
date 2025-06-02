@@ -92,15 +92,28 @@
             <h2>💻 Quick Start</h2>
             <div class="usage-steps">
                 <div class="step">
-                    <h3>1. Login to Azure DevOps</h3>
-                    <pre><code>ado login</code></pre>
+                    <h3>1. Create a Personal Access Token</h3>
+                    <p>Before using the CLI, you need to create a Personal Access Token (PAT) in Azure DevOps:</p>
+                    <ol>
+                        <li>Navigate to <strong>Azure DevOps</strong> → <strong>User Settings</strong> → <strong>Personal Access Tokens</strong></li>
+                        <li>Click <strong>"New Token"</strong></li>
+                        <li>Set a descriptive name (e.g., "azdocli")</li>
+                        <li>Configure the required scopes: <strong>Code (read & write)</strong>, <strong>Build (read & execute)</strong>, <strong>Work Items (read & write)</strong></li>
+                        <li>Click <strong>"Create"</strong> and copy the token securely</li>
+                    </ol>
+                    <p><strong>⚠️ Important:</strong> Store your PAT securely and never commit it to version control.</p>
                 </div>
                 <div class="step">
-                    <h3>2. Set a default project (optional)</h3>
+                    <h3>2. Login to Azure DevOps</h3>
+                    <pre><code>ado login</code></pre>
+                    <p>Enter your organization name and the PAT you created in step 1 when prompted.</p>
+                </div>
+                <div class="step">
+                    <h3>3. Set a default project (optional)</h3>
                     <pre><code>ado project MyProject</code></pre>
                 </div>
                 <div class="step">
-                    <h3>3. Start using the CLI</h3>
+                    <h3>4. Start using the CLI</h3>
                     <pre><code># Repository management
 ado repos list
 ado repos show --id MyRepo

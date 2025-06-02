@@ -339,13 +339,50 @@ You can also download pre-built binaries from the [GitHub Releases page](https:/
 
 Extract the binary and add it to your PATH.
 
+## Authentication Setup
+
+Before using the CLI, you need to create a Personal Access Token (PAT) in Azure DevOps:
+
+### Creating a Personal Access Token
+
+1. **Navigate to Azure DevOps**:
+   - Sign in to your Azure DevOps organization (`https://dev.azure.com/{yourorganization}`)
+   - Click on your profile picture in the top right corner
+   - Select **Personal Access Tokens**
+
+2. **Create New Token**:
+   - Click **+ New Token**
+   - Enter a descriptive name (e.g., "azdocli-token")
+   - Select your organization
+   - Set expiration date (recommended: 90 days or less)
+
+3. **Configure Required Scopes**:
+   - **Code**: Read & write (for repository operations)
+   - **Build**: Read & execute (for pipeline operations) 
+   - **Work Items**: Read & write (for board operations)
+   - **Project and Team**: Read (for project operations)
+
+4. **Save Your Token**:
+   - Click **Create**
+   - **⚠️ Important**: Copy the token immediately and store it securely
+   - The token will not be shown again
+
+**Security Best Practices**:
+- Never commit your PAT to version control
+- Use environment variables or secure storage for automation
+- Regularly rotate your tokens
+- Use the minimum required permissions
+
 ## Usage
 
-First, login to Azure DevOps:
+First, login to Azure DevOps using the PAT you created:
 
 ```sh
 # Login with your Personal Access Token
 ado login
+# You'll be prompted for:
+# - Organization name (e.g., "mycompany" from https://dev.azure.com/mycompany)
+# - Personal Access Token (the PAT you created above)
 
 # Set a default project (optional but recommended)
 ado project MyProject
