@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Guide - Azure DevOps CLI</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>📖 User Guide</h1>
+            <p class="subtitle">Complete guide to Azure DevOps CLI features and commands</p>
+        </div>
+    </header>
+
+    <nav>
+        <div class="container">
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="#authentication">Authentication</a></li>
+                <li><a href="#projects">Projects</a></li>
+                <li><a href="#repositories">Repositories</a></li>
+                <li><a href="#pipelines">Pipelines</a></li>
+                <li><a href="#boards">Boards</a></li>
+                <li><a href="#testing">Testing</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="container">
+        <section id="getting-started">
+            <h2>🚀 Getting Started</h2>
+            <p>Azure DevOps CLI (azdocli) provides a powerful command-line interface for interacting with Azure DevOps services. This guide covers all features and commands available in the tool.</p>
+        </section>
+
+        <section id="authentication">
+            <h2>🔐 Authentication</h2>
+            <div class="command-section">
+                <h3>Login and Logout</h3>
+                <p>Before using any commands, you need to authenticate with Azure DevOps using a Personal Access Token (PAT).</p>
+                
+                <div class="command-example">
+                    <h4>Login to Azure DevOps</h4>
+                    <pre><code>ado login</code></pre>
+                    <p>This command will prompt you to enter your Azure DevOps organization URL and Personal Access Token.</p>
+                </div>
+
+                <div class="command-example">
+                    <h4>Logout from Azure DevOps</h4>
+                    <pre><code>ado logout</code></pre>
+                    <p>Clears stored credentials and logs you out of Azure DevOps.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="projects">
+            <h2>📁 Default Project Management</h2>
+            <div class="command-section">
+                <h3>Project Commands</h3>
+                <p>The project command allows you to set and view a default project, eliminating the need to specify --project for every command.</p>
+
+                <div class="command-example">
+                    <h4>Set a default project</h4>
+                    <pre><code>ado project MyDefaultProject</code></pre>
+                </div>
+
+                <div class="command-example">
+                    <h4>View the current default project</h4>
+                    <pre><code>ado project</code></pre>
+                </div>
+
+                <h4>Features:</h4>
+                <ul>
+                    <li><strong>Persistent storage</strong>: Default project is saved in your user configuration</li>
+                    <li><strong>Optional override</strong>: Use --project to override the default for any command</li>
+                    <li><strong>All modules supported</strong>: Works with repos, pipelines, and boards</li>
+                    <li><strong>Helpful error messages</strong>: Clear feedback when no default is set and no --project is provided</li>
+                </ul>
+            </div>
+        </section>
+
+        <section id="repositories">
+            <h2>📦 Repository Management</h2>
+            
+            <div class="command-section">
+                <h3>Basic Repository Operations</h3>
+                
+                <div class="command-example">
+                    <h4>List all repositories</h4>
+                    <pre><code># List repositories in default project
+ado repos list
+
+# List repositories in specific project
+ado repos list --project MyProject</code></pre>
+                </div>
+
+                <div class="command-example">
+                    <h4>Create a new repository</h4>
+                    <pre><code># Create repository in default project
+ado repos create --name MyNewRepo
+
+# Create repository in specific project
+ado repos create --name MyNewRepo --project MyProject</code></pre>
+                </div>
+
+                <div class="command-example">
+                    <h4>Show repository details</h4>
+                    <pre><code># Show details using default project
+ado repos show --id MyRepository
+
+# Show details with specific project
+ado repos show --id MyRepository --project MyProject</code></pre>
+                </div>
+
+                <h4>Show Features:</h4>
+                <ul>
+                    <li><strong>Comprehensive details</strong>: View repository name, ID, URLs, size, and metadata</li>
+                    <li><strong>User-friendly formatting</strong>: Emoji icons and formatted output for better readability</li>
+                    <li><strong>Clone URLs</strong>: Display both HTTPS and SSH clone URLs</li>
+                    <li><strong>File size formatting</strong>: Automatic conversion to KB/MB for better readability</li>
+                    <li><strong>Error handling</strong>: Helpful error messages with suggestions when repository not found</li>
+                </ul>
+            </div>
+
+            <div class="command-section">
+                <h3>Repository Clone Feature</h3>
+                <p>The repos clone command allows you to clone all repositories from an Azure DevOps project with powerful options for automation and parallel processing.</p>
+
+                <div class="command-example">
+                    <h4>Basic cloning</h4>
+                    <pre><code># Clone all repositories from default project (with confirmation prompt)
+ado repos clone
+
+# Clone from specific project
+ado repos clone --project MyProject</code></pre>
+                </div>
+
+                <div class="command-example">
+                    <h4>Advanced cloning options</h4>
+                    <pre><code># Clone to specific directory
+ado repos clone --target-dir ./repos
+
+# Skip confirmation prompt (useful for automation)
+ado repos clone --yes
+
+# Clone repositories in parallel for faster execution
+ado repos clone --parallel
+
+# Control concurrent operations (default: 4, max: 8)
+ado repos clone --parallel --concurrency 6
+
+# Combine all options for maximum efficiency
+ado repos clone --target-dir ./repos --yes --parallel --concurrency 8</code></pre>
+                </div>
+
+                <h4>Clone Features:</h4>
+                <ul>
+                    <li><strong>Bulk cloning</strong>: Clone all repositories from a project with a single command</li>
+                    <li><strong>Target directory</strong>: Specify where to clone repositories (defaults to current directory)</li>
+                    <li><strong>Confirmation prompts</strong>: Interactive confirmation with repository listing before cloning</li>
+                    <li><strong>Automation support</strong>: Skip prompts with --yes flag for CI/CD scenarios</li>
+                    <li><strong>Parallel execution</strong>: Use --parallel flag to clone multiple repositories simultaneously</li>
+                    <li><strong>Concurrency control</strong>: Adjust the number of concurrent operations with --concurrency (1-8)</li>
+                    <li><strong>Error handling</strong>: Comprehensive error reporting for failed clones</li>
+                    <li><strong>Progress tracking</strong>: Real-time feedback on clone operations</li>
+                </ul>
+            </div>
+
+            <div class="command-section">
+                <h3>Repository Delete Feature</h3>
+                <p>The repos delete command allows you to delete repositories from an Azure DevOps project with safety features.</p>
+
+                <div class="command-example">
+                    <h4>Delete operations</h4>
+                    <pre><code># Soft delete (moves to recycle bin)
+ado repos delete --id MyRepository
+
+# Specify project explicitly
+ado repos delete --id MyRepository --project MyProject
+
+# Hard delete (permanent deletion)
+ado repos delete --id MyRepository --hard
+
+# Skip confirmation prompt (automation)
+ado repos delete --id MyRepository --yes
+
+# Combine options for automated hard delete
+ado repos delete --id MyRepository --hard --yes</code></pre>
+                </div>
+
+                <h4>Delete Features:</h4>
+                <ul>
+                    <li><strong>Soft delete by default</strong>: Repositories are moved to recycle bin and can be restored</li>
+                    <li><strong>Hard delete option</strong>: Use --hard flag for permanent deletion</li>
+                    <li><strong>Confirmation prompts</strong>: Interactive confirmation before deletion to prevent accidents</li>
+                    <li><strong>Automation support</strong>: Skip prompts with --yes flag for CI/CD scenarios</li>
+                    <li><strong>Repository validation</strong>: Verify repository exists before attempting deletion</li>
+                    <li><strong>Error handling</strong>: Clear feedback when repository not found or access denied</li>
+                </ul>
+            </div>
+
+            <div class="command-section">
+                <h3>Pull Request Management</h3>
+                <p>The repos pr commands allow you to manage pull requests within repositories.</p>
+
+                <div class="command-example">
+                    <h4>List Pull Requests</h4>
+                    <pre><code># List all pull requests for a repository
+ado repos pr list --repo MyRepository
+
+# With specific project
+ado repos pr list --repo MyRepository --project MyProject</code></pre>
+                </div>
+
+                <div class="command-example">
+                    <h4>Show Pull Request Details</h4>
+                    <pre><code># Show details of a specific pull request
+ado repos pr show --repo MyRepository --id 123
+
+# With specific project
+ado repos pr show --repo MyRepository --id 123 --project MyProject</code></pre>
+                </div>
+
+                <div class="command-example">
+                    <h4>Create Pull Request</h4>
+                    <pre><code># Create with full details
+ado repos pr create --repo MyRepository --source "feature/my-feature" --target "main" --title "My Feature" --description "Description"
+
+# Create with minimal information (target defaults to 'main')
+ado repos pr create --repo MyRepository --source "feature/my-feature" --title "My Feature"
+
+# With specific project
+ado repos pr create --repo MyRepository --source "feature/my-feature" --target "develop" --title "My Feature" --project MyProject
+
+# Source branch is required, target defaults to 'main'
+ado repos pr create --repo MyRepository --source "bugfix/fix-login"</code></pre>
+                </div>
+
+                <h4>Pull Request Features:</h4>
+                <ul>
+                    <li><strong>Repository filtering</strong>: List shows only pull requests for the specified repository</li>
+                    <li><strong>Comprehensive details</strong>: Show command displays ID, title, description, status, branches, and creation date</li>
+                    <li><strong>Branch specification</strong>: Specify source branch (required) and target branch (defaults to 'main')</li>
+                    <li><strong>Flexible creation</strong>: Create pull requests with or without title/description</li>
+                    <li><strong>Branch validation</strong>: Automatic formatting of branch names with refs/heads/ prefix</li>
+                    <li><strong>Repository validation</strong>: Verify repository exists before creating pull request</li>
+                    <li><strong>Authentication handling</strong>: Proper error messages when not logged in</li>
+                    <li><strong>Error handling</strong>: Clear feedback for invalid pull request IDs or missing repositories</li>
+                </ul>
+            </div>
+        </section>
+
+        <section id="pipelines">
+            <h2>🔧 Pipeline Management</h2>
+            
+            <div class="command-section">
+                <h3>Pipeline Commands</h3>
+
+                <div class="command-example">
+                    <h4>List Pipelines</h4>
+                    <pre><code># List all pipelines in default project
+ado pipelines list
+
+# List pipelines in specific project
+ado pipelines list --project MyProject</code></pre>
+                    <p><strong>Features</strong>: Comprehensive listing with IDs and names in user-friendly table format.</p>
+                </div>
+
+                <div class="command-example">
+                    <h4>Show Pipeline Runs</h4>
+                    <pre><code># Show all runs for a pipeline
+ado pipelines runs --id 42
+
+# With specific project
+ado pipelines runs --id 42 --project MyProject</code></pre>
+                    <p><strong>Features</strong>: View run history, status visibility, and clear display of run information.</p>
+                </div>
+
+                <div class="command-example">
+                    <h4>Show Pipeline Build Details</h4>
+                    <pre><code># Show details of a specific pipeline build
+ado pipelines show --id 42 --build-id 123
+
+# With specific project
+ado pipelines show --id 42 --project MyProject --build-id 123</code></pre>
+                    <p><strong>Features</strong>: Detailed information about builds, debug information for troubleshooting.</p>
+                </div>
+
+                <div class="command-example">
+                    <h4>Run Pipeline</h4>
+                    <pre><code># Start a new pipeline run
+ado pipelines run --id 42
+
+# With specific project
+ado pipelines run --id 42 --project MyProject</code></pre>
+                    <p><strong>Features</strong>: Pipeline execution with real-time updates and clear error feedback.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="boards">
+            <h2>📋 Board Management</h2>
+            
+            <div class="command-section">
+                <h3>Work Item Management</h3>
+                <p>The boards work-item commands allow you to manage work items in an Azure DevOps project with full CRUD operations.</p>
+
+                <div class="command-example">
+                    <h4>Show Work Item</h4>
+                    <pre><code># Show details of a work item
+ado boards work-item show --id 123
+
+# Open work item directly in web browser
+ado boards work-item show --id 123 --web
+
+# With specific project
+ado boards work-item show --id 123 --project MyProject</code></pre>
+                </div>
+
+                <div class="command-example">
+                    <h4>Create Work Item</h4>
+                    <pre><code># Create different types of work items
+ado boards work-item create bug --title "Fix login issue" --description "Users cannot login after password change"
+ado boards work-item create task --title "Update documentation"
+ado boards work-item create user-story --title "User registration feature"
+ado boards work-item create feature --title "New reporting dashboard"
+ado boards work-item create epic --title "Mobile application development"</code></pre>
+                    <p>Supported types: bug, task, user-story, feature, epic</p>
+                </div>
+
+                <div class="command-example">
+                    <h4>Update Work Item</h4>
+                    <pre><code># Update work item fields
+ado boards work-item update --id 123 --title "New title" --state "Active" --priority 2</code></pre>
+                </div>
+
+                <div class="command-example">
+                    <h4>Delete Work Item</h4>
+                    <pre><code># Permanent delete
+ado boards work-item delete --id 123
+
+# Soft delete (changes state to "Removed")
+ado boards work-item delete --id 123 --soft-delete</code></pre>
+                </div>
+
+                <h4>Work Item Features:</h4>
+                <ul>
+                    <li><strong>Full CRUD operations</strong>: Create, read, update, and delete work items</li>
+                    <li><strong>Multiple work item types</strong>: Support for bug, task, user story, feature, and epic</li>
+                    <li><strong>Web integration</strong>: Open work items directly in browser with --web option</li>
+                    <li><strong>Soft delete</strong>: Option to change state to "Removed" instead of permanent deletion</li>
+                    <li><strong>Field updates</strong>: Update title, description, state, and priority</li>
+                    <li><strong>Default project support</strong>: Use with default project or specify --project explicitly</li>
+                    <li><strong>Error handling</strong>: Clear feedback when work item not found or access denied</li>
+                </ul>
+            </div>
+        </section>
+
+        <section id="testing">
+            <h2>🧪 Testing</h2>
+            <div class="command-section">
+                <h3>Integration Tests</h3>
+                <p>The project includes integration tests that verify core functionality against a real Azure DevOps instance.</p>
+
+                <div class="command-example">
+                    <h4>Setting up Test Configuration</h4>
+                    <p>Create a test configuration file:</p>
+                    <pre><code># Copy the template
+cp test_config.json.template test_config.json
+
+# Edit with your Azure DevOps details
+{
+  "organization": "your-organization-name",
+  "pat": "your-personal-access-token", 
+  "project": "your-test-project-name"
+}</code></pre>
+                </div>
+
+                <div class="command-example">
+                    <h4>Running Tests</h4>
+                    <pre><code># Run all tests including integration tests
+cargo test -- --ignored
+
+# Run specific repository tests
+cargo test test_create_show_clone_delete_repository -- --ignored
+
+# Run regular unit tests only
+cargo test</code></pre>
+                </div>
+
+                <h4>Test Coverage:</h4>
+                <ul>
+                    <li><strong>Create</strong>: Creates new repositories in your Azure DevOps project</li>
+                    <li><strong>Show</strong>: Retrieves and verifies repository details</li>
+                    <li><strong>Clone</strong>: Attempts to clone repositories to temporary directory</li>
+                    <li><strong>Delete</strong>: Performs hard delete to clean up test repositories</li>
+                </ul>
+
+                <div class="command-example">
+                    <h4>Security Notes</h4>
+                    <ul>
+                        <li>The test_config.json file is automatically ignored by Git</li>
+                        <li>Store your PAT securely and never commit it to version control</li>
+                        <li>Use a PAT with minimal required permissions (repository read/write)</li>
+                        <li>Consider using a dedicated test organization or project</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section id="building">
+            <h2>🔨 Building from Source</h2>
+            <div class="command-section">
+                <h3>Development Setup</h3>
+                <div class="command-example">
+                    <h4>Build Process</h4>
+                    <pre><code># Clone the repository
+git clone https://github.com/christianhelle/azdocli.git
+cd azdocli
+
+# Build the project
+cargo build
+
+# Run tests
+cargo test
+
+# Run the CLI
+cargo run -- &lt;command&gt;</code></pre>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 Azure DevOps CLI. Built with ❤️ using Rust.</p>
+            <p><a href="index.html">Home</a> | <a href="contributing.html">Contributing</a> | <a href="https://github.com/christianhelle/azdocli">GitHub</a></p>
+        </div>
+    </footer>
+</body>
+</html>
