@@ -37,13 +37,64 @@
         <section id="authentication">
             <h2>🔐 Authentication</h2>
             <div class="command-section">
+                <h3>Creating a Personal Access Token (PAT)</h3>
+                <p>Before using any commands, you need to authenticate with Azure DevOps using a Personal Access Token (PAT). Follow these steps to create one:</p>
+                
+                <div class="command-example">
+                    <h4>Step 1: Navigate to Personal Access Tokens</h4>
+                    <ol>
+                        <li>Sign in to your Azure DevOps organization (<code>https://dev.azure.com/{yourorganization}</code>)</li>
+                        <li>Click on your profile picture in the top right corner</li>
+                        <li>Select <strong>Personal Access Tokens</strong> from the dropdown menu</li>
+                    </ol>
+                </div>
+
+                <div class="command-example">
+                    <h4>Step 2: Create New Token</h4>
+                    <ol>
+                        <li>Click <strong>+ New Token</strong></li>
+                        <li>Enter a descriptive name (e.g., "azdocli-token")</li>
+                        <li>Select your organization</li>
+                        <li>Set expiration date (recommended: 90 days or less)</li>
+                        <li>Configure the required scopes:</li>
+                    </ol>
+                    <h5>Required Scopes:</h5>
+                    <ul>
+                        <li><strong>Code:</strong> Read & write (for repository operations)</li>
+                        <li><strong>Build:</strong> Read & execute (for pipeline operations)</li>
+                        <li><strong>Work Items:</strong> Read & write (for board operations)</li>
+                        <li><strong>Project and Team:</strong> Read (for project operations)</li>
+                    </ul>
+                </div>
+
+                <div class="command-example">
+                    <h4>Step 3: Save Your Token</h4>
+                    <ol>
+                        <li>Click <strong>Create</strong></li>
+                        <li><strong>⚠️ Important:</strong> Copy the token immediately and store it securely</li>
+                        <li>The token will not be shown again</li>
+                    </ol>
+                    <p><strong>Security Best Practices:</strong></p>
+                    <ul>
+                        <li>Never commit your PAT to version control</li>
+                        <li>Use environment variables or secure storage for automation</li>
+                        <li>Regularly rotate your tokens</li>
+                        <li>Use the minimum required permissions</li>
+                    </ul>
+                </div>
+
                 <h3>Login and Logout</h3>
-                <p>Before using any commands, you need to authenticate with Azure DevOps using a Personal Access Token (PAT).</p>
+                <p>Once you have your Personal Access Token, you can authenticate with the CLI.</p>
                 
                 <div class="command-example">
                     <h4>Login to Azure DevOps</h4>
                     <pre><code>ado login</code></pre>
-                    <p>This command will prompt you to enter your Azure DevOps organization URL and Personal Access Token.</p>
+                    <p>This command will prompt you to enter:</p>
+                    <ul>
+                        <li><strong>Azure DevOps organization name:</strong> Just the organization name (e.g., "mycompany" from https://dev.azure.com/mycompany)</li>
+                        <li><strong>Personal Access Token:</strong> The PAT you created in the previous steps</li>
+                    </ul>
+                    <p>The CLI will validate your credentials and store them securely for future use.</p>
                 </div>
 
                 <div class="command-example">
