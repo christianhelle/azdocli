@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure DevOps CLI (azdocli)</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>🚀 Azure DevOps CLI</h1>
+            <p class="subtitle">A powerful command-line interface for Azure DevOps</p>
+            <div class="badges">
+                <img src="https://github.com/christianhelle/azdocli/actions/workflows/build.yml/badge.svg" alt="Build Status">
+                <img src="https://github.com/christianhelle/azdocli/actions/workflows/security-audit.yml/badge.svg" alt="Security Audit">
+            </div>
+        </div>
+    </header>
+
+    <nav>
+        <div class="container">
+            <ul>
+                <li><a href="#features">Features</a></li>
+                <li><a href="#installation">Installation</a></li>
+                <li><a href="#usage">Usage</a></li>
+                <li><a href="user-guide.html">User Guide</a></li>
+                <li><a href="contributing.html">Contributing</a></li>
+                <li><a href="https://github.com/christianhelle/azdocli">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="container">
+        <section id="overview">
+            <h2>Overview</h2>
+            <p>Azure DevOps CLI (azdocli) is a command-line tool that provides seamless interaction with Azure DevOps services. Built with Rust for performance and reliability, it offers comprehensive features for managing repositories, pipelines, boards, and more.</p>
+        </section>
+
+        <section id="features">
+            <h2>🌟 Key Features</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3>📁 Repository Management</h3>
+                    <p>List, create, delete, clone, view, and manage pull requests in repositories with powerful batch operations and parallel processing.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🔧 Pipeline Management</h3>
+                    <p>Manage Azure DevOps pipelines, view runs, show build details, and trigger new executions directly from the command line.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>📋 Board Management</h3>
+                    <p>Comprehensive work item management with full CRUD operations, support for multiple work item types, and web integration.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🔐 Secure Authentication</h3>
+                    <p>Secure login using Personal Access Tokens (PAT) with proper credential management and session handling.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>⚡ Default Project</h3>
+                    <p>Set a default project to streamline your workflow and avoid specifying --project for every command.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🚀 Performance</h3>
+                    <p>Built with Rust for exceptional performance, with parallel operations and efficient resource utilization.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="installation">
+            <h2>📦 Installation</h2>
+            <div class="install-methods">
+                <div class="install-card">
+                    <h3>From crates.io</h3>
+                    <pre><code>cargo install azdocli</code></pre>
+                    <p>The easiest way to install. This will install the <code>ado</code> binary.</p>
+                </div>
+                <div class="install-card">
+                    <h3>From GitHub Releases</h3>
+                    <p>Download pre-built binaries:</p>
+                    <ul>
+                        <li>Windows: <code>windows-x64.zip</code> or <code>windows-arm64.zip</code></li>
+                        <li>macOS: <code>macos-x64.zip</code> or <code>macos-arm64.zip</code></li>
+                        <li>Linux: <code>linux-x64.zip</code> or <code>linux-arm64.zip</code></li>
+                    </ul>
+                    <p><a href="https://github.com/christianhelle/azdocli/releases" class="button">Download Latest Release</a></p>
+                </div>
+            </div>
+        </section>
+
+        <section id="usage">
+            <h2>💻 Quick Start</h2>
+            <div class="usage-steps">
+                <div class="step">
+                    <h3>1. Login to Azure DevOps</h3>
+                    <pre><code>ado login</code></pre>
+                </div>
+                <div class="step">
+                    <h3>2. Set a default project (optional)</h3>
+                    <pre><code>ado project MyProject</code></pre>
+                </div>
+                <div class="step">
+                    <h3>3. Start using the CLI</h3>
+                    <pre><code># Repository management
+ado repos list
+ado repos show --id MyRepo
+ado repos clone
+
+# Pull request management  
+ado repos pr list --repo MyRepo
+ado repos pr create --repo MyRepo --source "feature/my-feature" --title "My Feature"
+
+# Pipeline management
+ado pipelines list
+ado pipelines runs --id 42</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section id="links">
+            <h2>📚 Documentation</h2>
+            <div class="doc-links">
+                <a href="user-guide.html" class="doc-link">
+                    <h3>📖 User Guide</h3>
+                    <p>Comprehensive guide covering all features and commands</p>
+                </a>
+                <a href="contributing.html" class="doc-link">
+                    <h3>🤝 Contributing</h3>
+                    <p>Learn how to contribute to the project</p>
+                </a>
+                <a href="https://github.com/christianhelle/azdocli" class="doc-link">
+                    <h3>📦 Source Code</h3>
+                    <p>View the source code on GitHub</p>
+                </a>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 Azure DevOps CLI. Built with ❤️ using Rust.</p>
+            <p><a href="https://github.com/christianhelle/azdocli">GitHub</a> | <a href="https://crates.io/crates/azdocli">crates.io</a></p>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contributing Guide - Azure DevOps CLI</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>🤝 Contributing Guide</h1>
+            <p class="subtitle">Learn how to contribute to Azure DevOps CLI</p>
+        </div>
+    </header>
+
+    <nav>
+        <div class="container">
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="user-guide.html">User Guide</a></li>
+                <li><a href="#setup">Development Setup</a></li>
+                <li><a href="#code-style">Code Style</a></li>
+                <li><a href="#testing">Testing</a></li>
+                <li><a href="#pull-requests">Pull Requests</a></li>
+                <li><a href="#getting-help">Getting Help</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="container">
+        <section id="overview">
+            <h2>🚀 Welcome Contributors!</h2>
+            <p>Thank you for your interest in contributing to azdocli! This document provides guidelines for contributing to the project. We welcome all contributions, from bug reports and feature requests to code improvements and documentation updates.</p>
+        </section>
+
+        <section id="code-of-conduct">
+            <h2>📜 Code of Conduct</h2>
+            <div class="command-section">
+                <p>By participating in this project, you agree to maintain a respectful and inclusive environment. We are committed to providing a welcoming and harassment-free experience for everyone.</p>
+            </div>
+        </section>
+
+        <section id="setup">
+            <h2>⚙️ Development Setup</h2>
+            <div class="command-section">
+                <h3>Prerequisites</h3>
+                <ul>
+                    <li>Rust 1.70+ (latest stable recommended)</li>
+                    <li>Git</li>
+                    <li>Azure DevOps account with PAT for testing</li>
+                </ul>
+
+                <div class="command-example">
+                    <h4>Getting Started</h4>
+                    <pre><code># Clone the repository
+git clone https://github.com/christianhelle/azdocli.git
+cd azdocli
+
+# Build the project
+cargo build
+
+# Run tests
+cargo test
+
+# Run the CLI
+cargo run -- --help</code></pre>
+                </div>
+
+                <div class="command-example">
+                    <h4>Setting up for Testing</h4>
+                    <pre><code># Copy test configuration template
+cp test_config.json.template test_config.json
+
+# Edit test_config.json with your Azure DevOps credentials
+# (This file is git-ignored for security)</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section id="code-style">
+            <h2>🎨 Code Style and Patterns</h2>
+            
+            <div class="command-section">
+                <h3>Follow Existing Patterns</h3>
+                <p>This project follows standard Rust conventions and established patterns. Please ensure your code is consistent with the existing codebase.</p>
+
+                <h4>Project Structure</h4>
+                <ul>
+                    <li><strong>Modular design</strong>: Each Azure DevOps service area has its own module (auth.rs, boards.rs, pipelines.rs, repos.rs)</li>
+                    <li><strong>Command handling</strong>: Each module has a handle_command() function that takes subcommands and delegates to specific functions</li>
+                    <li><strong>Consistent imports</strong>: Group imports by: standard library, external crates, internal modules</li>
+                </ul>
+
+                <h4>Code Conventions</h4>
+                <ul>
+                    <li>Use descriptive variable and function names</li>
+                    <li>Follow Rust naming conventions (snake_case for functions/variables, PascalCase for types)</li>
+                    <li>Keep functions focused and single-purpose</li>
+                    <li>Use proper error handling with anyhow::Result</li>
+                    <li>Include comprehensive docstring comments for public functions</li>
+                </ul>
+            </div>
+
+            <div class="command-section">
+                <h3>Code Quality</h3>
+                
+                <h4>Formatting and Linting</h4>
+                <div class="command-example">
+                    <pre><code># Format code before committing
+cargo fmt
+
+# Run clippy and fix all warnings
+cargo clippy
+
+# Both are required - CI will reject PRs that don't pass these checks</code></pre>
+                </div>
+
+                <h4>Documentation</h4>
+                <ul>
+                    <li>Add docstring comments (///) for public functions, especially CLI commands</li>
+                    <li>Keep inline comments minimal but use them to explain complex logic</li>
+                    <li>Update README.md if your changes affect usage or add new features</li>
+                </ul>
+            </div>
+        </section>
+
+        <section id="testing">
+            <h2>🧪 Testing</h2>
+            <div class="command-section">
+                <h3>Test Types</h3>
+                
+                <div class="command-example">
+                    <h4>Unit Tests</h4>
+                    <pre><code># Run unit tests
+cargo test</code></pre>
+                    <p>Write unit tests for individual functions and modules where possible.</p>
+                </div>
+
+                <div class="command-example">
+                    <h4>Integration Tests</h4>
+                    <pre><code># Run integration tests (requires test_config.json)
+cargo test -- --ignored
+
+# Run specific integration test
+cargo test test_create_show_clone_delete_repository -- --ignored</code></pre>
+                    <p>Integration tests verify functionality against a real Azure DevOps instance.</p>
+                </div>
+
+                <h4>Test Guidelines</h4>
+                <ul>
+                    <li>Write tests for new functionality</li>
+                    <li>Ensure tests are isolated and don't depend on external state</li>
+                    <li>Use descriptive test names that explain what is being tested</li>
+                    <li>Integration tests should clean up after themselves</li>
+                    <li>Use a dedicated test project/organization for integration tests</li>
+                </ul>
+            </div>
+        </section>
+
+        <section id="pull-requests">
+            <h2>📝 Pull Request Guidelines</h2>
+            
+            <div class="command-section">
+                <h3>Before Submitting</h3>
+                <ol>
+                    <li><strong>Test thoroughly</strong>: Ensure your changes work and don't break existing functionality</li>
+                    <li><strong>Update documentation</strong>: Keep README.md current with any new features or changes</li>
+                    <li><strong>Check CI requirements</strong>: Ensure your code passes formatting and linting</li>
+                    <li><strong>Create focused commits</strong>: Make commits atomic and with clear messages</li>
+                    <li><strong>Rebase if needed</strong>: Keep a clean commit history</li>
+                </ol>
+            </div>
+
+            <div class="command-section">
+                <h3>PR Description Requirements</h3>
+                <p>Use this template for your PR description:</p>
+                
+                <div class="command-example">
+                    <pre><code>## Description
+Brief description of what this PR does
+
+## Type of Change
+- [ ] Bug fix (non-breaking change which fixes an issue)
+- [ ] New feature (non-breaking change which adds functionality)
+- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] Documentation update
+
+## Testing
+- [ ] Manually tested CLI commands: `cargo run -- &lt;commands&gt;`
+- [ ] Tested on [Windows/Linux/macOS]
+
+## Breaking Changes
+List any breaking changes or "None"
+
+## Documentation Updates
+- [ ] Updated README.md
+- [ ] Updated inline documentation
+- [ ] Updated CONTRIBUTING.md (if process changes)
+
+Fixes #&lt;issue-number&gt;</code></pre>
+                </div>
+            </div>
+
+            <div class="command-section">
+                <h3>README Maintenance</h3>
+                
+                <h4>When to update README.md:</h4>
+                <ul>
+                    <li>Adding new commands or features</li>
+                    <li>Changing existing command behavior</li>
+                    <li>Adding new installation methods</li>
+                    <li>Updating usage examples</li>
+                    <li>Adding new dependencies that affect users</li>
+                </ul>
+
+                <h4>README sections to maintain:</h4>
+                <ul>
+                    <li><strong>Features</strong>: Update feature list for new capabilities</li>
+                    <li><strong>Usage</strong>: Add examples for new commands</li>
+                    <li><strong>Building from Source</strong>: Update if build process changes</li>
+                    <li><strong>Examples</strong>: Ensure all examples work with current code</li>
+                </ul>
+            </div>
+        </section>
+
+        <section id="getting-help">
+            <h2>❓ Getting Help</h2>
+            <div class="command-section">
+                <h3>Support Channels</h3>
+                <ul>
+                    <li><strong>Issues</strong>: Create an issue for bugs or feature requests</li>
+                    <li><strong>Discussions</strong>: Use discussions for questions about contributing</li>
+                    <li><strong>Code Patterns</strong>: Reference existing code patterns when in doubt</li>
+                    <li><strong>PR Questions</strong>: Ask questions in your PR if you're unsure about implementation details</li>
+                </ul>
+
+                <div class="command-example">
+                    <h4>Issue Templates</h4>
+                    <p>When creating issues, please provide:</p>
+                    <ul>
+                        <li>Clear description of the problem or feature request</li>
+                        <li>Steps to reproduce (for bugs)</li>
+                        <li>Expected vs actual behavior</li>
+                        <li>Environment details (OS, Rust version, etc.)</li>
+                        <li>Relevant error messages or logs</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section id="release-process">
+            <h2>🚢 Release Process</h2>
+            <div class="command-section">
+                <h3>For Contributors</h3>
+                <p>Maintainers handle releases. Contributors should:</p>
+                <ul>
+                    <li>Ensure changes are backward compatible when possible</li>
+                    <li>Document breaking changes clearly</li>
+                    <li>Update version numbers only if instructed</li>
+                    <li>Follow semantic versioning principles</li>
+                </ul>
+
+                <h3>For Maintainers</h3>
+                <ul>
+                    <li>Review all PRs thoroughly</li>
+                    <li>Ensure CI passes before merging</li>
+                    <li>Update CHANGELOG.md for releases</li>
+                    <li>Tag releases following semantic versioning</li>
+                    <li>Publish to crates.io and GitHub releases</li>
+                </ul>
+            </div>
+        </section>
+
+        <section id="best-practices">
+            <h2>✨ Best Practices</h2>
+            <div class="command-section">
+                <h3>Development Workflow</h3>
+                <ol>
+                    <li><strong>Fork and Clone</strong>: Fork the repository and clone your fork</li>
+                    <li><strong>Create Feature Branch</strong>: Create a branch for your feature/fix</li>
+                    <li><strong>Make Changes</strong>: Implement your changes following the guidelines</li>
+                    <li><strong>Test Locally</strong>: Run tests and manual testing</li>
+                    <li><strong>Commit Changes</strong>: Make atomic commits with clear messages</li>
+                    <li><strong>Push and PR</strong>: Push to your fork and create a pull request</li>
+                    <li><strong>Address Feedback</strong>: Respond to review comments promptly</li>
+                </ol>
+
+                <h3>Commit Message Guidelines</h3>
+                <div class="command-example">
+                    <pre><code># Good commit messages
+feat: add parallel repository cloning support
+fix: handle authentication errors gracefully
+docs: update README with new installation methods
+test: add integration tests for pipeline commands
+
+# Use conventional commit format when possible
+# type(scope): description</code></pre>
+                </div>
+
+                <h3>Code Review Checklist</h3>
+                <ul>
+                    <li>Code follows project conventions and style</li>
+                    <li>Tests are included and passing</li>
+                    <li>Documentation is updated if needed</li>
+                    <li>No breaking changes without proper discussion</li>
+                    <li>Error handling is appropriate</li>
+                    <li>Performance considerations are addressed</li>
+                </ul>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>Thank you for contributing to azdocli! 🚀</p>
+            <p><a href="index.html">Home</a> | <a href="user-guide.html">User Guide</a> | <a href="https://github.com/christianhelle/azdocli">GitHub</a></p>
+        </div>
+    </footer>
+</body>
+</html>
