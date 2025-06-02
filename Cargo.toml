@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Christian Helle"]
 description = "CLI tool for interacting with Azure DevOps"
+license = "MIT"
+homepage = "https://github.com/christianhelle/azdocli"
+repository = "https://github.com/christianhelle/azdocli"
+readme = "README.md"
 
 [[bin]]
 name = "ado"
