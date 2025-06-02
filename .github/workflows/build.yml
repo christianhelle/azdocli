@@ -52,7 +52,7 @@ jobs:
     - name: Run tests
       run: cargo test --verbose
     - name: Verify publish (dry-run)
-      run: cargo publish --dry-run
+      run: cargo publish --dry-run --allow-dirty
     - name: Build
       run: cargo build --release
     - name: Zip artifacts
@@ -63,5 +63,5 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.target }}        
+        name: ${{ matrix.target }}
         path: ${{ matrix.target }}.zip
