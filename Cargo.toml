@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["Christian Helle"]
 description = "CLI tool for interacting with Azure DevOps"
 license = "MIT"
-homepage = "https://github.com/christianhelle/azdocli"
+homepage = "https://christianhelle.com/azdocli"
 repository = "https://github.com/christianhelle/azdocli"
 readme = "src/README.md"
 
