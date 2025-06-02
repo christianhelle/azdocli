@@ -159,4 +159,4 @@ jobs:
     - name: Rust cache
       uses: christianhelle/rust-cache@v2
     - name: Publish to crates.io
-      run: cargo publish --token ${{ secrets.CRATES_TOKEN }}
+      run: cargo publish --allow-dirty --token ${{ secrets.CRATES_TOKEN }}
