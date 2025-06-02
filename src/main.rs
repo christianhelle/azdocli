@@ -53,7 +53,7 @@ async fn main() -> anyhow::Result<()> {
         Some(Commands::Project { project_name }) => match project_name {
             Some(project) => {
                 auth::save_default_project(project)?;
-                println!("✓ Default project set to: {}", project);
+                println!("✅ Default project set to: {}", project);
             }
             None => match auth::get_default_project() {
                 Ok(project) => println!("Current default project: {}", project),

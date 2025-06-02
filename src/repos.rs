@@ -463,7 +463,7 @@ async fn clone_all_repos(
                         }
                     }
                     Err(e) => {
-                        println!("✗ Failed to execute git command for {}: {}", repo.name, e);
+                        println!("❌ Failed to execute git command for {}: {}", repo.name, e);
                         if e.kind() == std::io::ErrorKind::NotFound {
                             println!("  Git command not found. Please ensure Git is installed and in your PATH.");
                             return Err(anyhow::anyhow!("Git command not found"));
