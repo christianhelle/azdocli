@@ -142,3 +142,21 @@ jobs:
         asset_path: artifacts/aarch64-unknown-linux-gnu/aarch64-unknown-linux-gnu.zip
         asset_name: linux-arm64.zip
         asset_content_type: application/zip
+
+  publish-crates:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - uses: actions/checkout@v4
+    - name: Update Version
+      shell: pwsh
+      run: |
+        $version = (Get-Content -Path Cargo.toml -Raw) -replace 'version = "0.1.0"', 'version = "${{ env.VERSION }}"'
+        $version | Set-Content -Path Cargo.toml
+    - name: Install Rust
+      uses: christianhelle/rust-toolchain@stable
+    - name: Rust cache
+      uses: christianhelle/rust-cache@v2
+    - name: Publish to crates.io
+      run: cargo publish --token ${{ secrets.CRATES_TOKEN }}
