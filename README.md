@@ -319,7 +319,25 @@ SUBCOMMANDS:
 
 ## Installation
 
-*This section will contain information about installation methods once the tool is ready for distribution.*
+### Install from crates.io
+
+The easiest way to install azdocli is using Cargo:
+
+```bash
+cargo install azdocli
+```
+
+This will install the `ado` binary which you can use immediately.
+
+### Install from GitHub Releases
+
+You can also download pre-built binaries from the [GitHub Releases page](https://github.com/christianhelle/azdocli/releases):
+
+- Windows: `windows-x64.zip` or `windows-arm64.zip`
+- macOS: `macos-x64.zip` or `macos-arm64.zip`  
+- Linux: `linux-x64.zip` or `linux-arm64.zip`
+
+Extract the binary and add it to your PATH.
 
 ## Usage
 
