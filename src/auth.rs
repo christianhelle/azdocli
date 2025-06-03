@@ -101,8 +101,30 @@ fn get_pat() -> Result<String> {
     Ok(credentials.pat)
 }
 
+fn show_pat_instructions() {
+    println!();
+    println!("{}", "Create a Personal Access Token".bold());
+    println!(
+        "Before using the CLI, you need to create a Personal Access Token (PAT) in Azure DevOps:"
+    );
+    println!();
+    println!("1. Navigate to Azure DevOps → User Settings → Personal Access Tokens");
+    println!("2. Click \"New Token\"");
+    println!("3. Set a descriptive name (e.g., \"azdocli\")");
+    println!("4. Configure the required scopes: Code (read & write), Build (read & execute), Work Items (read & write)");
+    println!("5. Click \"Create\" and copy the token securely");
+    println!();
+    println!(
+        "{} Store your PAT securely and never commit it to version control.",
+        "⚠️ Important:".yellow().bold()
+    );
+    println!();
+}
+
 pub async fn login() -> Result<()> {
     println!("{}", "Login to Azure DevOps".bold());
+
+    show_pat_instructions();
 
     let organization: String = Input::new()
         .with_prompt("Azure DevOps organization name")
