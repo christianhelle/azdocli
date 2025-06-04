@@ -160,3 +160,29 @@ jobs:
       uses: christianhelle/rust-cache@v2
     - name: Publish to crates.io
       run: cargo publish --allow-dirty --token ${{ secrets.CRATES_TOKEN }}
+
+  publish-homebrew:
+    name: Publish to Homebrew
+    runs-on: ubuntu-latest
+    needs: release
+    steps:
+    - uses: actions/checkout@v4
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+    - name: Update Homebrew formula
+      run: |
+        chmod +x scripts/update-homebrew-formula.sh
+        ./scripts/update-homebrew-formula.sh ${{ env.VERSION }} \
+          artifacts/x86_64-apple-darwin/x86_64-apple-darwin.zip \
+          artifacts/aarch64-apple-darwin/aarch64-apple-darwin.zip
+    - name: Publish formula (placeholder)
+      run: |
+        echo "Homebrew formula created successfully!"
+        echo "To complete Homebrew distribution, this formula should be:"
+        echo "1. Added to a Homebrew tap repository"
+        echo "2. Or submitted to homebrew-core for inclusion in the main repository"
+        echo ""
+        echo "Generated formula:"
+        cat azdocli.rb
