@@ -8,7 +8,7 @@
     <title>Azure DevOps CLI</title>
     <authors>Christian Helle</authors>
     <projectUrl>https://christianhelle.com/azdocli</projectUrl>
-    <iconUrl>https://raw.githubusercontent.com/christianhelle/azdocli/main/docs/favicon.ico</iconUrl>
+    <iconUrl>https://raw.githubusercontent.com/christianhelle/azdocli/main/images/nuget_icon.png</iconUrl>
     <copyright>Copyright (c) Christian Helle</copyright>
     <licenseUrl>https://github.com/christianhelle/azdocli/blob/main/LICENSE</licenseUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
