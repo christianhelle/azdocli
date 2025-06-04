@@ -12,11 +12,9 @@ if ($pp.x86 -or ((Get-OSArchitectureWidth -compare 32) -or ($env:PROCESSOR_ARCHI
 }
 
 $architecture = 'x64'
-if ((Get-OSArchitectureWidth -eq 64) -and ($env:PROCESSOR_ARCHITEW6432 -ne $null -or $env:PROCESSOR_ARCHITECTURE -eq 'AMD64')) {
-    # Check if we're on ARM64
-    if ([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -eq 'Arm64') {
-        $architecture = 'arm64'
-    }
+# Check for ARM64 architecture using environment variables (more compatible)
+if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') {
+    $architecture = 'arm64'
 }
 
 # Define download URLs
