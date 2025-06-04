@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>azdocli</id>
+    <version>VERSION_PLACEHOLDER</version>
+    <packageSourceUrl>https://github.com/christianhelle/azdocli</packageSourceUrl>
+    <owners>christianhelle</owners>
+    <title>Azure DevOps CLI</title>
+    <authors>Christian Helle</authors>
+    <projectUrl>https://christianhelle.com/azdocli</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/christianhelle/azdocli/main/docs/favicon.ico</iconUrl>
+    <copyright>Copyright (c) Christian Helle</copyright>
+    <licenseUrl>https://github.com/christianhelle/azdocli/blob/main/LICENSE</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <projectSourceUrl>https://github.com/christianhelle/azdocli</projectSourceUrl>
+    <docsUrl>https://christianhelle.com/azdocli</docsUrl>
+    <bugTrackerUrl>https://github.com/christianhelle/azdocli/issues</bugTrackerUrl>
+    <tags>azure devops cli command-line git repository pipeline board</tags>
+    <summary>CLI tool for interacting with Azure DevOps</summary>
+    <description>A powerful command-line interface for Azure DevOps that provides repository management, pipeline management, and board management capabilities.
+
+Features include:
+- Repository management (list, create, delete, clone, view, and manage pull requests)
+- Pipeline management
+- Board management
+- Authentication using Personal Access Tokens (PAT)
+- Default project support</description>
+    <releaseNotes>https://github.com/christianhelle/azdocli/releases</releaseNotes>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>
