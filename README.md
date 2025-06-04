@@ -329,6 +329,16 @@ cargo install azdocli
 
 This will install the `ado` binary which you can use immediately.
 
+### Install from Snapcraft
+
+For Linux systems, you can install from the Snap Store:
+
+```bash
+sudo snap install azdocli
+```
+
+This provides automatic updates and easy installation on most Linux distributions.
+
 ### Install from GitHub Releases
 
 You can also download pre-built binaries from the [GitHub Releases page](https://github.com/christianhelle/azdocli/releases):

@@ -2,3 +2,9 @@
 Cargo.lock
 test_config.json
 .idea
+
+# Snap build artifacts
+*.snap
+prime/
+stage/
+parts/
