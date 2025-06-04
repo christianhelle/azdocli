@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - ".github/workflows/release.yml"
+    branches:
+      - main
   workflow_dispatch:
 
 env:
