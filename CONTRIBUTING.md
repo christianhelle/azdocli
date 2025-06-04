@@ -247,4 +247,27 @@ Maintainers handle releases. Contributors should:
 - Document breaking changes clearly
 - Update version numbers only if instructed
 
+### Distribution Process
+
+The release workflow automatically handles distribution to multiple package managers:
+
+**Automated Distribution:**
+- **GitHub Releases**: Binaries for Windows, macOS, and Linux (x64 and ARM64)
+- **crates.io**: Rust package registry
+
+**Generated Package Configurations:**
+- **Snapcraft**: Linux package configuration (requires manual publication)
+- **Homebrew**: macOS formula (requires submission to homebrew-core or tap)
+- **Chocolatey**: Windows package (requires manual publication)
+- **WinGet**: Windows package manager manifests (requires PR to microsoft/winget-pkgs)
+
+The release workflow generates all necessary configuration files and calculates checksums automatically. Package maintainers can use these generated files for publication to their respective package managers.
+
+**Required Secrets for Full Automation:**
+- `CRATES_TOKEN`: For crates.io publication
+- `SNAPCRAFT_TOKEN`: For Snapcraft publication (optional)
+- `CHOCOLATEY_API_KEY`: For Chocolatey publication (optional)
+- `HOMEBREW_GITHUB_TOKEN`: For Homebrew tap automation (optional)
+- `WINGET_GITHUB_TOKEN`: For WinGet submission automation (optional)
+
 Thank you for contributing to azdocli! 🚀
