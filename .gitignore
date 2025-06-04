@@ -2,3 +2,6 @@
 Cargo.lock
 test_config.json
 .idea
+
+# Generated Homebrew formula (keep template, ignore generated)
+azdocli.rb

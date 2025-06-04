@@ -329,6 +329,14 @@ cargo install azdocli
 
 This will install the `ado` binary which you can use immediately.
 
+### Install with Homebrew (macOS)
+
+On macOS, you can install azdocli using Homebrew:
+
+```bash
+brew install azdocli
+```
+
 ### Install from GitHub Releases
 
 You can also download pre-built binaries from the [GitHub Releases page](https://github.com/christianhelle/azdocli/releases):
