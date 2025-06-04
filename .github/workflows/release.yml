@@ -198,7 +198,7 @@ jobs:
 
   chocolatey-distribute:
     name: Distribute to Chocolatey
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     needs: release
     steps:
     - uses: actions/checkout@v4
@@ -226,7 +226,7 @@ jobs:
 
   winget-distribute:
     name: Distribute to WinGet
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     needs: release
     steps:
     - uses: actions/checkout@v4
