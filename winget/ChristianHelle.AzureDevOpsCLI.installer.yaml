@@ -1,0 +1,36 @@
+PackageIdentifier: ChristianHelle.AzureDevOpsCLI
+PackageVersion: VERSION_PLACEHOLDER
+Platform:
+- Windows.Desktop
+MinimumOSVersion: 10.0.0.0
+Scope: user
+InstallModes:
+- interactive
+- silent
+- silentWithProgress
+UpgradeBehavior: install
+Commands:
+- ado
+FileExtensions:
+- yml
+- yaml
+- json
+Installers:
+- Architecture: x64
+  InstallerType: zip
+  NestedInstallerType: portable
+  NestedInstallerFiles:
+  - RelativeFilePath: ado.exe
+    PortableCommandAlias: ado
+  InstallerUrl: https://github.com/christianhelle/azdocli/releases/download/VERSION_PLACEHOLDER/windows-x64.zip
+  InstallerSha256: SHA256_X64_PLACEHOLDER
+- Architecture: arm64
+  InstallerType: zip
+  NestedInstallerType: portable
+  NestedInstallerFiles:
+  - RelativeFilePath: ado.exe
+    PortableCommandAlias: ado
+  InstallerUrl: https://github.com/christianhelle/azdocli/releases/download/VERSION_PLACEHOLDER/windows-arm64.zip
+  InstallerSha256: SHA256_ARM64_PLACEHOLDER
+ManifestType: installer
+ManifestVersion: 1.6.0

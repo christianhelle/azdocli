@@ -1,0 +1,38 @@
+name: azdocli
+base: core22
+version: '0.2.0' # Will be updated by CI
+summary: CLI tool for interacting with Azure DevOps
+description: |
+  A powerful command-line interface for Azure DevOps that provides repository 
+  management, pipeline management, and board management capabilities.
+  
+  Features include:
+  - Repository management (list, create, delete, clone, view, and manage pull requests)
+  - Pipeline management
+  - Board management  
+  - Authentication using Personal Access Tokens (PAT)
+  - Default project support
+
+grade: stable
+confinement: strict
+
+architectures:
+  - build-on: amd64
+  - build-on: arm64
+
+apps:
+  azdocli:
+    command: bin/ado
+    plugs:
+      - home
+      - network
+      - network-bind
+
+parts:
+  azdocli:
+    plugin: dump
+    source: .
+    stage-packages:
+      - ca-certificates
+    organize:
+      ado: bin/ado
