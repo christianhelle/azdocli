@@ -329,6 +329,16 @@ cargo install azdocli
 
 This will install the `ado` binary which you can use immediately.
 
+### Install from Chocolatey (Windows)
+
+On Windows, you can install azdocli using Chocolatey:
+
+```powershell
+choco install azdocli
+```
+
+This will install the `ado` binary and add it to your PATH automatically.
+
 ### Install from GitHub Releases
 
 You can also download pre-built binaries from the [GitHub Releases page](https://github.com/christianhelle/azdocli/releases):

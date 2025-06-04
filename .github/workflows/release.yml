@@ -160,3 +160,56 @@ jobs:
       uses: christianhelle/rust-cache@v2
     - name: Publish to crates.io
       run: cargo publish --allow-dirty --token ${{ secrets.CRATES_TOKEN }}
+
+  publish-chocolatey:
+    name: Publish to Chocolatey
+    runs-on: windows-latest
+    needs: [build, release]
+    steps:
+    - uses: actions/checkout@v4
+    - name: Download Windows x64 artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: x86_64-pc-windows-msvc
+        path: artifacts/x64
+    - name: Download Windows ARM64 artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: aarch64-pc-windows-msvc
+        path: artifacts/arm64
+    - name: Calculate checksums
+      shell: pwsh
+      run: |
+        $x64Hash = (Get-FileHash "artifacts/x64/x86_64-pc-windows-msvc.zip" -Algorithm SHA256).Hash.ToLower()
+        $arm64Hash = (Get-FileHash "artifacts/arm64/aarch64-pc-windows-msvc.zip" -Algorithm SHA256).Hash.ToLower()
+        Write-Output "X64_CHECKSUM=$x64Hash" >> $env:GITHUB_ENV
+        Write-Output "ARM64_CHECKSUM=$arm64Hash" >> $env:GITHUB_ENV
+    - name: Update Chocolatey install script with checksums
+      shell: pwsh
+      run: |
+        $installScript = Get-Content "chocolatey/tools/chocolateyinstall.ps1" -Raw
+        $installScript = $installScript -replace "checksum64    = ''", "checksum64    = '${{ env.X64_CHECKSUM }}'"
+        $installScript = $installScript -replace "__ARM64_CHECKSUM__", "${{ env.ARM64_CHECKSUM }}"
+        $installScript | Set-Content "chocolatey/tools/chocolateyinstall.ps1"
+    - name: Update nuspec version
+      shell: pwsh
+      run: |
+        $nuspec = Get-Content "chocolatey/azdocli.nuspec" -Raw
+        $nuspec = $nuspec -replace '\$version\$', '${{ env.VERSION }}'
+        $nuspec | Set-Content "chocolatey/azdocli.nuspec"
+    - name: Install Chocolatey
+      shell: pwsh
+      run: |
+        Set-ExecutionPolicy Bypass -Scope Process -Force
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+        iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+    - name: Create Chocolatey package
+      shell: pwsh
+      run: |
+        cd chocolatey
+        choco pack azdocli.nuspec
+    - name: Publish to Chocolatey
+      shell: pwsh
+      run: |
+        cd chocolatey
+        choco push azdocli.${{ env.VERSION }}.nupkg --source https://push.chocolatey.org/ --api-key ${{ secrets.CHOCOLATEY_API_KEY }}
