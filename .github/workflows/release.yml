@@ -219,6 +219,7 @@ jobs:
         name: chocolatey-package
         path: chocolatey-package-${{ env.VERSION }}/
     - name: Publish to Chocolatey
+      working-directory: chocolatey
       env:
         CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
       run: |
