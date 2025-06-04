@@ -161,8 +161,8 @@ jobs:
     - name: Publish to crates.io
       run: cargo publish --allow-dirty --token ${{ secrets.CRATES_TOKEN }}
 
-  distribute:
-    name: Distribute to Package Managers
+  homebrew-distribute:
+    name: Distribute to Homebrew
     runs-on: ubuntu-latest
     needs: [build, release]
     steps:
@@ -176,40 +176,14 @@ jobs:
       run: |
         echo "macos_x64_sha=$(sha256sum artifacts/x86_64-apple-darwin/x86_64-apple-darwin.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
         echo "macos_arm64_sha=$(sha256sum artifacts/aarch64-apple-darwin/aarch64-apple-darwin.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
-        echo "windows_x64_sha=$(sha256sum artifacts/x86_64-pc-windows-msvc/x86_64-pc-windows-msvc.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
-        echo "windows_arm64_sha=$(sha256sum artifacts/aarch64-pc-windows-msvc/aarch64-pc-windows-msvc.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
-        echo "linux_x64_sha=$(sha256sum artifacts/x86_64-unknown-linux-gnu/x86_64-unknown-linux-gnu.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
-        echo "linux_arm64_sha=$(sha256sum artifacts/aarch64-unknown-linux-gnu/aarch64-unknown-linux-gnu.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
     - name: Generate Homebrew formula
       run: |
         ./scripts/generate-homebrew.sh "${{ env.VERSION }}" "${{ steps.checksums.outputs.macos_x64_sha }}" "${{ steps.checksums.outputs.macos_arm64_sha }}"
-    - name: Generate Chocolatey package
-      run: |
-        ./scripts/generate-chocolatey.sh "${{ env.VERSION }}" "${{ steps.checksums.outputs.windows_x64_sha }}"
-    - name: Generate WinGet manifests
-      run: |
-        ./scripts/generate-winget.sh "${{ env.VERSION }}" "${{ steps.checksums.outputs.windows_x64_sha }}" "${{ steps.checksums.outputs.windows_arm64_sha }}"
-    - name: Generate Snapcraft package
-      run: |
-        ./scripts/generate-snapcraft.sh "${{ env.VERSION }}"
-    - name: Upload distribution artifacts
+    - name: Upload Homebrew artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: distribution-packages
-        path: |
-          homebrew/azdocli-${{ env.VERSION }}.rb
-          chocolatey-package-${{ env.VERSION }}/
-          winget-${{ env.VERSION }}/
-          snap-package-${{ env.VERSION }}/
-    - name: Publish to Snapcraft
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      env:
-        SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_TOKEN }}
-      run: |
-        # Note: This would require setting up snapcraft and the binary in the snap package
-        # For now, we just generate the configuration files
-        echo "Snapcraft package configuration generated. Manual publication required."
-        echo "To publish: snapcraft upload snap-package-${{ env.VERSION }}/azdocli_${{ env.VERSION }}_amd64.snap"
+        name: homebrew-package
+        path: homebrew/azdocli-${{ env.VERSION }}.rb
     - name: Create Homebrew PR
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       env:
@@ -219,15 +193,29 @@ jobs:
         # For now, we just generate the formula
         echo "Homebrew formula generated. Manual submission to homebrew-core or create a tap required."
         echo "Formula location: homebrew/azdocli-${{ env.VERSION }}.rb"
-    - name: Submit to WinGet
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      env:
-        GITHUB_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
+
+  chocolatey-distribute:
+    name: Distribute to Chocolatey
+    runs-on: ubuntu-latest
+    needs: [build, release]
+    steps:
+    - uses: actions/checkout@v4
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+    - name: Calculate SHA256 checksums
+      id: checksums
       run: |
-        # Note: This would require setting up winget-cli or creating a PR to winget-pkgs
-        # For now, we just generate the manifests
-        echo "WinGet manifests generated. Manual submission to microsoft/winget-pkgs required."
-        echo "Manifests location: winget-${{ env.VERSION }}/"
+        echo "windows_x64_sha=$(sha256sum artifacts/x86_64-pc-windows-msvc/x86_64-pc-windows-msvc.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+    - name: Generate Chocolatey package
+      run: |
+        ./scripts/generate-chocolatey.sh "${{ env.VERSION }}" "${{ steps.checksums.outputs.windows_x64_sha }}"
+    - name: Upload Chocolatey artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: chocolatey-package
+        path: chocolatey-package-${{ env.VERSION }}/
     - name: Publish to Chocolatey
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       env:
@@ -238,3 +226,69 @@ jobs:
         echo "Chocolatey package generated. Manual publication required."
         echo "Package location: chocolatey-package-${{ env.VERSION }}/"
         echo "To publish: choco push chocolatey-package-${{ env.VERSION }}/azdocli.${{ env.VERSION }}.nupkg --source https://push.chocolatey.org/"
+
+  winget-distribute:
+    name: Distribute to WinGet
+    runs-on: ubuntu-latest
+    needs: [build, release]
+    steps:
+    - uses: actions/checkout@v4
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+    - name: Calculate SHA256 checksums
+      id: checksums
+      run: |
+        echo "windows_x64_sha=$(sha256sum artifacts/x86_64-pc-windows-msvc/x86_64-pc-windows-msvc.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+        echo "windows_arm64_sha=$(sha256sum artifacts/aarch64-pc-windows-msvc/aarch64-pc-windows-msvc.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+    - name: Generate WinGet manifests
+      run: |
+        ./scripts/generate-winget.sh "${{ env.VERSION }}" "${{ steps.checksums.outputs.windows_x64_sha }}" "${{ steps.checksums.outputs.windows_arm64_sha }}"
+    - name: Upload WinGet artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: winget-package
+        path: winget-${{ env.VERSION }}/
+    - name: Submit to WinGet
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      env:
+        GITHUB_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
+      run: |
+        # Note: This would require setting up winget-cli or creating a PR to winget-pkgs
+        # For now, we just generate the manifests
+        echo "WinGet manifests generated. Manual submission to microsoft/winget-pkgs required."
+        echo "Manifests location: winget-${{ env.VERSION }}/"
+
+  snapcraft-distribute:
+    name: Distribute to Snapcraft
+    runs-on: ubuntu-latest
+    needs: [build, release]
+    steps:
+    - uses: actions/checkout@v4
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+    - name: Calculate SHA256 checksums
+      id: checksums
+      run: |
+        echo "linux_x64_sha=$(sha256sum artifacts/x86_64-unknown-linux-gnu/x86_64-unknown-linux-gnu.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+        echo "linux_arm64_sha=$(sha256sum artifacts/aarch64-unknown-linux-gnu/aarch64-unknown-linux-gnu.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+    - name: Generate Snapcraft package
+      run: |
+        ./scripts/generate-snapcraft.sh "${{ env.VERSION }}"
+    - name: Upload Snapcraft artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: snapcraft-package
+        path: snap-package-${{ env.VERSION }}/
+    - name: Publish to Snapcraft
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      env:
+        SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_TOKEN }}
+      run: |
+        # Note: This would require setting up snapcraft and the binary in the snap package
+        # For now, we just generate the configuration files
+        echo "Snapcraft package configuration generated. Manual publication required."
+        echo "To publish: snapcraft upload snap-package-${{ env.VERSION }}/azdocli_${{ env.VERSION }}_amd64.snap"
