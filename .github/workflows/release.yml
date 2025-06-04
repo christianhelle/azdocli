@@ -222,6 +222,7 @@ jobs:
       env:
         CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
       run: |
+        choco pack
         choco push chocolatey-package-${{ env.VERSION }}/azdocli.${{ env.VERSION }}.nupkg --source https://push.chocolatey.org/ --api-key ${{ secrets.CHOCOLATEY_API_KEY }}
 
   winget-distribute:
