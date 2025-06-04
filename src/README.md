@@ -316,6 +316,14 @@ SUBCOMMANDS:
 
 ## Installation
 
+### Install from WinGet (Windows)
+
+The recommended way to install azdocli on Windows is using WinGet:
+
+```bash
+winget install ChristianHelle.azdocli
+```
+
 ### Install from crates.io
 
 The easiest way to install azdocli is using Cargo:

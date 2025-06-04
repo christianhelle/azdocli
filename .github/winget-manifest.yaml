@@ -1,0 +1,20 @@
+# WinGet manifest template for azdocli
+PackageIdentifier: ChristianHelle.azdocli
+PackageVersion: ${VERSION}
+PackageName: Azure DevOps CLI
+Publisher: Christian Helle
+License: MIT
+LicenseUrl: https://github.com/christianhelle/azdocli/blob/main/LICENSE
+ShortDescription: CLI tool for interacting with Azure DevOps
+PackageUrl: https://github.com/christianhelle/azdocli
+Installers:
+- Architecture: x64
+  InstallerType: zip
+  InstallerUrl: https://github.com/christianhelle/azdocli/releases/download/${VERSION}/windows-x64.zip
+  InstallerSha256: ${SHA256_X64}
+- Architecture: arm64
+  InstallerType: zip
+  InstallerUrl: https://github.com/christianhelle/azdocli/releases/download/${VERSION}/windows-arm64.zip
+  InstallerSha256: ${SHA256_ARM64}
+ManifestType: singleton
+ManifestVersion: 1.0.0

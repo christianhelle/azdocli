@@ -160,3 +160,20 @@ jobs:
       uses: christianhelle/rust-cache@v2
     - name: Publish to crates.io
       run: cargo publish --allow-dirty --token ${{ secrets.CRATES_TOKEN }}
+
+  winget-release:
+    name: Submit to WinGet
+    runs-on: windows-latest
+    needs: release
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Submit to WinGet Community Repository
+        uses: vedantmgoyal2009/winget-releaser@v2
+        with:
+          identifier: ChristianHelle.azdocli
+          version: ${{ env.VERSION }}
+          installers-regex: 'windows-(x64|arm64)\.zip$'
+          token: ${{ secrets.WINGET_TOKEN }}
+          fork-user: christianhelle
+          release-tag: ${{ env.VERSION }}
