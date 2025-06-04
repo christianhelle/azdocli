@@ -219,7 +219,7 @@ jobs:
     - name: Publish to Chocolatey
       working-directory: chocolatey
       run: |
-        choco push chocolatey-package-${{ env.VERSION }}/azdocli.${{ env.VERSION }}.nupkg --source https://push.chocolatey.org/ --api-key ${{ secrets.CHOCOLATEY_API_KEY }}
+        choco push ./azdocli.${{ env.VERSION }}.nupkg --source https://push.chocolatey.org/ --api-key ${{ secrets.CHOCOLATEY_API_KEY }}
 
   winget-distribute:
     name: Distribute to WinGet
