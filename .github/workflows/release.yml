@@ -206,24 +206,19 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         path: artifacts
-    - name: Calculate SHA256 checksums
-      id: checksums
-      run: |
-        echo "windows_x64_sha=$(sha256sum artifacts/x86_64-pc-windows-msvc/x86_64-pc-windows-msvc.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
-    - name: Generate Chocolatey package
-      run: |
-        ./scripts/generate-chocolatey.sh "${{ env.VERSION }}" "${{ steps.checksums.outputs.windows_x64_sha }}"
-    - name: Upload Chocolatey artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: chocolatey-package
-        path: chocolatey-package-${{ env.VERSION }}/
-    - name: Publish to Chocolatey
+    - name: Update Version
       working-directory: chocolatey
-      env:
-        CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+      shell: pwsh
+      run: |
+        $version = (Get-Content -Path azdocli.nuspec -Raw) -replace 'VERSION_PLACEHOLDER', '${{ env.VERSION }}'
+        $version | Set-Content -Path azdocli.nuspec
+    - name: Create Chocolatey package
+      working-directory: chocolatey
       run: |
         choco pack
+    - name: Publish to Chocolatey
+      working-directory: chocolatey
+      run: |
         choco push chocolatey-package-${{ env.VERSION }}/azdocli.${{ env.VERSION }}.nupkg --source https://push.chocolatey.org/ --api-key ${{ secrets.CHOCOLATEY_API_KEY }}
 
   winget-distribute:
