@@ -172,11 +172,19 @@ jobs:
       with:
         name: x86_64-unknown-linux-gnu
         path: artifacts
-    - name: Extract binary
+    - name: Extract binary and prepare for snap
       run: |
         cd artifacts
         unzip x86_64-unknown-linux-gnu.zip
         chmod +x ado
+        ls -la
+        # Move binary to root for snapcraft
+        mv ado ../
+        cd ..
+        ls -la
+    - name: Update snap version
+      run: |
+        sed -i "s/version: '0.1.0'/version: '${{ env.VERSION }}'/" snap/snapcraft.yaml
     - name: Build and publish snap
       uses: snapcore/action-build@v1
       with:

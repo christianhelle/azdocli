@@ -1,6 +1,6 @@
 name: azdocli
 base: core22
-version: git
+version: '0.1.0'
 summary: CLI tool for interacting with Azure DevOps
 description: |
   Azure DevOps CLI is a command-line tool that provides seamless interaction 
@@ -29,7 +29,7 @@ apps:
 parts:
   azdocli:
     plugin: dump
-    source: artifacts/
+    source: .
     organize:
       ado: bin/ado
     stage:
