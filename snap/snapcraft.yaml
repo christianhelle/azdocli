@@ -14,25 +14,16 @@ description: |
   - Default project support
 
 grade: stable
-confinement: strict
-
-architectures:
-  - build-on: amd64
-  - build-on: arm64
+confinement: devmode
 
 apps:
   azdocli:
     command: bin/ado
-    plugs:
-      - home
-      - network
-      - network-bind
 
 parts:
   azdocli:
-    plugin: dump
+    plugin: rust
     source: .
-    stage-packages:
-      - ca-certificates
-    organize:
-      ado: bin/ado
+    build-packages:
+      - libssl-dev
+      - pkg-config
