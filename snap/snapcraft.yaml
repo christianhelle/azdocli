@@ -17,9 +17,9 @@ grade: stable
 confinement: strict
 
 apps:
-  ado:
+  azdocli:
     command: bin/ado
-    aliases: [azdocli, azdo, ado]
+    aliases: [adocli, azdo, ado]
 
 parts:
   azdocli:
