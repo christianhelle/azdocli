@@ -1,6 +1,6 @@
 name: azdocli
 base: core22
-version: '0.2.0' # Will be updated by CI
+version: '0.2.36' # Will be updated by CI
 summary: CLI tool for interacting with Azure DevOps
 description: |
   A powerful command-line interface for Azure DevOps that provides repository 
@@ -14,11 +14,12 @@ description: |
   - Default project support
 
 grade: stable
-confinement: devmode
+confinement: strict
 
 apps:
-  azdocli:
+  ado:
     command: bin/ado
+    aliases: [azdocli, azdo, ado]
 
 parts:
   azdocli:
