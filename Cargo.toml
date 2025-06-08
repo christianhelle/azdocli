@@ -24,7 +24,6 @@ dirs = "6.0"
 async-trait = "0.1"
 dialoguer = "0.11"
 colored = "3.0"
-base64 = "0.22"
 azure_devops_rust_api = { version = "0.28.0", features = ["git", "pipelines", "wit"], default-features = false }
 azure_core = { version = "0.24.0", features = ["reqwest_rustls"], default-features = false }
 chrono = { version = "0.4", features = ["serde"] }
