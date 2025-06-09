@@ -1,14 +1,12 @@
-use crate::{
-    pr::{self, PullRequestsSubCommands},
-};
+use crate::auth::get_credentials;
+use crate::pr::{self, PullRequestsSubCommands};
+use crate::project::get_project_or_default;
 use anyhow::Result;
 use azure_devops_rust_api::git::{self, models::GitRepositoryCreateOptions, ClientBuilder};
 use clap::Subcommand;
 use dialoguer::Confirm;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
-use crate::auth::get_credentials;
-use crate::project::get_project_or_default;
 
 #[derive(Subcommand, Clone)]
 pub enum ReposSubCommands {
@@ -563,10 +561,10 @@ async fn clone_repos_parallel(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::Credentials;
     use serde::{Deserialize, Serialize};
     use std::fs;
     use std::path::PathBuf;
-    use crate::auth::Credentials;
 
     #[derive(Serialize, Deserialize, Debug)]
     struct TestConfig {
