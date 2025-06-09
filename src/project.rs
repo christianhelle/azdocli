@@ -1,5 +1,5 @@
-use std::fs;
 use anyhow::anyhow;
+use std::fs;
 
 pub fn save_default_project(project: &str) -> anyhow::Result<()> {
     let config_dir = crate::config::get_config_dir()?;

@@ -1,9 +1,9 @@
+use crate::auth::get_credentials;
+use crate::project::get_project_or_default;
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::pipelines::{self, models, ClientBuilder};
 use clap::Subcommand;
 use colored::Colorize;
-use crate::auth::get_credentials;
-use crate::project::get_project_or_default;
 
 #[derive(Subcommand, Clone)]
 pub enum PipelinesSubCommands {

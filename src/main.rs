@@ -1,14 +1,14 @@
-use clap::{CommandFactory, Parser, Subcommand};
 use crate::auth::{login, logout};
 use crate::project::{get_default_project, save_default_project};
+use clap::{CommandFactory, Parser, Subcommand};
 
 mod auth;
 mod boards;
+mod config;
 mod pipelines;
 mod pr;
-mod repos;
 mod project;
-mod config;
+mod repos;
 
 #[derive(Parser)]
 #[clap(about, version)]

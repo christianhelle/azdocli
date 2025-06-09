@@ -1,6 +1,6 @@
+use anyhow::anyhow;
 use std::fs;
 use std::path::PathBuf;
-use anyhow::anyhow;
 
 pub fn get_config_dir() -> anyhow::Result<PathBuf> {
     let home_dir = get_home_dir().ok_or_else(|| anyhow!("Could not find home directory"))?;
