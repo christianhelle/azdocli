@@ -1,5 +1,4 @@
 use crate::{
-    auth::{self, get_credentials},
     pr::{self, PullRequestsSubCommands},
 };
 use anyhow::Result;
@@ -8,6 +7,8 @@ use clap::Subcommand;
 use dialoguer::Confirm;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
+use crate::auth::get_credentials;
+use crate::project::get_project_or_default;
 
 #[derive(Subcommand, Clone)]
 pub enum ReposSubCommands {
@@ -79,7 +80,7 @@ pub enum ReposSubCommands {
 pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
     match subcommand {
         ReposSubCommands::Create { project, name } => {
-            let project_name = auth::get_project_or_default(project.as_deref())?;
+            let project_name = get_project_or_default(project.as_deref())?;
             match create_repo(&project_name, name).await {
                 Ok(repo) => {
                     display_repo_details(&repo);
@@ -95,7 +96,7 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
             }
         }
         ReposSubCommands::List { project } => {
-            let project_name = auth::get_project_or_default(project.as_deref())?;
+            let project_name = get_project_or_default(project.as_deref())?;
             let repos = list_repos(&project_name).await?;
             for repo in repos.iter() {
                 println!("{}", repo.name);
@@ -108,7 +109,7 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
             parallel,
             concurrency,
         } => {
-            let project_name = auth::get_project_or_default(project.as_deref())?;
+            let project_name = get_project_or_default(project.as_deref())?;
             clone_all_repos(
                 &project_name,
                 target_dir.as_deref(),
@@ -124,7 +125,7 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
             hard,
             yes,
         } => {
-            let project_name = auth::get_project_or_default(project.as_deref())?;
+            let project_name = get_project_or_default(project.as_deref())?;
 
             println!(
                 "{}Deleting repository '{}' in project '{}'",
@@ -166,7 +167,7 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
             }
         }
         ReposSubCommands::Show { id, project } => {
-            let project_name = auth::get_project_or_default(project.as_deref())?;
+            let project_name = get_project_or_default(project.as_deref())?;
             match get_repo(&project_name, id).await {
                 Ok(repo) => {
                     display_repo_details(&repo);
@@ -562,10 +563,10 @@ async fn clone_repos_parallel(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::auth::Credentials;
     use serde::{Deserialize, Serialize};
     use std::fs;
     use std::path::PathBuf;
+    use crate::auth::Credentials;
 
     #[derive(Serialize, Deserialize, Debug)]
     struct TestConfig {

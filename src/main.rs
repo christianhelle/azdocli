@@ -1,9 +1,14 @@
 use clap::{CommandFactory, Parser, Subcommand};
+use crate::auth::{login, logout};
+use crate::project::{get_default_project, save_default_project};
+
 mod auth;
 mod boards;
 mod pipelines;
 mod pr;
 mod repos;
+mod project;
+mod config;
 
 #[derive(Parser)]
 #[clap(about, version)]
@@ -45,17 +50,17 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match &cli.command {
         Some(Commands::Login) => {
-            auth::login().await?;
+            login().await?;
         }
         Some(Commands::Logout) => {
-            auth::logout()?;
+            logout()?;
         }
         Some(Commands::Project { project_name }) => match project_name {
             Some(project) => {
-                auth::save_default_project(project)?;
+                save_default_project(project)?;
                 println!("✅ Default project set to: {}", project);
             }
-            None => match auth::get_default_project() {
+            None => match get_default_project() {
                 Ok(project) => println!("Current default project: {}", project),
                 Err(_) => println!("No default project configured"),
             },

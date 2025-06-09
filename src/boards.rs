@@ -1,4 +1,5 @@
-use crate::auth;
+use crate::auth::get_credentials;
+use crate::project::get_project_or_default;
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::wit::{self, models, ClientBuilder};
 use clap::Subcommand;
@@ -94,7 +95,7 @@ pub enum WorkItemSubCommands {
 }
 
 fn create_client() -> Result<wit::Client> {
-    match auth::get_credentials() {
+    match get_credentials() {
         Ok(creds) => {
             let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
             let client = ClientBuilder::new(credential).build();
@@ -109,7 +110,7 @@ async fn get_work_item(project: &str, id: &str) -> Result<models::WorkItem> {
         .parse::<i32>()
         .map_err(|_| anyhow!("Invalid work item ID, must be a number"))?;
 
-    match auth::get_credentials() {
+    match get_credentials() {
         Ok(creds) => {
             let client = create_client()?;
             let work_item = client
@@ -132,7 +133,7 @@ async fn create_work_item(
     title: &str,
     description: Option<&str>,
 ) -> Result<()> {
-    match auth::get_credentials() {
+    match get_credentials() {
         Ok(_) => {
             let type_str = match work_item_type {
                 WorkItemType::Bug => "Bug",
@@ -171,7 +172,7 @@ async fn update_work_item(
     let _id_int = id
         .parse::<i32>()
         .map_err(|_| anyhow!("Invalid work item ID, must be a number"))?;
-    match auth::get_credentials() {
+    match get_credentials() {
         Ok(_) => {
             println!("Would update work item {} in project '{}':", id, project);
 
@@ -204,7 +205,7 @@ async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<
     let _id_int = id
         .parse::<i32>()
         .map_err(|_| anyhow!("Invalid work item ID, must be a number"))?;
-    match auth::get_credentials() {
+    match get_credentials() {
         Ok(_) => {
             if soft_delete {
                 update_work_item(project, id, None, None, Some("Removed"), None).await?;
@@ -306,7 +307,7 @@ fn display_work_item(work_item: &models::WorkItem) {
 }
 
 pub async fn handle_command(subcommand: &BoardsSubCommands) -> Result<()> {
-    let _credentials = auth::get_credentials()?;
+    let _credentials = get_credentials()?;
     match subcommand {
         BoardsSubCommands::WorkItem { subcommand } => handle_work_item_command(subcommand).await,
     }
@@ -320,7 +321,7 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
             description,
             project,
         } => {
-            let project_name = auth::get_project_or_default(project.as_deref())?;
+            let project_name = get_project_or_default(project.as_deref())?;
             println!(
                 "Creating a {:?} work item in project: {}",
                 work_item_type, project_name
@@ -343,7 +344,7 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
             project,
             soft_delete,
         } => {
-            let project_name = auth::get_project_or_default(project.as_deref())?;
+            let project_name = get_project_or_default(project.as_deref())?;
             println!(
                 "{}Deleting work item with id: {} in project: {}",
                 if *soft_delete { "Soft " } else { "" },
@@ -370,7 +371,7 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
             }
         }
         WorkItemSubCommands::Show { id, project, web } => {
-            let project_name = auth::get_project_or_default(project.as_deref())?;
+            let project_name = get_project_or_default(project.as_deref())?;
             println!(
                 "Showing work item with id: {} in project: {}",
                 id, project_name
@@ -378,7 +379,7 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
 
             // Open in browser if requested
             if *web {
-                match auth::get_credentials() {
+                match get_credentials() {
                     Ok(creds) => {
                         if let Err(e) = open_work_item_in_browser(&creds.organization, id) {
                             eprintln!("❌ Failed to open work item in browser: {}", e);
@@ -411,7 +412,7 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
             state,
             priority,
         } => {
-            let project_name = auth::get_project_or_default(project.as_deref())?;
+            let project_name = get_project_or_default(project.as_deref())?;
             println!(
                 "Updating work item with id: {} in project: {}",
                 id, project_name
