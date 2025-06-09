@@ -1,8 +1,9 @@
-use crate::auth;
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::pipelines::{self, models, ClientBuilder};
 use clap::Subcommand;
 use colored::Colorize;
+use crate::auth::get_credentials;
+use crate::project::get_project_or_default;
 
 #[derive(Subcommand, Clone)]
 pub enum PipelinesSubCommands {
@@ -45,7 +46,7 @@ pub enum PipelinesSubCommands {
 }
 
 fn create_client() -> Result<pipelines::Client> {
-    match auth::get_credentials() {
+    match get_credentials() {
         Ok(creds) => {
             let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
             let client = ClientBuilder::new(credential).build();
@@ -56,7 +57,7 @@ fn create_client() -> Result<pipelines::Client> {
 }
 
 async fn list_pipelines(project: &str) -> Result<Vec<models::Pipeline>> {
-    match auth::get_credentials() {
+    match get_credentials() {
         Ok(creds) => {
             let client = create_client()?;
             Ok(client
@@ -73,7 +74,7 @@ async fn list_pipelines(project: &str) -> Result<Vec<models::Pipeline>> {
 }
 
 async fn get_pipeline_runs(project: &str, pipeline_id: &str) -> Result<Vec<models::Run>> {
-    match auth::get_credentials() {
+    match get_credentials() {
         Ok(creds) => {
             let client = create_client()?;
             let pipeline_id_int = pipeline_id
@@ -94,7 +95,7 @@ async fn get_pipeline_runs(project: &str, pipeline_id: &str) -> Result<Vec<model
 }
 
 async fn get_build(project: &str, pipeline_id: &str, build_id: &str) -> Result<models::Run> {
-    match auth::get_credentials() {
+    match get_credentials() {
         Ok(creds) => {
             let client = create_client()?;
             let pipeline_id_int = pipeline_id
@@ -174,17 +175,17 @@ fn display_build_details(run: &models::Run) {
 pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
     match subcommand {
         PipelinesSubCommands::List { project } => {
-            let project_name = crate::auth::get_project_or_default(project.as_deref())?;
+            let project_name = get_project_or_default(project.as_deref())?;
             let pipelines = list_pipelines(&project_name).await?;
             display_pipelines(&pipelines);
         }
         PipelinesSubCommands::Runs { id, project } => {
-            let project_name = crate::auth::get_project_or_default(project.as_deref())?;
+            let project_name = get_project_or_default(project.as_deref())?;
             let runs = get_pipeline_runs(&project_name, id).await?;
             display_pipeline_runs(&runs);
         }
         PipelinesSubCommands::Run { id, project } => {
-            let project_name = crate::auth::get_project_or_default(project.as_deref())?;
+            let project_name = get_project_or_default(project.as_deref())?;
             println!(
                 "Starting pipeline with ID: {} in project: {}",
                 id, project_name
@@ -205,7 +206,7 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
             project,
             build_id,
         } => {
-            let project_name = crate::auth::get_project_or_default(project.as_deref())?;
+            let project_name = get_project_or_default(project.as_deref())?;
             println!(
                 "Showing details for build {} of pipeline {} in project {}",
                 build_id, id, project_name
