@@ -327,7 +327,7 @@ The easiest way to install azdocli is using Cargo:
 cargo install azdocli
 ```
 
-This will install the `azdocli` binary which you can use immediately.
+This will install the `azdocli` binary, which you can use immediately.
 
 ### Install from GitHub Releases
 
