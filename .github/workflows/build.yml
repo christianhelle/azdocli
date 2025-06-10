@@ -65,3 +65,20 @@ jobs:
       with:
         name: ${{ matrix.target }}
         path: ${{ matrix.target }}.zip
+
+  snapcraft:
+    name: Snapcraft
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Snapcraft
+      run: sudo snap install snapcraft --classic
+    - name: Build Snap
+      run: snapcraft --use-lxd --destructive-mode
+    - name: Build Snapcraft package
+      run: snapcraft
+    - name: Upload Snapcraft artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: snapcraft-packages
+        path: *.snap
