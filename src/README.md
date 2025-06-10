@@ -326,6 +326,16 @@ cargo install azdocli
 
 This will install the `azdocli` binary, which you can use immediately.
 
+### Install using Snap (Linux)
+
+On Linux systems with Snap support, you can install azdocli directly from the Snap Store:
+
+```bash
+snap install azdocli
+```
+
+This will install the latest stable version and automatically handle updates.
+
 ### Install from GitHub Releases
 
 You can also download pre-built binaries from the [GitHub Releases page](https://github.com/christianhelle/azdocli/releases):
