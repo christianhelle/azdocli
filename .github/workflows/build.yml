@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 env:
-  VERSION: 0.2.${{ github.run_number }}-alpha
+  VERSION: 0.3.0.${{ github.run_number }}-alpha
 
 jobs:
   build:
