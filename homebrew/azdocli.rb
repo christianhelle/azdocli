@@ -12,12 +12,12 @@ class Azdocli < Formula
   end
 
   def install
-    bin.install "ado" => "ado"
+    bin.install "azdocli" => "azdocli"
     doc.install "README.md"
     (share/"licenses"/name).install "LICENSE"
   end
 
   test do
-    system "#{bin}/ado", "--help"
+    system "#{bin}/azdocli", "--help"
   end
 end
