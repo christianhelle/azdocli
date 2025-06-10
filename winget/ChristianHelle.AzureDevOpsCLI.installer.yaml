@@ -10,7 +10,7 @@ InstallModes:
 - silentWithProgress
 UpgradeBehavior: install
 Commands:
-- ado
+- azdocli
 FileExtensions:
 - yml
 - yaml
@@ -20,16 +20,16 @@ Installers:
   InstallerType: zip
   NestedInstallerType: portable
   NestedInstallerFiles:
-  - RelativeFilePath: ado.exe
-    PortableCommandAlias: ado
+  - RelativeFilePath: azdocli.exe
+    PortableCommandAlias: azdocli
   InstallerUrl: https://github.com/christianhelle/azdocli/releases/download/VERSION_PLACEHOLDER/windows-x64.zip
   InstallerSha256: SHA256_X64_PLACEHOLDER
 - Architecture: arm64
   InstallerType: zip
   NestedInstallerType: portable
   NestedInstallerFiles:
-  - RelativeFilePath: ado.exe
-    PortableCommandAlias: ado
+  - RelativeFilePath: azdocli.exe
+    PortableCommandAlias: azdocli
   InstallerUrl: https://github.com/christianhelle/azdocli/releases/download/VERSION_PLACEHOLDER/windows-arm64.zip
   InstallerSha256: SHA256_ARM64_PLACEHOLDER
 ManifestType: installer
