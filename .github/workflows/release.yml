@@ -155,8 +155,8 @@ jobs:
       uses: christianhelle/rust-toolchain@stable
     - name: Rust cache
       uses: christianhelle/rust-cache@v2
-    #- name: Publish to crates.io
-    #  run: cargo publish --allow-dirty --token ${{ secrets.CRATES_TOKEN }}
+    - name: Publish to crates.io
+      run: cargo publish --allow-dirty --token ${{ secrets.CRATES_TOKEN }}
 
   homebrew-distribute:
     name: Distribute to Homebrew
