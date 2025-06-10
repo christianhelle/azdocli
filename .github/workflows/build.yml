@@ -73,6 +73,6 @@ jobs:
     - name: Install Snapcraft
       run: sudo snap install snapcraft --classic
     - name: Build Snap
-      run: snapcraft
+      run: snapcraft --use-lxd
     - name: Build Snapcraft package
       run: snapcraft
