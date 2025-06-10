@@ -9,10 +9,6 @@ homepage = "https://christianhelle.com/azdocli"
 repository = "https://github.com/christianhelle/azdocli"
 readme = "src/README.md"
 
-[[bin]]
-name = "ado"
-path = "src/main.rs"
-
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
