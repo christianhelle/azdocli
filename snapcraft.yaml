@@ -18,8 +18,8 @@ confinement: strict
 
 apps:
   azdocli:
-    command: bin/ado
-    aliases: [adocli, azdo, ado]
+    command: bin/azdocli
+    aliases: [ado, azdo, azdocli]
 
 parts:
   azdocli:
