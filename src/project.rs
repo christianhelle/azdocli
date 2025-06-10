@@ -23,7 +23,7 @@ pub fn get_default_project() -> anyhow::Result<String> {
     let config_file = config_dir.join("config.json");
 
     if !config_file.exists() {
-        return Err(anyhow!("No default project configured. Please set one using 'ado project <project_name>' or use the --project argument"));
+        return Err(anyhow!("No default project configured. Please set one using 'azdocli project <project_name>' or use the --project argument"));
     }
 
     let config_content = fs::read_to_string(config_file)?;
@@ -31,7 +31,7 @@ pub fn get_default_project() -> anyhow::Result<String> {
 
     match config["default_project"].as_str() {
         Some(project) => Ok(project.to_string()),
-        None => Err(anyhow!("No default project configured. Please set one using 'ado project <project_name>' or use the --project argument"))
+        None => Err(anyhow!("No default project configured. Please set one using 'azdocli project <project_name>' or use the --project argument"))
     }
 }
 

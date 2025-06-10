@@ -81,7 +81,7 @@ fn get_pat() -> Result<String> {
 
     if !creds_path.exists() {
         return Err(anyhow!(
-            "Not logged in. Please login first with 'ado login'"
+            "Not logged in. Please login first with 'azdocli login'"
         ));
     }
 
