@@ -6,7 +6,6 @@ on:
       - ".github/workflows/build.yml"
       - "Cargo.toml"
       - "src/**/*.rs"
-    branches: [ main ]
   workflow_dispatch:
 
 env:
