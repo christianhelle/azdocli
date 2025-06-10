@@ -19,7 +19,7 @@ confinement: strict
 apps:
   azdocli:
     command: bin/azdocli
-    aliases: [ado, azdo, azdocli]
+    aliases: [ado, azdo, adocli]
 
 parts:
   azdocli:
