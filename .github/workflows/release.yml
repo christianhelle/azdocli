@@ -46,8 +46,8 @@ jobs:
     - name: Zip artifacts
       shell: pwsh
       run: |
-        mv target/release/ado* ./
-        Compress-Archive ado*, README.md, LICENSE ${{ matrix.target }}.zip
+        mv target/release/azdocli* ./
+        Compress-Archive azdocli*, README.md, LICENSE ${{ matrix.target }}.zip
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
