@@ -77,8 +77,3 @@ jobs:
       run: snapcraft --use-lxd --destructive-mode
     - name: Build Snapcraft package
       run: snapcraft
-    - name: Upload Snapcraft artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: snapcraft-packages
-        path: *.snap
