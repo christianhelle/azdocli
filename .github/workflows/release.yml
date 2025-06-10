@@ -248,36 +248,3 @@ jobs:
         # For now, we just generate the manifests
         echo "WinGet manifests generated. Manual submission to microsoft/winget-pkgs required."
         echo "Manifests location: winget-${{ env.VERSION }}/"
-
-  snapcraft-distribute:
-    name: Distribute to Snapcraft
-    runs-on: ubuntu-latest
-    needs: release
-    steps:
-    - uses: actions/checkout@v4
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: artifacts
-    - name: Calculate SHA256 checksums
-      id: checksums
-      run: |
-        echo "linux_x64_sha=$(sha256sum artifacts/x86_64-unknown-linux-gnu/x86_64-unknown-linux-gnu.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
-        echo "linux_arm64_sha=$(sha256sum artifacts/aarch64-unknown-linux-gnu/aarch64-unknown-linux-gnu.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
-    - name: Generate Snapcraft package
-      run: |
-        ./scripts/generate-snapcraft.sh "${{ env.VERSION }}"
-    - name: Upload Snapcraft artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: snapcraft-package
-        path: snap-package-${{ env.VERSION }}/
-    - name: Publish to Snapcraft
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      env:
-        SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_TOKEN }}
-      run: |
-        # Note: This would require setting up snapcraft and the binary in the snap package
-        # For now, we just generate the configuration files
-        echo "Snapcraft package configuration generated. Manual publication required."
-        echo "To publish: snapcraft upload snap-package-${{ env.VERSION }}/azdocli_${{ env.VERSION }}_amd64.snap"
