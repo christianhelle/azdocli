@@ -17,15 +17,15 @@ eliminating the need to specify `--project` for every command:
 
 ```sh
 # Set a default project
-ado project MyDefaultProject
+azdocli project MyDefaultProject
 
 # View the current default project
-ado project
+azdocli project
 
 # All commands will now use the default project if --project is not specified
-ado repos list                  # Uses default project
-ado pipelines list              # Uses default project
-ado repos list --project Other  # Overrides default with "Other"
+azdocli repos list                  # Uses default project
+azdocli pipelines list              # Uses default project
+azdocli repos list --project Other  # Overrides default with "Other"
 ```
 
 **Default Project Features:**
@@ -43,28 +43,28 @@ The `repos clone` command allows you to clone all repositories from an Azure Dev
 
 ```sh
 # Set a default project first (optional but recommended)
-ado project MyProject
+azdocli project MyProject
 
 # Clone all repositories from the default project (with confirmation prompt)
-ado repos clone
+azdocli repos clone
 
 # Or override with a specific project
-ado repos clone --project MyProject
+azdocli repos clone --project MyProject
 
 # Clone to a specific directory
-ado repos clone --target-dir ./repos
+azdocli repos clone --target-dir ./repos
 
 # Skip confirmation prompt (useful for automation)
-ado repos clone --yes
+azdocli repos clone --yes
 
 # Clone repositories in parallel for faster execution
-ado repos clone --parallel
+azdocli repos clone --parallel
 
 # Control the number of concurrent clone operations (default: 4, max: 8)
-ado repos clone --parallel --concurrency 6
+azdocli repos clone --parallel --concurrency 6
 
 # Combine all options for maximum efficiency
-ado repos clone --target-dir ./repos --yes --parallel --concurrency 8
+azdocli repos clone --target-dir ./repos --yes --parallel --concurrency 8
 ```
 
 **Clone Features:**
@@ -84,10 +84,10 @@ The `repos show` command displays detailed information about a specific reposito
 
 ```sh
 # Show details of a repository by name (using default project)
-ado repos show --id MyRepository
+azdocli repos show --id MyRepository
 
 # Or specify a project explicitly
-ado repos show --id MyRepository --project MyProject
+azdocli repos show --id MyRepository --project MyProject
 ```
 
 **Show Features:**
@@ -104,19 +104,19 @@ The `repos delete` command allows you to delete repositories from an Azure DevOp
 
 ```sh
 # Soft delete a repository by name (using default project) - moves to recycle bin
-ado repos delete --id MyRepository
+azdocli repos delete --id MyRepository
 
 # Or specify a project explicitly
-ado repos delete --id MyRepository --project MyProject
+azdocli repos delete --id MyRepository --project MyProject
 
 # Hard delete - permanently delete after soft delete (requires manual recycle bin cleanup)
-ado repos delete --id MyRepository --hard
+azdocli repos delete --id MyRepository --hard
 
 # Skip confirmation prompt (useful for automation)
-ado repos delete --id MyRepository --yes
+azdocli repos delete --id MyRepository --yes
 
 # Combine options for automated hard delete
-ado repos delete --id MyRepository --hard --yes
+azdocli repos delete --id MyRepository --hard --yes
 ```
 
 **Delete Features:**
@@ -137,36 +137,36 @@ The `repos pr` commands allow you to manage pull requests within repositories:
 
 ```sh
 # List all pull requests for a repository (using default project)
-ado repos pr list --repo MyRepository
+azdocli repos pr list --repo MyRepository
 
 # Or specify a project explicitly
-ado repos pr list --repo MyRepository --project MyProject
+azdocli repos pr list --repo MyRepository --project MyProject
 ```
 
 ##### Show Pull Request Details
 
 ```sh
 # Show details of a specific pull request (using default project)
-ado repos pr show --repo MyRepository --id 123
+azdocli repos pr show --repo MyRepository --id 123
 
 # Or specify a project explicitly
-ado repos pr show --repo MyRepository --id 123 --project MyProject
+azdocli repos pr show --repo MyRepository --id 123 --project MyProject
 ```
 
 ##### Create Pull Request
 
 ```sh
 # Create a new pull request with source and target branches (using default project)
-ado repos pr create --repo MyRepository --source "feature/my-feature" --target "main" --title "My Feature" --description "Description"
+azdocli repos pr create --repo MyRepository --source "feature/my-feature" --target "main" --title "My Feature" --description "Description"
 
 # Create with minimal information - target defaults to 'main'
-ado repos pr create --repo MyRepository --source "feature/my-feature" --title "My Feature"
+azdocli repos pr create --repo MyRepository --source "feature/my-feature" --title "My Feature"
 
 # Or specify a project explicitly
-ado repos pr create --repo MyRepository --source "feature/my-feature" --target "develop" --title "My Feature" --description "Description" --project MyProject
+azdocli repos pr create --repo MyRepository --source "feature/my-feature" --target "develop" --title "My Feature" --description "Description" --project MyProject
 
 # Source branch is required, target defaults to 'main' if not specified
-ado repos pr create --repo MyRepository --source "bugfix/fix-login"
+azdocli repos pr create --repo MyRepository --source "bugfix/fix-login"
 ```
 
 **Pull Request Features:**
@@ -189,10 +189,10 @@ The `pipelines list` command allows you to list all pipelines in an Azure DevOps
 
 ```sh
 # List all pipelines in the default project
-ado pipelines list
+azdocli pipelines list
 
 # Or specify a project explicitly
-ado pipelines list --project MyProject
+azdocli pipelines list --project MyProject
 ```
 
 **List Features:**
@@ -207,10 +207,10 @@ The `pipelines runs` command shows all builds (runs) of a specified pipeline:
 
 ```sh
 # Show all runs for a pipeline (using default project)
-ado pipelines runs --id 42
+azdocli pipelines runs --id 42
 
 # Or specify a project explicitly
-ado pipelines runs --id 42 --project MyProject
+azdocli pipelines runs --id 42 --project MyProject
 ```
 
 **Runs Features:**
@@ -225,10 +225,10 @@ The `pipelines show` command displays detailed information about a specific pipe
 
 ```sh
 # Show details of a specific pipeline build (using default project)
-ado pipelines show --id 42 --build-id 123
+azdocli pipelines show --id 42 --build-id 123
 
 # Or specify a project explicitly
-ado pipelines show --id 42 --project MyProject --build-id 123
+azdocli pipelines show --id 42 --project MyProject --build-id 123
 ```
 
 **Show Features:**
@@ -243,10 +243,10 @@ The `pipelines run` command starts a new pipeline run:
 
 ```sh
 # Run a pipeline (using default project)
-ado pipelines run --id 42
+azdocli pipelines run --id 42
 
 # Or specify a project explicitly
-ado pipelines run --id 42 --project MyProject
+azdocli pipelines run --id 42 --project MyProject
 ```
 
 **Run Features:**
@@ -263,26 +263,26 @@ The `boards work-item` commands allow you to manage work items in an Azure DevOp
 
 ```sh
 # Show details of a specific work item (using default project)
-ado boards work-item show --id 123
+azdocli boards work-item show --id 123
 
 # Open work item directly in web browser
-ado boards work-item show --id 123 --web
+azdocli boards work-item show --id 123 --web
 
 # Or specify a project explicitly
-ado boards work-item show --id 123 --project MyProject
+azdocli boards work-item show --id 123 --project MyProject
 
 # Create a new work item (using default project)
 # Supported types: bug, task, user-story, feature, epic
-ado boards work-item create bug --title "Fix login issue" --description "Users cannot login after password change"
+azdocli boards work-item create bug --title "Fix login issue" --description "Users cannot login after password change"
 
 # Update a work item (using default project)
-ado boards work-item update --id 123 --title "New title" --state "Active" --priority 2
+azdocli boards work-item update --id 123 --title "New title" --state "Active" --priority 2
 
 # Delete a work item permanently (using default project)
-ado boards work-item delete --id 123
+azdocli boards work-item delete --id 123
 
 # Soft delete a work item by changing state to "Removed"
-ado boards work-item delete --id 123 --soft-delete
+azdocli boards work-item delete --id 123 --soft-delete
 ```
 
 **Work Item Features:**
@@ -299,7 +299,7 @@ ado boards work-item delete --id 123 --soft-delete
 CLI tool for interacting with Azure DevOps
 
 USAGE:
-    ado [SUBCOMMAND]
+    azdocli [SUBCOMMAND]
 
 OPTIONS:
     -h, --help       Print help information
@@ -324,7 +324,7 @@ The easiest way to install azdocli is using Cargo:
 cargo install azdocli
 ```
 
-This will install the `ado` binary which you can use immediately.
+This will install the `azdocli` binary which you can use immediately.
 
 ### Install from GitHub Releases
 
@@ -376,32 +376,32 @@ First, login to Azure DevOps using the PAT you created:
 
 ```sh
 # Login with your Personal Access Token
-ado login
+azdocli login
 # You'll be prompted for:
 # - Organization name (e.g., "mycompany" from https://dev.azure.com/mycompany)
 # - Personal Access Token (the PAT you created above)
 
 # Set a default project (optional but recommended)
-ado project MyProject
+azdocli project MyProject
 ```
 
 ### Basic Examples
 
 ```sh
 # Repository management
-ado repos list                           # List all repositories
-ado repos show --id MyRepo               # Show repository details
-ado repos clone                          # Clone all repositories
+azdocli repos list                           # List all repositories
+azdocli repos show --id MyRepo               # Show repository details
+azdocli repos clone                          # Clone all repositories
 
 # Pull request management
-ado repos pr list --repo MyRepo          # List pull requests for a repository
-ado repos pr show --repo MyRepo --id 123 # Show pull request details
-ado repos pr create --repo MyRepo --source "feature/my-feature" --title "My Feature" # Create a new pull request
+azdocli repos pr list --repo MyRepo          # List pull requests for a repository
+azdocli repos pr show --repo MyRepo --id 123 # Show pull request details
+azdocli repos pr create --repo MyRepo --source "feature/my-feature" --title "My Feature" # Create a new pull request
 
 # Pipeline management
-ado pipelines list                       # List all pipelines
-ado pipelines runs --id 42               # Show pipeline runs
-ado pipelines show --id 42 --build-id 123 # Show build details
+azdocli pipelines list                       # List all pipelines
+azdocli pipelines runs --id 42               # Show pipeline runs
+azdocli pipelines show --id 42 --build-id 123 # Show build details
 ```
 
 For detailed examples and features, see the respective sections below.

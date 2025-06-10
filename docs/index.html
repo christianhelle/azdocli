@@ -73,7 +73,7 @@
                 <div class="install-card">
                     <h3>From crates.io</h3>
                     <pre><code>cargo install azdocli</code></pre>
-                    <p>The easiest way to install. This will install the <code>ado</code> binary.</p>
+                    <p>The easiest way to install. This will install the <code>azdocli</code> binary.</p>
                 </div>
                 <div class="install-card">
                     <h3>From GitHub Releases</h3>
@@ -105,27 +105,27 @@
                 </div>
                 <div class="step">
                     <h3>2. Login to Azure DevOps</h3>
-                    <pre><code>ado login</code></pre>
+                    <pre><code>azdocli login</code></pre>
                     <p>Enter your organization name and the PAT you created in step 1 when prompted.</p>
                 </div>
                 <div class="step">
                     <h3>3. Set a default project (optional)</h3>
-                    <pre><code>ado project MyProject</code></pre>
+                    <pre><code>azdocli project MyProject</code></pre>
                 </div>
                 <div class="step">
                     <h3>4. Start using the CLI</h3>
                     <pre><code># Repository management
-ado repos list
-ado repos show --id MyRepo
-ado repos clone
+azdocli repos list
+azdocli repos show --id MyRepo
+azdocli repos clone
 
 # Pull request management  
-ado repos pr list --repo MyRepo
-ado repos pr create --repo MyRepo --source "feature/my-feature" --title "My Feature"
+azdocli repos pr list --repo MyRepo
+azdocli repos pr create --repo MyRepo --source "feature/my-feature" --title "My Feature"
 
 # Pipeline management
-ado pipelines list
-ado pipelines runs --id 42</code></pre>
+azdocli pipelines list
+azdocli pipelines runs --id 42</code></pre>
                 </div>
             </div>
         </section>

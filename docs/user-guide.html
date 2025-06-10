@@ -88,7 +88,7 @@
                 
                 <div class="command-example">
                     <h4>Login to Azure DevOps</h4>
-                    <pre><code>ado login</code></pre>
+                    <pre><code>azdocli login</code></pre>
                     <p>This command will prompt you to enter:</p>
                     <ul>
                         <li><strong>Azure DevOps organization name:</strong> Just the organization name (e.g., "mycompany" from https://dev.azure.com/mycompany)</li>
@@ -99,7 +99,7 @@
 
                 <div class="command-example">
                     <h4>Logout from Azure DevOps</h4>
-                    <pre><code>ado logout</code></pre>
+                    <pre><code>azdocli logout</code></pre>
                     <p>Clears stored credentials and logs you out of Azure DevOps.</p>
                 </div>
             </div>
@@ -113,12 +113,12 @@
 
                 <div class="command-example">
                     <h4>Set a default project</h4>
-                    <pre><code>ado project MyDefaultProject</code></pre>
+                    <pre><code>azdocli project MyDefaultProject</code></pre>
                 </div>
 
                 <div class="command-example">
                     <h4>View the current default project</h4>
-                    <pre><code>ado project</code></pre>
+                    <pre><code>azdocli project</code></pre>
                 </div>
 
                 <h4>Features:</h4>
@@ -140,28 +140,28 @@
                 <div class="command-example">
                     <h4>List all repositories</h4>
                     <pre><code># List repositories in default project
-ado repos list
+azdocli repos list
 
 # List repositories in specific project
-ado repos list --project MyProject</code></pre>
+azdocli repos list --project MyProject</code></pre>
                 </div>
 
                 <div class="command-example">
                     <h4>Create a new repository</h4>
                     <pre><code># Create repository in default project
-ado repos create --name MyNewRepo
+azdocli repos create --name MyNewRepo
 
 # Create repository in specific project
-ado repos create --name MyNewRepo --project MyProject</code></pre>
+azdocli repos create --name MyNewRepo --project MyProject</code></pre>
                 </div>
 
                 <div class="command-example">
                     <h4>Show repository details</h4>
                     <pre><code># Show details using default project
-ado repos show --id MyRepository
+azdocli repos show --id MyRepository
 
 # Show details with specific project
-ado repos show --id MyRepository --project MyProject</code></pre>
+azdocli repos show --id MyRepository --project MyProject</code></pre>
                 </div>
 
                 <h4>Show Features:</h4>
@@ -181,28 +181,28 @@ ado repos show --id MyRepository --project MyProject</code></pre>
                 <div class="command-example">
                     <h4>Basic cloning</h4>
                     <pre><code># Clone all repositories from default project (with confirmation prompt)
-ado repos clone
+azdocli repos clone
 
 # Clone from specific project
-ado repos clone --project MyProject</code></pre>
+azdocli repos clone --project MyProject</code></pre>
                 </div>
 
                 <div class="command-example">
                     <h4>Advanced cloning options</h4>
                     <pre><code># Clone to specific directory
-ado repos clone --target-dir ./repos
+azdocli repos clone --target-dir ./repos
 
 # Skip confirmation prompt (useful for automation)
-ado repos clone --yes
+azdocli repos clone --yes
 
 # Clone repositories in parallel for faster execution
-ado repos clone --parallel
+azdocli repos clone --parallel
 
 # Control concurrent operations (default: 4, max: 8)
-ado repos clone --parallel --concurrency 6
+azdocli repos clone --parallel --concurrency 6
 
 # Combine all options for maximum efficiency
-ado repos clone --target-dir ./repos --yes --parallel --concurrency 8</code></pre>
+azdocli repos clone --target-dir ./repos --yes --parallel --concurrency 8</code></pre>
                 </div>
 
                 <h4>Clone Features:</h4>
@@ -225,19 +225,19 @@ ado repos clone --target-dir ./repos --yes --parallel --concurrency 8</code></pr
                 <div class="command-example">
                     <h4>Delete operations</h4>
                     <pre><code># Soft delete (moves to recycle bin)
-ado repos delete --id MyRepository
+azdocli repos delete --id MyRepository
 
 # Specify project explicitly
-ado repos delete --id MyRepository --project MyProject
+azdocli repos delete --id MyRepository --project MyProject
 
 # Hard delete (permanent deletion)
-ado repos delete --id MyRepository --hard
+azdocli repos delete --id MyRepository --hard
 
 # Skip confirmation prompt (automation)
-ado repos delete --id MyRepository --yes
+azdocli repos delete --id MyRepository --yes
 
 # Combine options for automated hard delete
-ado repos delete --id MyRepository --hard --yes</code></pre>
+azdocli repos delete --id MyRepository --hard --yes</code></pre>
                 </div>
 
                 <h4>Delete Features:</h4>
@@ -258,34 +258,34 @@ ado repos delete --id MyRepository --hard --yes</code></pre>
                 <div class="command-example">
                     <h4>List Pull Requests</h4>
                     <pre><code># List all pull requests for a repository
-ado repos pr list --repo MyRepository
+azdocli repos pr list --repo MyRepository
 
 # With specific project
-ado repos pr list --repo MyRepository --project MyProject</code></pre>
+azdocli repos pr list --repo MyRepository --project MyProject</code></pre>
                 </div>
 
                 <div class="command-example">
                     <h4>Show Pull Request Details</h4>
                     <pre><code># Show details of a specific pull request
-ado repos pr show --repo MyRepository --id 123
+azdocli repos pr show --repo MyRepository --id 123
 
 # With specific project
-ado repos pr show --repo MyRepository --id 123 --project MyProject</code></pre>
+azdocli repos pr show --repo MyRepository --id 123 --project MyProject</code></pre>
                 </div>
 
                 <div class="command-example">
                     <h4>Create Pull Request</h4>
                     <pre><code># Create with full details
-ado repos pr create --repo MyRepository --source "feature/my-feature" --target "main" --title "My Feature" --description "Description"
+azdocli repos pr create --repo MyRepository --source "feature/my-feature" --target "main" --title "My Feature" --description "Description"
 
 # Create with minimal information (target defaults to 'main')
-ado repos pr create --repo MyRepository --source "feature/my-feature" --title "My Feature"
+azdocli repos pr create --repo MyRepository --source "feature/my-feature" --title "My Feature"
 
 # With specific project
-ado repos pr create --repo MyRepository --source "feature/my-feature" --target "develop" --title "My Feature" --project MyProject
+azdocli repos pr create --repo MyRepository --source "feature/my-feature" --target "develop" --title "My Feature" --project MyProject
 
 # Source branch is required, target defaults to 'main'
-ado repos pr create --repo MyRepository --source "bugfix/fix-login"</code></pre>
+azdocli repos pr create --repo MyRepository --source "bugfix/fix-login"</code></pre>
                 </div>
 
                 <h4>Pull Request Features:</h4>
@@ -311,40 +311,40 @@ ado repos pr create --repo MyRepository --source "bugfix/fix-login"</code></pre>
                 <div class="command-example">
                     <h4>List Pipelines</h4>
                     <pre><code># List all pipelines in default project
-ado pipelines list
+azdocli pipelines list
 
 # List pipelines in specific project
-ado pipelines list --project MyProject</code></pre>
+azdocli pipelines list --project MyProject</code></pre>
                     <p><strong>Features</strong>: Comprehensive listing with IDs and names in user-friendly table format.</p>
                 </div>
 
                 <div class="command-example">
                     <h4>Show Pipeline Runs</h4>
                     <pre><code># Show all runs for a pipeline
-ado pipelines runs --id 42
+azdocli pipelines runs --id 42
 
 # With specific project
-ado pipelines runs --id 42 --project MyProject</code></pre>
+azdocli pipelines runs --id 42 --project MyProject</code></pre>
                     <p><strong>Features</strong>: View run history, status visibility, and clear display of run information.</p>
                 </div>
 
                 <div class="command-example">
                     <h4>Show Pipeline Build Details</h4>
                     <pre><code># Show details of a specific pipeline build
-ado pipelines show --id 42 --build-id 123
+azdocli pipelines show --id 42 --build-id 123
 
 # With specific project
-ado pipelines show --id 42 --project MyProject --build-id 123</code></pre>
+azdocli pipelines show --id 42 --project MyProject --build-id 123</code></pre>
                     <p><strong>Features</strong>: Detailed information about builds, debug information for troubleshooting.</p>
                 </div>
 
                 <div class="command-example">
                     <h4>Run Pipeline</h4>
                     <pre><code># Start a new pipeline run
-ado pipelines run --id 42
+azdocli pipelines run --id 42
 
 # With specific project
-ado pipelines run --id 42 --project MyProject</code></pre>
+azdocli pipelines run --id 42 --project MyProject</code></pre>
                     <p><strong>Features</strong>: Pipeline execution with real-time updates and clear error feedback.</p>
                 </div>
             </div>
@@ -360,39 +360,39 @@ ado pipelines run --id 42 --project MyProject</code></pre>
                 <div class="command-example">
                     <h4>Show Work Item</h4>
                     <pre><code># Show details of a work item
-ado boards work-item show --id 123
+azdocli boards work-item show --id 123
 
 # Open work item directly in web browser
-ado boards work-item show --id 123 --web
+azdocli boards work-item show --id 123 --web
 
 # With specific project
-ado boards work-item show --id 123 --project MyProject</code></pre>
+azdocli boards work-item show --id 123 --project MyProject</code></pre>
                 </div>
 
                 <div class="command-example">
                     <h4>Create Work Item</h4>
                     <pre><code># Create different types of work items
-ado boards work-item create bug --title "Fix login issue" --description "Users cannot login after password change"
-ado boards work-item create task --title "Update documentation"
-ado boards work-item create user-story --title "User registration feature"
-ado boards work-item create feature --title "New reporting dashboard"
-ado boards work-item create epic --title "Mobile application development"</code></pre>
+azdocli boards work-item create bug --title "Fix login issue" --description "Users cannot login after password change"
+azdocli boards work-item create task --title "Update documentation"
+azdocli boards work-item create user-story --title "User registration feature"
+azdocli boards work-item create feature --title "New reporting dashboard"
+azdocli boards work-item create epic --title "Mobile application development"</code></pre>
                     <p>Supported types: bug, task, user-story, feature, epic</p>
                 </div>
 
                 <div class="command-example">
                     <h4>Update Work Item</h4>
                     <pre><code># Update work item fields
-ado boards work-item update --id 123 --title "New title" --state "Active" --priority 2</code></pre>
+azdocli boards work-item update --id 123 --title "New title" --state "Active" --priority 2</code></pre>
                 </div>
 
                 <div class="command-example">
                     <h4>Delete Work Item</h4>
                     <pre><code># Permanent delete
-ado boards work-item delete --id 123
+azdocli boards work-item delete --id 123
 
 # Soft delete (changes state to "Removed")
-ado boards work-item delete --id 123 --soft-delete</code></pre>
+azdocli boards work-item delete --id 123 --soft-delete</code></pre>
                 </div>
 
                 <h4>Work Item Features:</h4>
