@@ -157,11 +157,12 @@ p {
 
 .install-card ul {
     margin: 1rem 0;
-    padding-left: 1.5rem;
+    padding-left: 2.5rem;
 }
 
 .install-card li {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.8rem;
+    line-height: 1.7;
 }
 
 /* Usage steps */
@@ -331,6 +332,17 @@ tr:hover {
     background-color: #f8f9fa;
 }
 
+/* Lists styling */
+ul {
+    margin: 1rem 0;
+    padding-left: 2rem;
+}
+
+li {
+    margin-bottom: 0.5rem;
+    line-height: 1.6;
+}
+
 /* Command reference styling */
 .command-section {
     background: white;
@@ -347,6 +359,16 @@ tr:hover {
     margin-bottom: 1.5rem;
 }
 
+.command-section ul {
+    margin: 1rem 0;
+    padding-left: 2.5rem;
+}
+
+.command-section li {
+    margin-bottom: 0.8rem;
+    line-height: 1.7;
+}
+
 .command-example {
     background-color: #f6f8fa;
     border-left: 4px solid #0066cc;
@@ -357,4 +379,14 @@ tr:hover {
 .command-example h4 {
     color: #0066cc;
     margin-bottom: 0.5rem;
+}
+
+.command-example ul {
+    margin: 1rem 0;
+    padding-left: 2.5rem;
+}
+
+.command-example li {
+    margin-bottom: 0.8rem;
+    line-height: 1.7;
 }
