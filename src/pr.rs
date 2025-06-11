@@ -57,6 +57,20 @@ pub enum PullRequestsSubCommands {
         #[clap(short, long)]
         id: String,
     },
+    /// Show commits in a pull request
+    Commits {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+
+        /// Name of the repository to show commits from
+        #[clap(short, long)]
+        repo: String,
+
+        /// ID of the pull request to show commits for
+        #[clap(short, long)]
+        id: String,
+    },
 }
 
 fn create_client() -> Result<git::Client> {
@@ -99,8 +113,61 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
             let project_name = get_project_or_default(project.as_deref())?;
             show_pull_request(&project_name, repo, id).await?;
         }
+        PullRequestsSubCommands::Commits {
+            ref project,
+            repo,
+            id,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            list_pull_request_commits(repo, id, project_name).await?;
+        }
     }
     Ok(())
+}
+
+async fn list_pull_request_commits(
+    repo: &String,
+    id: &String,
+    project_name: String,
+) -> Result<()> {
+    match get_credentials() {
+        Ok(creds) => {
+            let client = create_client()?;
+            let pr_client = client.pull_request_commits_client();
+
+            let pr_id = id
+                .parse::<i32>()
+                .map_err(|_| anyhow::anyhow!("Invalid pull request ID, must be a number"))?;
+
+            let commits = pr_client
+                .get_pull_request_commits(creds.organization, repo, pr_id, project_name)
+                .await?;
+
+            if commits.count == Option::from(0) {
+                println!("No commits found for pull request ID {}", id);
+            } else {
+                println!("Commits in pull request ID {}:", id);
+                for commit in commits.value {
+                    println!("  - Commit ID: {}", commit.commit_id.unwrap());
+                    if let Some(message) = commit.comment {
+                        println!("    Message: {}", message);
+                    }
+                    if let Some(author) = commit.author {
+                        println!(
+                            "    Author: {} ({})",
+                            author.name.unwrap(),
+                            author.email.unwrap_or_default()
+                        );
+                    }
+                }
+            }
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("Unable to retrieve commits: {}", e);
+            Err(e)
+        }
+    }
 }
 
 async fn create_pull_request(
