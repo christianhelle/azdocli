@@ -333,9 +333,13 @@ tr:hover {
 }
 
 /* Lists styling */
-ul {
+ul, ol {
     margin: 1rem 0;
     padding-left: 2rem;
+}
+
+ol {
+    padding-left: 2.5rem; /* Extra padding for numbered lists */
 }
 
 li {
@@ -359,9 +363,13 @@ li {
     margin-bottom: 1.5rem;
 }
 
-.command-section ul {
+.command-section ul, .command-section ol {
     margin: 1rem 0;
     padding-left: 2.5rem;
+}
+
+.command-section ol {
+    padding-left: 3rem; /* Extra padding for numbered lists in command sections */
 }
 
 .command-section li {
@@ -381,9 +389,13 @@ li {
     margin-bottom: 0.5rem;
 }
 
-.command-example ul {
+.command-example ul, .command-example ol {
     margin: 1rem 0;
     padding-left: 2.5rem;
+}
+
+.command-example ol {
+    padding-left: 3rem; /* Extra padding for numbered lists in command examples */
 }
 
 .command-example li {
