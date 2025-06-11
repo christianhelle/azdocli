@@ -302,9 +302,7 @@ azdocli repos pr show --repo MyRepository --id 123
 
 # With specific project
 azdocli repos pr show --repo MyRepository --id 123 --project MyProject</code></pre>
-                </div>
-
-                <div class="command-example">
+                </div>                <div class="command-example">
                     <h4>Create Pull Request</h4>
                     <pre><code># Create with full details
 azdocli repos pr create --repo MyRepository --source "feature/my-feature" --target "main" --title "My Feature" --description "Description"
@@ -319,7 +317,14 @@ azdocli repos pr create --repo MyRepository --source "feature/my-feature" --targ
 azdocli repos pr create --repo MyRepository --source "bugfix/fix-login"</code></pre>
                 </div>
 
-                <h4>Pull Request Features:</h4>
+                <div class="command-example">
+                    <h4>Show Pull Request Commits</h4>
+                    <pre><code># Show commits in a specific pull request
+azdocli repos pr commits --repo MyRepository --id 123
+
+# With specific project
+azdocli repos pr commits --repo MyRepository --id 123 --project MyProject</code></pre>
+                </div>                <h4>Pull Request Features:</h4>
                 <ul>
                     <li><strong>Repository filtering</strong>: List shows only pull requests for the specified repository</li>
                     <li><strong>Comprehensive details</strong>: Show command displays ID, title, description, status, branches, and creation date</li>
@@ -329,6 +334,7 @@ azdocli repos pr create --repo MyRepository --source "bugfix/fix-login"</code></
                     <li><strong>Repository validation</strong>: Verify repository exists before creating pull request</li>
                     <li><strong>Authentication handling</strong>: Proper error messages when not logged in</li>
                     <li><strong>Error handling</strong>: Clear feedback for invalid pull request IDs or missing repositories</li>
+                    <li><strong>Commit tracking</strong>: View all commits included in a pull request with detailed commit information, messages, and author details</li>
                 </ul>
             </div>
         </section>

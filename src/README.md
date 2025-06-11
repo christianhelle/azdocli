@@ -169,6 +169,16 @@ azdocli repos pr create --repo MyRepository --source "feature/my-feature" --targ
 azdocli repos pr create --repo MyRepository --source "bugfix/fix-login"
 ```
 
+##### Show Pull Request Commits
+
+```sh
+# Show commits in a specific pull request (using default project)
+azdocli repos pr commits --repo MyRepository --id 123
+
+# Or specify a project explicitly
+azdocli repos pr commits --repo MyRepository --id 123 --project MyProject
+```
+
 **Pull Request Features:**
 
 - **Repository filtering**: List shows only pull requests for the specified repository
@@ -180,6 +190,7 @@ azdocli repos pr create --repo MyRepository --source "bugfix/fix-login"
 - **Authentication handling**: Proper error messages when not logged in
 - **Default project support**: Use with default project or specify --project explicitly
 - **Error handling**: Clear feedback for invalid pull request IDs or missing repositories
+- **Commit tracking**: View all commits included in a pull request with detailed information
 
 ### Pipeline Management Features
 
