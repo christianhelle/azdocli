@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Guide - Azure DevOps CLI</title>
     <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
     <header>
         <div class="container">
@@ -30,7 +32,8 @@
     <main class="container">
         <section id="getting-started">
             <h2>🚀 Getting Started</h2>
-            <p>Azure DevOps CLI (azdocli) provides a powerful command-line interface for interacting with Azure DevOps services. This guide covers all features and commands available in the tool.</p>
+            <p>Azure DevOps CLI (azdocli) provides a powerful command-line interface for interacting with Azure DevOps
+                services. This guide covers all features and commands available in the tool.</p>
         </section>
 
         <section id="installation">
@@ -38,28 +41,32 @@
             <div class="command-section">
                 <h3>Installation Methods</h3>
                 <p>Choose the installation method that works best for your system:</p>
-                
+
                 <div class="command-example">
                     <h4>From crates.io (Recommended)</h4>
                     <pre><code>cargo install azdocli</code></pre>
-                    <p>This is the easiest way to install azdocli. It requires Rust and Cargo to be installed on your system.</p>
+                    <p>This is the easiest way to install azdocli. It requires Rust and Cargo to be installed on your
+                        system.</p>
                 </div>
 
                 <div class="command-example">
                     <h4>Using Snap (Linux)</h4>
                     <pre><code>snap install azdocli</code></pre>
-                    <p>On Linux systems with Snap support, you can install azdocli directly from the Snap Store. This method provides automatic updates and easy installation.</p>
+                    <p>On Linux systems with Snap support, you can install azdocli directly from the Snap Store. This
+                        method provides automatic updates and easy installation.</p>
                 </div>
 
                 <div class="command-example">
                     <h4>From GitHub Releases</h4>
                     <p>Download pre-built binaries for your platform:</p>
                     <ul>
-                        <li><strong>Windows:</strong> <code>windows-x64.zip</code> or <code>windows-arm64.zip</code></li>
+                        <li><strong>Windows:</strong> <code>windows-x64.zip</code> or <code>windows-arm64.zip</code>
+                        </li>
                         <li><strong>macOS:</strong> <code>macos-x64.zip</code> or <code>macos-arm64.zip</code></li>
                         <li><strong>Linux:</strong> <code>linux-x64.zip</code> or <code>linux-arm64.zip</code></li>
                     </ul>
-                    <p>Visit the <a href="https://github.com/christianhelle/azdocli/releases">GitHub Releases page</a> to download the latest version.</p>
+                    <p>Visit the <a href="https://github.com/christianhelle/azdocli/releases">GitHub Releases page</a>
+                        to download the latest version.</p>
                     <p>Extract the binary from the downloaded archive and add it to your system's PATH.</p>
                 </div>
             </div>
@@ -69,12 +76,14 @@
             <h2>🔐 Authentication</h2>
             <div class="command-section">
                 <h3>Creating a Personal Access Token (PAT)</h3>
-                <p>Before using any commands, you need to authenticate with Azure DevOps using a Personal Access Token (PAT). Follow these steps to create one:</p>
-                
+                <p>Before using any commands, you need to authenticate with Azure DevOps using a Personal Access Token
+                    (PAT). Follow these steps to create one:</p>
+
                 <div class="command-example">
                     <h4>Step 1: Navigate to Personal Access Tokens</h4>
                     <ol>
-                        <li>Sign in to your Azure DevOps organization (<code>https://dev.azure.com/{yourorganization}</code>)</li>
+                        <li>Sign in to your Azure DevOps organization
+                            (<code>https://dev.azure.com/{yourorganization}</code>)</li>
                         <li>Click on your profile picture in the top right corner</li>
                         <li>Select <strong>Personal Access Tokens</strong> from the dropdown menu</li>
                     </ol>
@@ -116,13 +125,14 @@
 
                 <h3>Login and Logout</h3>
                 <p>Once you have your Personal Access Token, you can authenticate with the CLI.</p>
-                
+
                 <div class="command-example">
                     <h4>Login to Azure DevOps</h4>
                     <pre><code>azdocli login</code></pre>
                     <p>This command will prompt you to enter:</p>
                     <ul>
-                        <li><strong>Azure DevOps organization name:</strong> Just the organization name (e.g., "mycompany" from https://dev.azure.com/mycompany)</li>
+                        <li><strong>Azure DevOps organization name:</strong> Just the organization name (e.g.,
+                            "mycompany" from https://dev.azure.com/mycompany)</li>
                         <li><strong>Personal Access Token:</strong> The PAT you created in the previous steps</li>
                     </ul>
                     <p>The CLI will validate your credentials and store them securely for future use.</p>
@@ -140,7 +150,8 @@
             <h2>📁 Default Project Management</h2>
             <div class="command-section">
                 <h3>Project Commands</h3>
-                <p>The project command allows you to set and view a default project, eliminating the need to specify --project for every command.</p>
+                <p>The project command allows you to set and view a default project, eliminating the need to specify
+                    --project for every command.</p>
 
                 <div class="command-example">
                     <h4>Set a default project</h4>
@@ -157,17 +168,18 @@
                     <li><strong>Persistent storage</strong>: Default project is saved in your user configuration</li>
                     <li><strong>Optional override</strong>: Use --project to override the default for any command</li>
                     <li><strong>All modules supported</strong>: Works with repos, pipelines, and boards</li>
-                    <li><strong>Helpful error messages</strong>: Clear feedback when no default is set and no --project is provided</li>
+                    <li><strong>Helpful error messages</strong>: Clear feedback when no default is set and no --project
+                        is provided</li>
                 </ul>
             </div>
         </section>
 
         <section id="repositories">
             <h2>📦 Repository Management</h2>
-            
+
             <div class="command-section">
                 <h3>Basic Repository Operations</h3>
-                
+
                 <div class="command-example">
                     <h4>List all repositories</h4>
                     <pre><code># List repositories in default project
@@ -198,16 +210,19 @@ azdocli repos show --id MyRepository --project MyProject</code></pre>
                 <h4>Show Features:</h4>
                 <ul>
                     <li><strong>Comprehensive details</strong>: View repository name, ID, URLs, size, and metadata</li>
-                    <li><strong>User-friendly formatting</strong>: Emoji icons and formatted output for better readability</li>
+                    <li><strong>User-friendly formatting</strong>: Emoji icons and formatted output for better
+                        readability</li>
                     <li><strong>Clone URLs</strong>: Display both HTTPS and SSH clone URLs</li>
                     <li><strong>File size formatting</strong>: Automatic conversion to KB/MB for better readability</li>
-                    <li><strong>Error handling</strong>: Helpful error messages with suggestions when repository not found</li>
+                    <li><strong>Error handling</strong>: Helpful error messages with suggestions when repository not
+                        found</li>
                 </ul>
             </div>
 
             <div class="command-section">
                 <h3>Repository Clone Feature</h3>
-                <p>The repos clone command allows you to clone all repositories from an Azure DevOps project with powerful options for automation and parallel processing.</p>
+                <p>The repos clone command allows you to clone all repositories from an Azure DevOps project with
+                    powerful options for automation and parallel processing.</p>
 
                 <div class="command-example">
                     <h4>Basic cloning</h4>
@@ -239,11 +254,15 @@ azdocli repos clone --target-dir ./repos --yes --parallel --concurrency 8</code>
                 <h4>Clone Features:</h4>
                 <ul>
                     <li><strong>Bulk cloning</strong>: Clone all repositories from a project with a single command</li>
-                    <li><strong>Target directory</strong>: Specify where to clone repositories (defaults to current directory)</li>
-                    <li><strong>Confirmation prompts</strong>: Interactive confirmation with repository listing before cloning</li>
+                    <li><strong>Target directory</strong>: Specify where to clone repositories (defaults to current
+                        directory)</li>
+                    <li><strong>Confirmation prompts</strong>: Interactive confirmation with repository listing before
+                        cloning</li>
                     <li><strong>Automation support</strong>: Skip prompts with --yes flag for CI/CD scenarios</li>
-                    <li><strong>Parallel execution</strong>: Use --parallel flag to clone multiple repositories simultaneously</li>
-                    <li><strong>Concurrency control</strong>: Adjust the number of concurrent operations with --concurrency (1-8)</li>
+                    <li><strong>Parallel execution</strong>: Use --parallel flag to clone multiple repositories
+                        simultaneously</li>
+                    <li><strong>Concurrency control</strong>: Adjust the number of concurrent operations with
+                        --concurrency (1-8)</li>
                     <li><strong>Error handling</strong>: Comprehensive error reporting for failed clones</li>
                     <li><strong>Progress tracking</strong>: Real-time feedback on clone operations</li>
                 </ul>
@@ -251,7 +270,8 @@ azdocli repos clone --target-dir ./repos --yes --parallel --concurrency 8</code>
 
             <div class="command-section">
                 <h3>Repository Delete Feature</h3>
-                <p>The repos delete command allows you to delete repositories from an Azure DevOps project with safety features.</p>
+                <p>The repos delete command allows you to delete repositories from an Azure DevOps project with safety
+                    features.</p>
 
                 <div class="command-example">
                     <h4>Delete operations</h4>
@@ -273,9 +293,11 @@ azdocli repos delete --id MyRepository --hard --yes</code></pre>
 
                 <h4>Delete Features:</h4>
                 <ul>
-                    <li><strong>Soft delete by default</strong>: Repositories are moved to recycle bin and can be restored</li>
+                    <li><strong>Soft delete by default</strong>: Repositories are moved to recycle bin and can be
+                        restored</li>
                     <li><strong>Hard delete option</strong>: Use --hard flag for permanent deletion</li>
-                    <li><strong>Confirmation prompts</strong>: Interactive confirmation before deletion to prevent accidents</li>
+                    <li><strong>Confirmation prompts</strong>: Interactive confirmation before deletion to prevent
+                        accidents</li>
                     <li><strong>Automation support</strong>: Skip prompts with --yes flag for CI/CD scenarios</li>
                     <li><strong>Repository validation</strong>: Verify repository exists before attempting deletion</li>
                     <li><strong>Error handling</strong>: Clear feedback when repository not found or access denied</li>
@@ -302,7 +324,8 @@ azdocli repos pr show --repo MyRepository --id 123
 
 # With specific project
 azdocli repos pr show --repo MyRepository --id 123 --project MyProject</code></pre>
-                </div>                <div class="command-example">
+                </div>
+                <div class="command-example">
                     <h4>Create Pull Request</h4>
                     <pre><code># Create with full details
 azdocli repos pr create --repo MyRepository --source "feature/my-feature" --target "main" --title "My Feature" --description "Description"
@@ -324,24 +347,32 @@ azdocli repos pr commits --repo MyRepository --id 123
 
 # With specific project
 azdocli repos pr commits --repo MyRepository --id 123 --project MyProject</code></pre>
-                </div>                <h4>Pull Request Features:</h4>
+                </div>
+                <h4>Pull Request Features:</h4>
                 <ul>
-                    <li><strong>Repository filtering</strong>: List shows only pull requests for the specified repository</li>
-                    <li><strong>Comprehensive details</strong>: Show command displays ID, title, description, status, branches, and creation date</li>
-                    <li><strong>Branch specification</strong>: Specify source branch (required) and target branch (defaults to 'main')</li>
+                    <li><strong>Repository filtering</strong>: List shows only pull requests for the specified
+                        repository</li>
+                    <li><strong>Comprehensive details</strong>: Show command displays ID, title, description, status,
+                        branches, and creation date</li>
+                    <li><strong>Branch specification</strong>: Specify source branch (required) and target branch
+                        (defaults to 'main')</li>
                     <li><strong>Flexible creation</strong>: Create pull requests with or without title/description</li>
-                    <li><strong>Branch validation</strong>: Automatic formatting of branch names with refs/heads/ prefix</li>
-                    <li><strong>Repository validation</strong>: Verify repository exists before creating pull request</li>
+                    <li><strong>Branch validation</strong>: Automatic formatting of branch names with refs/heads/ prefix
+                    </li>
+                    <li><strong>Repository validation</strong>: Verify repository exists before creating pull request
+                    </li>
                     <li><strong>Authentication handling</strong>: Proper error messages when not logged in</li>
-                    <li><strong>Error handling</strong>: Clear feedback for invalid pull request IDs or missing repositories</li>
-                    <li><strong>Commit tracking</strong>: View all commits included in a pull request with detailed commit information, messages, and author details</li>
+                    <li><strong>Error handling</strong>: Clear feedback for invalid pull request IDs or missing
+                        repositories</li>
+                    <li><strong>Commit tracking</strong>: View all commits included in a pull request with detailed
+                        commit information, messages, and author details</li>
                 </ul>
             </div>
         </section>
 
         <section id="pipelines">
             <h2>🔧 Pipeline Management</h2>
-            
+
             <div class="command-section">
                 <h3>Pipeline Commands</h3>
 
@@ -352,7 +383,8 @@ azdocli pipelines list
 
 # List pipelines in specific project
 azdocli pipelines list --project MyProject</code></pre>
-                    <p><strong>Features</strong>: Comprehensive listing with IDs and names in user-friendly table format.</p>
+                    <p><strong>Features</strong>: Comprehensive listing with IDs and names in user-friendly table
+                        format.</p>
                 </div>
 
                 <div class="command-example">
@@ -362,7 +394,8 @@ azdocli pipelines runs --id 42
 
 # With specific project
 azdocli pipelines runs --id 42 --project MyProject</code></pre>
-                    <p><strong>Features</strong>: View run history, status visibility, and clear display of run information.</p>
+                    <p><strong>Features</strong>: View run history, status visibility, and clear display of run
+                        information.</p>
                 </div>
 
                 <div class="command-example">
@@ -372,7 +405,8 @@ azdocli pipelines show --id 42 --build-id 123
 
 # With specific project
 azdocli pipelines show --id 42 --project MyProject --build-id 123</code></pre>
-                    <p><strong>Features</strong>: Detailed information about builds, debug information for troubleshooting.</p>
+                    <p><strong>Features</strong>: Detailed information about builds, debug information for
+                        troubleshooting.</p>
                 </div>
 
                 <div class="command-example">
@@ -382,17 +416,19 @@ azdocli pipelines run --id 42
 
 # With specific project
 azdocli pipelines run --id 42 --project MyProject</code></pre>
-                    <p><strong>Features</strong>: Pipeline execution with real-time updates and clear error feedback.</p>
+                    <p><strong>Features</strong>: Pipeline execution with real-time updates and clear error feedback.
+                    </p>
                 </div>
             </div>
         </section>
 
         <section id="boards">
             <h2>📋 Board Management</h2>
-            
+
             <div class="command-section">
                 <h3>Work Item Management</h3>
-                <p>The boards work-item commands allow you to manage work items in an Azure DevOps project with full CRUD operations.</p>
+                <p>The boards work-item commands allow you to manage work items in an Azure DevOps project with full
+                    CRUD operations.</p>
 
                 <div class="command-example">
                     <h4>Show Work Item</h4>
@@ -435,11 +471,14 @@ azdocli boards work-item delete --id 123 --soft-delete</code></pre>
                 <h4>Work Item Features:</h4>
                 <ul>
                     <li><strong>Full CRUD operations</strong>: Create, read, update, and delete work items</li>
-                    <li><strong>Multiple work item types</strong>: Support for bug, task, user story, feature, and epic</li>
+                    <li><strong>Multiple work item types</strong>: Support for bug, task, user story, feature, and epic
+                    </li>
                     <li><strong>Web integration</strong>: Open work items directly in browser with --web option</li>
-                    <li><strong>Soft delete</strong>: Option to change state to "Removed" instead of permanent deletion</li>
+                    <li><strong>Soft delete</strong>: Option to change state to "Removed" instead of permanent deletion
+                    </li>
                     <li><strong>Field updates</strong>: Update title, description, state, and priority</li>
-                    <li><strong>Default project support</strong>: Use with default project or specify --project explicitly</li>
+                    <li><strong>Default project support</strong>: Use with default project or specify --project
+                        explicitly</li>
                     <li><strong>Error handling</strong>: Clear feedback when work item not found or access denied</li>
                 </ul>
             </div>
@@ -449,7 +488,8 @@ azdocli boards work-item delete --id 123 --soft-delete</code></pre>
             <h2>🧪 Testing</h2>
             <div class="command-section">
                 <h3>Integration Tests</h3>
-                <p>The project includes integration tests that verify core functionality against a real Azure DevOps instance.</p>
+                <p>The project includes integration tests that verify core functionality against a real Azure DevOps
+                    instance.</p>
 
                 <div class="command-example">
                     <h4>Setting up Test Configuration</h4>
@@ -523,8 +563,10 @@ cargo run -- &lt;command&gt;</code></pre>
     <footer>
         <div class="container">
             <p>&copy; 2024 Azure DevOps CLI. Built with ❤️ using Rust.</p>
-            <p><a href="index.html">Home</a> | <a href="contributing.html">Contributing</a> | <a href="https://github.com/christianhelle/azdocli">GitHub</a></p>
+            <p><a href="index.html">Home</a> | <a href="contributing.html">Contributing</a> | <a
+                    href="https://github.com/christianhelle/azdocli">GitHub</a></p>
         </div>
     </footer>
 </body>
+
 </html>
