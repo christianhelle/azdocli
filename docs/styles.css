@@ -150,9 +150,20 @@ p {
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
 
+.install-card.featured {
+    background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
+    border: 2px solid #0066cc;
+    box-shadow: 0 8px 16px rgba(0,102,204,0.2);
+}
+
 .install-card h3 {
     color: #0066cc;
     margin-bottom: 1rem;
+}
+
+.install-card.featured h3 {
+    color: #0066cc;
+    font-weight: 700;
 }
 
 .install-card ul {
