@@ -35,10 +35,13 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v5
+      - name: Copy install scripts
+        run: |
+          cp install.sh docs/install
+          cp install.ps1 docs/install.ps1
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload docs directory
           path: 'docs'
       - name: Deploy to GitHub Pages
         id: deployment
