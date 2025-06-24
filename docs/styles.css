@@ -34,8 +34,8 @@
     --accent-primary: #58a6ff;
     --accent-secondary: #1f6feb;
     --accent-tertiary: #79c0ff;
-    --gradient-start: #0066cc;
-    --gradient-end: #0080ff;
+    --gradient-start: #1f6feb;
+    --gradient-end: #58a6ff;
     --shadow-light: rgba(1, 4, 9, 0.15);
     --shadow-medium: rgba(1, 4, 9, 0.3);
     --shadow-heavy: rgba(1, 4, 9, 0.45);
@@ -57,8 +57,8 @@
         --accent-primary: #58a6ff;
         --accent-secondary: #1f6feb;
         --accent-tertiary: #79c0ff;
-        --gradient-start: #0066cc;
-        --gradient-end: #0080ff;
+        --gradient-start: #1f6feb;
+        --gradient-end: #58a6ff;
         --shadow-light: rgba(1, 4, 9, 0.15);
         --shadow-medium: rgba(1, 4, 9, 0.3);
         --shadow-heavy: rgba(1, 4, 9, 0.45);
