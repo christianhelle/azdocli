@@ -64,7 +64,7 @@ detect_platform() {
 
 # Get latest release version from GitHub
 get_latest_version() {
-    log_info "Fetching latest release information..."
+    log_info "Fetching latest release information..." >&2
     
     if command -v curl >/dev/null 2>&1; then
         curl -s "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'
