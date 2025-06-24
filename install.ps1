@@ -100,13 +100,15 @@ function Install-AzDoCli {
         [System.IO.Compression.ZipFile]::ExtractToDirectory($zipFile, $extractDir)
         
         # Find the binary
-        $binaryPath = Get-ChildItem -Path $extractDir -Name $BinaryName -Recurse | Select-Object -First 1
+        $binaryFile = Get-ChildItem -Path $extractDir -Name $BinaryName -Recurse | Select-Object -First 1
         
-        if (-not $binaryPath) {
+        if (-not $binaryFile) {
             Write-Error "Binary $BinaryName not found in the downloaded archive"
         }
         
-        $sourceBinary = Join-Path $extractDir $binaryPath.Name
+        # Get the full path to the found binary
+        $binaryFileInfo = Get-ChildItem -Path $extractDir -Filter $BinaryName -Recurse | Select-Object -First 1
+        $sourceBinary = $binaryFileInfo.FullName
         
         Write-Info "Installing azdocli to $InstallPath..."
         
