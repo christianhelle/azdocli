@@ -130,6 +130,7 @@ header h1 {
     position: relative;
     z-index: 1;
     font-weight: 400;
+    color: white;
 }
 
 .badges {
