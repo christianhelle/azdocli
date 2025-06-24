@@ -119,6 +119,12 @@ function Install-AzDoCli {
         
         # Install the binary
         $targetBinary = Join-Path $InstallPath $BinaryName
+        
+        # Remove target if it exists as a directory (from previous failed installation)
+        if (Test-Path $targetBinary -PathType Container) {
+            Remove-Item $targetBinary -Recurse -Force
+        }
+        
         Copy-Item $sourceBinary $targetBinary -Force
         
         # Cleanup
