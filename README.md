@@ -334,12 +334,12 @@ SUBCOMMANDS:
 
 **Linux and macOS:**
 ```bash
-curl -sSL https://raw.githubusercontent.com/christianhelle/azdocli/main/install.sh | bash
+curl -sSL https://christianhelle.com/azdocli/install | bash
 ```
 
 **Windows (PowerShell):**
 ```powershell
-iwr -useb https://raw.githubusercontent.com/christianhelle/azdocli/main/install.ps1 | iex
+iwr -useb https://christianhelle.com/azdocli/install.ps1 | iex
 ```
 
 These one-liner commands will automatically download and install the latest release for your platform.
