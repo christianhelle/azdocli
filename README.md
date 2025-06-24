@@ -330,9 +330,23 @@ SUBCOMMANDS:
 
 ## Installation
 
+### Quick Install (Recommended)
+
+**Linux and macOS:**
+```bash
+curl -sSL https://christianhelle.com/azdocli/install | bash
+```
+
+**Windows (PowerShell):**
+```powershell
+iwr -useb https://christianhelle.com/azdocli/install.ps1 | iex
+```
+
+These one-liner commands will automatically download and install the latest release for your platform.
+
 ### Install from crates.io
 
-The easiest way to install azdocli is using Cargo:
+You can also install azdocli using Cargo:
 
 ```bash
 cargo install azdocli

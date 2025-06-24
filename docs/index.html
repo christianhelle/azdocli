@@ -69,10 +69,18 @@
         <section id="installation">
             <h2>📦 Installation</h2>
             <div class="install-methods">
+                <div class="install-card featured">
+                    <h3>🚀 Quick Install (Recommended)</h3>
+                    <h4>Linux/macOS:</h4>
+                    <pre><code>curl -sSL https://christianhelle.com/azdocli/install | bash</code></pre>
+                    <h4>Windows (PowerShell):</h4>
+                    <pre><code>iwr -useb https://christianhelle.com/azdocli/install.ps1 | iex</code></pre>
+                    <p>One-liner commands that automatically download and install the latest release for your platform.</p>
+                </div>
                 <div class="install-card">
                     <h3>From crates.io</h3>
                     <pre><code>cargo install azdocli</code></pre>
-                    <p>The easiest way to install. This will install the <code>azdocli</code> binary.</p>
+                    <p>Install using Cargo. This will install the <code>azdocli</code> binary.</p>
                 </div>
                 <div class="install-card">
                     <h3>Using Snap (Linux)</h3>

@@ -43,10 +43,18 @@
                 <p>Choose the installation method that works best for your system:</p>
 
                 <div class="command-example">
-                    <h4>From crates.io (Recommended)</h4>
+                    <h4>🚀 Quick Install (Recommended)</h4>
+                    <p><strong>Linux and macOS:</strong></p>
+                    <pre><code>curl -sSL https://christianhelle.com/azdocli/install | bash</code></pre>
+                    <p><strong>Windows (PowerShell):</strong></p>
+                    <pre><code>iwr -useb https://christianhelle.com/azdocli/install.ps1 | iex</code></pre>
+                    <p>These one-liner commands automatically download and install the latest release for your platform.</p>
+                </div>
+
+                <div class="command-example">
+                    <h4>From crates.io</h4>
                     <pre><code>cargo install azdocli</code></pre>
-                    <p>This is the easiest way to install azdocli. It requires Rust and Cargo to be installed on your
-                        system.</p>
+                    <p>Install using Cargo. It requires Rust and Cargo to be installed on your system.</p>
                 </div>
 
                 <div class="command-example">
