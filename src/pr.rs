@@ -125,11 +125,7 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
     Ok(())
 }
 
-async fn list_pull_request_commits(
-    repo: &String,
-    id: &String,
-    project_name: String,
-) -> Result<()> {
+async fn list_pull_request_commits(repo: &String, id: &String, project_name: String) -> Result<()> {
     match get_credentials() {
         Ok(creds) => {
             let client = create_client()?;
