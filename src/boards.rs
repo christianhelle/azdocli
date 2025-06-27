@@ -363,10 +363,7 @@ fn display_work_items_list(work_items: &[models::WorkItem]) {
 
         println!(
             "{:<8} {:<15} {:<20} {:<30}",
-            id,
-            work_item_type,
-            state,
-            truncated_title
+            id, work_item_type, state, truncated_title
         );
     }
 
@@ -405,10 +402,15 @@ async fn list_my_work_items(
             // Create WIQL request body
             let wiql_request = models::Wiql {
                 query: Some(wiql_query),
-            };            // Execute the WIQL query
+            }; // Execute the WIQL query
             match client
                 .wiql_client()
-                .query_by_wiql(creds.organization.clone(), wiql_request, project.to_string(), "".to_string())
+                .query_by_wiql(
+                    creds.organization.clone(),
+                    wiql_request,
+                    project.to_string(),
+                    "".to_string(),
+                )
                 .await
             {
                 Ok(query_result) => {
@@ -419,8 +421,9 @@ async fn list_my_work_items(
                     }
 
                     // Take only the requested number of items
-                    let limited_items: Vec<_> = work_items.into_iter().take(limit as usize).collect();
-                    
+                    let limited_items: Vec<_> =
+                        work_items.into_iter().take(limit as usize).collect();
+
                     // Get detailed work item information by calling get_work_item for each ID
                     let mut detailed_work_items = Vec::new();
                     for work_item_ref in &limited_items {
@@ -431,7 +434,10 @@ async fn list_my_work_items(
                                 .await
                             {
                                 Ok(detailed_item) => detailed_work_items.push(detailed_item),
-                                Err(e) => eprintln!("❌ Failed to get details for work item {}: {}", id, e),
+                                Err(e) => eprintln!(
+                                    "❌ Failed to get details for work item {}: {}",
+                                    id, e
+                                ),
                             }
                         }
                     }
