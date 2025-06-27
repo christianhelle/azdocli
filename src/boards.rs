@@ -59,6 +59,21 @@ pub enum WorkItemSubCommands {
         #[clap(long)]
         soft_delete: bool,
     },
+    /// List work items assigned to me
+    List {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Filter by work item state (e.g., 'Active', 'New', 'Resolved')
+        #[clap(long)]
+        state: Option<String>,
+        /// Filter by work item type (e.g., 'Bug', 'Task', 'User Story')
+        #[clap(long)]
+        work_item_type: Option<String>,
+        /// Maximum number of work items to return (default: 50)
+        #[clap(long, default_value = "50")]
+        limit: i32,
+    },
     /// Show details of a work item
     Show {
         /// ID of the work item to show
