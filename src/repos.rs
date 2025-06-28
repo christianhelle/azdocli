@@ -134,9 +134,8 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
 
             if !*yes {
                 let delete_type = if *hard { "hard" } else { "soft" };
-                let prompt_message = format!(
-                    "Are you sure you want to {delete_type} delete repository '{id}'?"
-                );
+                let prompt_message =
+                    format!("Are you sure you want to {delete_type} delete repository '{id}'?");
                 if !Confirm::new()
                     .with_prompt(prompt_message)
                     .default(false)
@@ -405,9 +404,7 @@ async fn clone_all_repos(
             );
             8
         } else if concurrency < 1 {
-            println!(
-                "Warning: Concurrency level {concurrency} is invalid. Using 1 instead."
-            );
+            println!("Warning: Concurrency level {concurrency} is invalid. Using 1 instead.");
             1
         } else {
             concurrency
@@ -536,9 +533,10 @@ async fn clone_repos_parallel(
         } else {
             // For repos without SSH URLs, create a task that immediately returns an error
             let repo_name = repo.name.clone();
-            let task = tokio::spawn(async move {
-                Err(format!("Skipping {repo_name} (No SSH URL available)"))
-            });
+            let task =
+                tokio::spawn(
+                    async move { Err(format!("Skipping {repo_name} (No SSH URL available)")) },
+                );
             tasks.push(task);
         }
     }

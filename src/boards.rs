@@ -226,9 +226,7 @@ fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<()> {
                 return Ok(());
             }
 
-            println!(
-                "Would permanently delete work item {id} in project '{project}'"
-            );
+            println!("Would permanently delete work item {id} in project '{project}'");
 
             Ok(())
         }
@@ -240,9 +238,7 @@ fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<()> {
 }
 
 fn open_work_item_in_browser(organization: &str, id: &str) -> Result<()> {
-    let url = format!(
-        "https://dev.azure.com/{organization}//_workitems/edit/{id}"
-    );
+    let url = format!("https://dev.azure.com/{organization}//_workitems/edit/{id}");
 
     #[cfg(target_os = "windows")]
     {
@@ -358,9 +354,7 @@ fn display_work_items_list(work_items: &[models::WorkItem]) {
             title.to_string()
         };
 
-        println!(
-            "{id:<8} {work_item_type:<15} {state:<20} {truncated_title:<30}"
-        );
+        println!("{id:<8} {work_item_type:<15} {state:<20} {truncated_title:<30}");
     }
 
     println!();
@@ -378,9 +372,7 @@ async fn list_my_work_items(
         Ok(creds) => {
             let client = create_client()?;
 
-            println!(
-                "📋 Listing work items assigned to you in project: {project}"
-            );
+            println!("📋 Listing work items assigned to you in project: {project}");
 
             if let Some(state) = state_filter {
                 println!("🔍 Filtering by state: {state}");
@@ -429,9 +421,9 @@ async fn list_my_work_items(
                                 .await
                             {
                                 Ok(detailed_item) => detailed_work_items.push(detailed_item),
-                                Err(e) => eprintln!(
-                                    "❌ Failed to get details for work item {id}: {e}"
-                                ),
+                                Err(e) => {
+                                    eprintln!("❌ Failed to get details for work item {id}: {e}")
+                                }
                             }
                         }
                     }
@@ -510,12 +502,9 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
             project,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
-            println!(
-                "Creating a {work_item_type:?} work item in project: {project_name}"
-            );
+            println!("Creating a {work_item_type:?} work item in project: {project_name}");
 
-            match create_work_item(&project_name, work_item_type, title, description.as_deref())
-            {
+            match create_work_item(&project_name, work_item_type, title, description.as_deref()) {
                 Ok(_) => {
                     println!("{}", "✅ Work item created successfully!".green());
                 }
@@ -583,9 +572,7 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
         }
         WorkItemSubCommands::Show { id, project, web } => {
             let project_name = get_project_or_default(project.as_deref())?;
-            println!(
-                "Showing work item with id: {id} in project: {project_name}"
-            );
+            println!("Showing work item with id: {id} in project: {project_name}");
 
             // Open in browser if requested
             if *web {
@@ -623,9 +610,7 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
             priority,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
-            println!(
-                "Updating work item with id: {id} in project: {project_name}"
-            );
+            println!("Updating work item with id: {id} in project: {project_name}");
 
             match update_work_item(
                 &project_name,
@@ -634,8 +619,7 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
                 description.as_deref(),
                 state.as_deref(),
                 *priority,
-            )
-            {
+            ) {
                 Ok(_) => {
                     println!("{}", "✅ Work item updated successfully!".green());
                 }

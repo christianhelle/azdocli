@@ -186,9 +186,7 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
         }
         PipelinesSubCommands::Run { id, project } => {
             let project_name = get_project_or_default(project.as_deref())?;
-            println!(
-                "Starting pipeline with ID: {id} in project: {project_name}"
-            );
+            println!("Starting pipeline with ID: {id} in project: {project_name}");
             match run_pipeline(&project_name, id) {
                 Ok(run) => {
                     println!("Pipeline started successfully!");

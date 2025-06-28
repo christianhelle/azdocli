@@ -253,13 +253,9 @@ async fn list_pull_requests(project: &str, repo: &str) -> Result<()> {
                 .collect();
 
             if filtered_prs.is_empty() {
-                println!(
-                    "No pull requests found for repository '{repo}' in project '{project}'"
-                );
+                println!("No pull requests found for repository '{repo}' in project '{project}'");
             } else {
-                println!(
-                    "Pull requests for repository '{repo}' in project '{project}':"
-                );
+                println!("Pull requests for repository '{repo}' in project '{project}':");
                 for pr in filtered_prs {
                     println!(
                         "  #{} - {}",
