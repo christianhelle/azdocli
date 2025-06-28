@@ -132,12 +132,10 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
                 project_name
             );
 
-            if !yes {
+            if !*yes {
                 let delete_type = if *hard { "hard" } else { "soft" };
-                let prompt_message = format!(
-                    "Are you sure you want to {} delete repository '{}'?",
-                    delete_type, id
-                );
+                let prompt_message =
+                    format!("Are you sure you want to {delete_type} delete repository '{id}'?");
                 if !Confirm::new()
                     .with_prompt(prompt_message)
                     .default(false)
@@ -159,7 +157,7 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
                     }
                 }
                 Err(e) => {
-                    eprintln!("❌ Failed to delete repository '{}': {}", id, e);
+                    eprintln!("❌ Failed to delete repository '{id}': {e}");
                     return Err(e);
                 }
             }
@@ -172,10 +170,9 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
                 }
                 Err(e) => {
                     eprintln!(
-                        "❌ Failed to retrieve repository '{}' from project '{}'",
-                        id, project_name
+                        "❌ Failed to retrieve repository '{id}' from project '{project_name}'"
                     );
-                    eprintln!("   {}", e);
+                    eprintln!("   {e}");
                     return Err(e);
                 }
             }
@@ -309,29 +306,29 @@ fn display_repo_details(repo: &git::models::GitRepository) {
     println!("🆔 ID: {}", repo.id);
 
     if let Some(url) = &repo.web_url {
-        println!("🌐 Web URL: {}", url);
+        println!("🌐 Web URL: {url}");
     }
 
     if let Some(remote_url) = &repo.remote_url {
-        println!("🔗 Remote URL (HTTPS): {}", remote_url);
+        println!("🔗 Remote URL (HTTPS): {remote_url}");
     }
 
     if let Some(ssh_url) = &repo.ssh_url {
-        println!("🔑 Clone URL (SSH): {}", ssh_url);
+        println!("🔑 Clone URL (SSH): {ssh_url}");
     }
 
     if let Some(size) = &repo.size {
-        let size_kb = *size as f64 / 1024.0;
-        let size_mb = size_kb / 1024.0;
-        if size_mb >= 1.0 {
-            println!("📦 Size: {:.2} MB ({} bytes)", size_mb, size);
+        let size_kilobytes = *size as f64 / 1024.0;
+        let size_megabytes = size_kilobytes / 1024.0;
+        if size_megabytes >= 1.0 {
+            println!("📦 Size: {size_megabytes:.2} MB ({size} bytes)");
         } else {
-            println!("📦 Size: {:.2} KB ({} bytes)", size_kb, size);
+            println!("📦 Size: {size_kilobytes:.2} KB ({size} bytes)");
         }
     }
 
     if let Some(default_branch) = &repo.default_branch {
-        println!("🌿 Default Branch: {}", default_branch);
+        println!("🌿 Default Branch: {default_branch}");
     }
 
     println!("🎯 Project: {}", repo.project.name);
@@ -359,7 +356,7 @@ async fn clone_all_repos(
     let target_directory = target_dir.unwrap_or(".");
 
     if repos.is_empty() {
-        println!("No repositories found in project '{}'", project);
+        println!("No repositories found in project '{project}'");
         return Ok(());
     }
 
@@ -368,9 +365,9 @@ async fn clone_all_repos(
         repos.len(),
         project
     );
-    println!("Target directory: {}", target_directory);
+    println!("Target directory: {target_directory}");
     println!("\nRepositories to clone:");
-    for repo in repos.iter() {
+    for repo in &repos {
         if let Some(ssh_url) = &repo.ssh_url {
             println!("  • {} ({})", repo.name, ssh_url);
         } else {
@@ -403,15 +400,11 @@ async fn clone_all_repos(
     if parallel {
         let concurrency_level = if concurrency > 8 {
             println!(
-                "Warning: Concurrency level {} exceeds maximum of 8. Using 8 instead.",
-                concurrency
+                "Warning: Concurrency level {concurrency} exceeds maximum of 8. Using 8 instead."
             );
             8
         } else if concurrency < 1 {
-            println!(
-                "Warning: Concurrency level {} is invalid. Using 1 instead.",
-                concurrency
-            );
+            println!("Warning: Concurrency level {concurrency} is invalid. Using 1 instead.");
             1
         } else {
             concurrency
@@ -426,17 +419,17 @@ async fn clone_all_repos(
         for result in results {
             match result {
                 Ok(repo_name) => {
-                    println!("✅ Successfully cloned {}", repo_name);
+                    println!("✅ Successfully cloned {repo_name}");
                     success_count += 1;
                 }
                 Err(e) => {
-                    println!("❌ {}", e);
+                    println!("❌ {e}");
                     failed_count += 1;
                 }
             }
         }
     } else {
-        for repo in repos.iter() {
+        for repo in &repos {
             if let Some(ssh_url) = &repo.ssh_url {
                 println!("Cloning repository: {} from {}", repo.name, ssh_url);
 
@@ -478,9 +471,9 @@ async fn clone_all_repos(
     }
 
     println!("\nCloning completed:");
-    println!("  ✅ Successfully cloned: {}", success_count);
+    println!("  ✅ Successfully cloned: {success_count}");
     if failed_count > 0 {
-        println!("  ❌ Failed/Skipped: {}", failed_count);
+        println!("  ❌ Failed/Skipped: {failed_count}");
     }
 
     Ok(())
@@ -501,14 +494,14 @@ async fn clone_repos_parallel(
             let target_path = if target_directory == "." {
                 repo_name.clone()
             } else {
-                format!("{}/{}", target_directory, repo_name)
+                format!("{target_directory}/{repo_name}")
             };
             let semaphore = semaphore.clone();
 
             let task = tokio::spawn(async move {
                 let _permit = semaphore.acquire().await.unwrap();
 
-                println!("Cloning repository: {} from {}", repo_name, ssh_url);
+                println!("Cloning repository: {repo_name} from {ssh_url}");
 
                 let output = tokio::process::Command::new("git")
                     .args(["clone", &ssh_url, &target_path])
@@ -526,11 +519,10 @@ async fn clone_repos_parallel(
                     }
                     Err(e) => {
                         if e.kind() == std::io::ErrorKind::NotFound {
-                            Err(format!("Git command not found while cloning {}", repo_name))
+                            Err(format!("Git command not found while cloning {repo_name}"))
                         } else {
                             Err(format!(
-                                "Failed to execute git command for {}: {}",
-                                repo_name, e
+                                "Failed to execute git command for {repo_name}: {e}"
                             ))
                         }
                     }
@@ -541,9 +533,10 @@ async fn clone_repos_parallel(
         } else {
             // For repos without SSH URLs, create a task that immediately returns an error
             let repo_name = repo.name.clone();
-            let task = tokio::spawn(async move {
-                Err(format!("Skipping {} (No SSH URL available)", repo_name))
-            });
+            let task =
+                tokio::spawn(
+                    async move { Err(format!("Skipping {repo_name} (No SSH URL available)")) },
+                );
             tasks.push(task);
         }
     }
@@ -551,7 +544,7 @@ async fn clone_repos_parallel(
     for task in tasks {
         match task.await {
             Ok(result) => results.push(result),
-            Err(e) => results.push(Err(format!("Task failed: {}", e))),
+            Err(e) => results.push(Err(format!("Task failed: {e}"))),
         }
     }
 
@@ -668,8 +661,8 @@ mod tests {
         let project = get_test_project()?;
         let test_repo_name = format!("test-repo-{}", chrono::Utc::now().timestamp());
 
-        println!("Testing with project: {}", project);
-        println!("Test repository name: {}", test_repo_name);
+        println!("Testing with project: {project}");
+        println!("Test repository name: {test_repo_name}");
         println!("1. Creating repository...");
         let created_repo = create_test_repo(&project, &test_repo_name).await?;
         assert_eq!(created_repo.name, test_repo_name);
@@ -681,7 +674,7 @@ mod tests {
         println!("✅ Repository details retrieved successfully");
 
         println!("3. Cloning repository...");
-        let temp_dir = std::env::temp_dir().join(format!("azdocli_test_{}", test_repo_name));
+        let temp_dir = std::env::temp_dir().join(format!("azdocli_test_{test_repo_name}"));
 
         if let Some(clone_url) = &retrieved_repo.ssh_url {
             let output = std::process::Command::new("git")
@@ -691,7 +684,7 @@ mod tests {
             match output {
                 Ok(output) => {
                     if output.status.success() {
-                        println!("✅ Repository cloned successfully to: {:?}", temp_dir);
+                        println!("✅ Repository cloned successfully to: {temp_dir:?}");
 
                         if temp_dir.exists() {
                             std::fs::remove_dir_all(&temp_dir).ok();
@@ -706,8 +699,7 @@ mod tests {
                 }
                 Err(e) => {
                     eprintln!(
-                        "⚠️  Git command failed: {} (Git may not be available in test environment)",
-                        e
+                        "⚠️  Git command failed: {e} (Git may not be available in test environment)"
                     );
                 }
             }
@@ -737,7 +729,7 @@ mod tests {
     async fn test_list_repositories() -> Result<()> {
         let project = get_test_project()?;
 
-        println!("Testing repository listing for project: {}", project);
+        println!("Testing repository listing for project: {project}");
         let repos = list_test_repos(&project).await?;
 
         println!(
