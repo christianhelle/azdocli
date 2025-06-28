@@ -140,13 +140,13 @@ async fn list_pull_request_commits(repo: &String, id: &String, project_name: Str
                 .await?;
 
             if commits.count == Option::from(0) {
-                println!("No commits found for pull request ID {}", id);
+                println!("No commits found for pull request ID {id}");
             } else {
-                println!("Commits in pull request ID {}:", id);
+                println!("Commits in pull request ID {id}:");
                 for commit in commits.value {
                     println!("  - Commit ID: {}", commit.commit_id.unwrap());
                     if let Some(message) = commit.comment {
-                        println!("    Message: {}", message);
+                        println!("    Message: {message}");
                     }
                     if let Some(author) = commit.author {
                         println!(
@@ -160,7 +160,7 @@ async fn list_pull_request_commits(repo: &String, id: &String, project_name: Str
             Ok(())
         }
         Err(e) => {
-            eprintln!("Unable to retrieve commits: {}", e);
+            eprintln!("Unable to retrieve commits: {e}");
             Err(e)
         }
     }
@@ -185,18 +185,18 @@ async fn create_pull_request(
             let source_ref = if source.starts_with("refs/heads/") {
                 source.to_string()
             } else {
-                format!("refs/heads/{}", source)
+                format!("refs/heads/{source}")
             };
 
             let target_ref = if target.starts_with("refs/heads/") {
                 target.to_string()
             } else {
-                format!("refs/heads/{}", target)
+                format!("refs/heads/{target}")
             };
             println!("Creating pull request:");
-            println!("  Repository: {}", repo);
-            println!("  Source branch: {}", source);
-            println!("  Target branch: {}", target);
+            println!("  Repository: {repo}");
+            println!("  Source branch: {source}");
+            println!("  Target branch: {target}");
             println!("  Title: {}", title.unwrap_or("Default title"));
 
             let pr_options = git::models::GitPullRequestCreateOptions {
@@ -224,7 +224,7 @@ async fn create_pull_request(
                     Ok(())
                 }
                 Err(e) => {
-                    eprintln!("❌ Failed to create pull request: {}", e);
+                    eprintln!("❌ Failed to create pull request: {e}");
                     Err(anyhow::anyhow!("Failed to create pull request: {}", e))
                 }
             }
@@ -254,13 +254,11 @@ async fn list_pull_requests(project: &str, repo: &str) -> Result<()> {
 
             if filtered_prs.is_empty() {
                 println!(
-                    "No pull requests found for repository '{}' in project '{}'",
-                    repo, project
+                    "No pull requests found for repository '{repo}' in project '{project}'"
                 );
             } else {
                 println!(
-                    "Pull requests for repository '{}' in project '{}':",
-                    repo, project
+                    "Pull requests for repository '{repo}' in project '{project}':"
                 );
                 for pr in filtered_prs {
                     println!(
@@ -299,7 +297,7 @@ async fn show_pull_request(project: &str, _repo: &str, id: &str) -> Result<()> {
             println!("  Title: {}", pull_request.title.unwrap_or_default());
             if let Some(description) = pull_request.description {
                 if !description.is_empty() {
-                    println!("  Description: {}", description);
+                    println!("  Description: {description}");
                 }
             }
             println!("  Status: {:?}", pull_request.status);

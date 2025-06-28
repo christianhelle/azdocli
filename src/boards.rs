@@ -142,7 +142,7 @@ async fn get_work_item(project: &str, id: &str) -> Result<models::WorkItem> {
     }
 }
 
-async fn create_work_item(
+fn create_work_item(
     project: &str,
     work_item_type: &WorkItemType,
     title: &str,
@@ -159,12 +159,11 @@ async fn create_work_item(
             };
 
             println!(
-                "Would create a {} work item with title '{}' in project '{}'",
-                type_str, title, project
+                "Would create a {type_str} work item with title '{title}' in project '{project}'"
             );
 
             if let Some(desc) = description {
-                println!("Description: {}", desc);
+                println!("Description: {desc}");
             }
 
             Ok(())
@@ -176,7 +175,7 @@ async fn create_work_item(
     }
 }
 
-async fn update_work_item(
+fn update_work_item(
     project: &str,
     id: &str,
     title: Option<&str>,
@@ -189,22 +188,22 @@ async fn update_work_item(
         .map_err(|_| anyhow!("Invalid work item ID, must be a number"))?;
     match get_credentials() {
         Ok(_) => {
-            println!("Would update work item {} in project '{}':", id, project);
+            println!("Would update work item {id} in project '{project}':");
 
             if let Some(t) = title {
-                println!("New title: {}", t);
+                println!("New title: {t}");
             }
 
             if let Some(desc) = description {
-                println!("New description: {}", desc);
+                println!("New description: {desc}");
             }
 
             if let Some(s) = state {
-                println!("New state: {}", s);
+                println!("New state: {s}");
             }
 
             if let Some(p) = priority {
-                println!("New priority: {}", p);
+                println!("New priority: {p}");
             }
 
             Ok(())
@@ -216,20 +215,19 @@ async fn update_work_item(
     }
 }
 
-async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<()> {
+fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<()> {
     let _id_int = id
         .parse::<i32>()
         .map_err(|_| anyhow!("Invalid work item ID, must be a number"))?;
     match get_credentials() {
         Ok(_) => {
             if soft_delete {
-                update_work_item(project, id, None, None, Some("Removed"), None).await?;
+                update_work_item(project, id, None, None, Some("Removed"), None)?;
                 return Ok(());
             }
 
             println!(
-                "Would permanently delete work item {} in project '{}'",
-                id, project
+                "Would permanently delete work item {id} in project '{project}'"
             );
 
             Ok(())
@@ -243,8 +241,7 @@ async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<
 
 fn open_work_item_in_browser(organization: &str, id: &str) -> Result<()> {
     let url = format!(
-        "https://dev.azure.com/{}//_workitems/edit/{}",
-        organization, id
+        "https://dev.azure.com/{organization}//_workitems/edit/{id}"
     );
 
     #[cfg(target_os = "windows")]
@@ -264,7 +261,7 @@ fn open_work_item_in_browser(organization: &str, id: &str) -> Result<()> {
         Command::new("xdg-open").arg(&url).spawn()?;
     }
 
-    println!("Opening work item in browser: {}", url);
+    println!("Opening work item in browser: {url}");
     Ok(())
 }
 
@@ -275,48 +272,48 @@ fn display_work_item(work_item: &models::WorkItem) {
     println!("🆔 ID: {}", work_item.id);
 
     if let Some(rev) = work_item.rev {
-        println!("📚 Revision: {}", rev);
+        println!("📚 Revision: {rev}");
     }
 
     if let Some(fields) = work_item.fields.as_object() {
         if let Some(title) = fields.get("System.Title").and_then(|v| v.as_str()) {
-            println!("📝 Title: {}", title);
+            println!("📝 Title: {title}");
         }
 
         if let Some(state) = fields.get("System.State").and_then(|v| v.as_str()) {
-            println!("🔄 State: {}", state);
+            println!("🔄 State: {state}");
         }
 
         if let Some(work_item_type) = fields.get("System.WorkItemType").and_then(|v| v.as_str()) {
-            println!("📌 Type: {}", work_item_type);
+            println!("📌 Type: {work_item_type}");
         }
 
         if let Some(created_by) = fields.get("System.CreatedBy").and_then(|v| v.as_str()) {
-            println!("👤 Created By: {}", created_by);
+            println!("👤 Created By: {created_by}");
         }
 
         if let Some(created_date) = fields.get("System.CreatedDate").and_then(|v| v.as_str()) {
-            println!("📅 Created Date: {}", created_date);
+            println!("📅 Created Date: {created_date}");
         }
 
         if let Some(changed_by) = fields.get("System.ChangedBy").and_then(|v| v.as_str()) {
-            println!("🔄 Changed By: {}", changed_by);
+            println!("🔄 Changed By: {changed_by}");
         }
 
         if let Some(changed_date) = fields.get("System.ChangedDate").and_then(|v| v.as_str()) {
-            println!("📅 Changed Date: {}", changed_date);
+            println!("📅 Changed Date: {changed_date}");
         }
 
         if let Some(priority) = fields
             .get("Microsoft.VSTS.Common.Priority")
-            .and_then(|v| v.as_i64())
+            .and_then(serde_json::Value::as_i64)
         {
-            println!("🔝 Priority: {}", priority);
+            println!("🔝 Priority: {priority}");
         }
 
         if let Some(desc) = fields.get("System.Description").and_then(|v| v.as_str()) {
             println!("\n📄 Description:");
-            println!("{}", desc);
+            println!("{desc}");
         }
     }
 }
@@ -325,10 +322,10 @@ fn display_work_items_list(work_items: &[models::WorkItem]) {
     println!();
     println!("📋 My Work Items ({} items)", work_items.len());
     let separator = "=".repeat(80);
-    println!("{}", separator);
+    println!("{separator}");
     println!("{:<8} {:<15} {:<20} {:<30}", "ID", "Type", "State", "Title");
     let dash_separator = "-".repeat(80);
-    println!("{}", dash_separator);
+    println!("{dash_separator}");
 
     for work_item in work_items {
         let id = work_item.id;
@@ -362,8 +359,7 @@ fn display_work_items_list(work_items: &[models::WorkItem]) {
         };
 
         println!(
-            "{:<8} {:<15} {:<20} {:<30}",
-            id, work_item_type, state, truncated_title
+            "{id:<8} {work_item_type:<15} {state:<20} {truncated_title:<30}"
         );
     }
 
@@ -383,19 +379,18 @@ async fn list_my_work_items(
             let client = create_client()?;
 
             println!(
-                "📋 Listing work items assigned to you in project: {}",
-                project
+                "📋 Listing work items assigned to you in project: {project}"
             );
 
             if let Some(state) = state_filter {
-                println!("🔍 Filtering by state: {}", state);
+                println!("🔍 Filtering by state: {state}");
             }
 
             if let Some(wit_type) = work_item_type_filter {
-                println!("🔍 Filtering by type: {}", wit_type);
+                println!("🔍 Filtering by type: {wit_type}");
             }
 
-            println!("📊 Limit: {} items", limit);
+            println!("📊 Limit: {limit} items");
 
             let wiql_query = build_wiql_query(project, state_filter, work_item_type_filter);
 
@@ -409,7 +404,7 @@ async fn list_my_work_items(
                     creds.organization.clone(),
                     wiql_request,
                     project.to_string(),
-                    "".to_string(),
+                    String::new(),
                 )
                 .await
             {
@@ -435,21 +430,20 @@ async fn list_my_work_items(
                             {
                                 Ok(detailed_item) => detailed_work_items.push(detailed_item),
                                 Err(e) => eprintln!(
-                                    "❌ Failed to get details for work item {}: {}",
-                                    id, e
+                                    "❌ Failed to get details for work item {id}: {e}"
                                 ),
                             }
                         }
                     }
 
-                    if !detailed_work_items.is_empty() {
-                        display_work_items_list(&detailed_work_items);
-                    } else {
+                    if detailed_work_items.is_empty() {
                         display_empty_work_items_table();
+                    } else {
+                        display_work_items_list(&detailed_work_items);
                     }
                 }
                 Err(e) => {
-                    eprintln!("❌ Failed to execute WIQL query: {}", e);
+                    eprintln!("❌ Failed to execute WIQL query: {e}");
                     display_empty_work_items_table();
                 }
             }
@@ -469,18 +463,17 @@ fn build_wiql_query(
     work_item_type_filter: Option<&str>,
 ) -> String {
     let mut wiql_query = format!(
-        "SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType], [System.AssignedTo], [System.CreatedDate], [Microsoft.VSTS.Common.Priority] FROM WorkItems WHERE [System.TeamProject] = '{}' AND [System.AssignedTo] = @Me",
-        project
+        "SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType], [System.AssignedTo], [System.CreatedDate], [Microsoft.VSTS.Common.Priority] FROM WorkItems WHERE [System.TeamProject] = '{project}' AND [System.AssignedTo] = @Me"
     );
 
     // Add state filter if provided
     if let Some(state) = state_filter {
-        wiql_query.push_str(&format!(" AND [System.State] = '{}'", state));
+        wiql_query.push_str(&format!(" AND [System.State] = '{state}'"));
     }
 
     // Add work item type filter if provided
     if let Some(wit_type) = work_item_type_filter {
-        wiql_query.push_str(&format!(" AND [System.WorkItemType] = '{}'", wit_type));
+        wiql_query.push_str(&format!(" AND [System.WorkItemType] = '{wit_type}'"));
     }
 
     wiql_query.push_str(" ORDER BY [System.CreatedDate] DESC");
@@ -491,10 +484,10 @@ fn display_empty_work_items_table() {
     println!();
     println!("📋 My Work Items (0 items)");
     let separator = "=".repeat(80);
-    println!("{}", separator);
+    println!("{separator}");
     println!("{:<8} {:<15} {:<20} {:<30}", "ID", "Type", "State", "Title");
     let dash_separator = "-".repeat(80);
-    println!("{}", dash_separator);
+    println!("{dash_separator}");
     println!("No work items found assigned to you.");
     println!();
     println!("💡 Use 'azdocli boards work-item show --id <ID>' for detailed information");
@@ -518,18 +511,16 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
             println!(
-                "Creating a {:?} work item in project: {}",
-                work_item_type, project_name
+                "Creating a {work_item_type:?} work item in project: {project_name}"
             );
 
             match create_work_item(&project_name, work_item_type, title, description.as_deref())
-                .await
             {
                 Ok(_) => {
                     println!("{}", "✅ Work item created successfully!".green());
                 }
                 Err(e) => {
-                    eprintln!("❌ Failed to create work item: {}", e);
+                    eprintln!("❌ Failed to create work item: {e}");
                     return Err(e);
                 }
             }
@@ -547,7 +538,7 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
                 project_name
             );
 
-            match delete_work_item(&project_name, id, *soft_delete).await {
+            match delete_work_item(&project_name, id, *soft_delete) {
                 Ok(_) => {
                     if *soft_delete {
                         println!(
@@ -560,7 +551,7 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
                     }
                 }
                 Err(e) => {
-                    eprintln!("❌ Failed to delete work item: {}", e);
+                    eprintln!("❌ Failed to delete work item: {e}");
                     return Err(e);
                 }
             }
@@ -585,7 +576,7 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
                     println!("{}", "✅ Work items listed successfully!".green());
                 }
                 Err(e) => {
-                    eprintln!("❌ Failed to list work items: {}", e);
+                    eprintln!("❌ Failed to list work items: {e}");
                     return Err(e);
                 }
             }
@@ -593,8 +584,7 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
         WorkItemSubCommands::Show { id, project, web } => {
             let project_name = get_project_or_default(project.as_deref())?;
             println!(
-                "Showing work item with id: {} in project: {}",
-                id, project_name
+                "Showing work item with id: {id} in project: {project_name}"
             );
 
             // Open in browser if requested
@@ -602,12 +592,12 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
                 match get_credentials() {
                     Ok(creds) => {
                         if let Err(e) = open_work_item_in_browser(&creds.organization, id) {
-                            eprintln!("❌ Failed to open work item in browser: {}", e);
+                            eprintln!("❌ Failed to open work item in browser: {e}");
                         }
                         return Ok(());
                     }
                     Err(e) => {
-                        eprintln!("❌ Failed to get credentials: {}", e);
+                        eprintln!("❌ Failed to get credentials: {e}");
                         return Err(e);
                     }
                 }
@@ -619,7 +609,7 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
                     display_work_item(&work_item);
                 }
                 Err(e) => {
-                    eprintln!("❌ Failed to retrieve work item: {}", e);
+                    eprintln!("❌ Failed to retrieve work item: {e}");
                     return Err(e);
                 }
             }
@@ -634,8 +624,7 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
             println!(
-                "Updating work item with id: {} in project: {}",
-                id, project_name
+                "Updating work item with id: {id} in project: {project_name}"
             );
 
             match update_work_item(
@@ -646,13 +635,12 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
                 state.as_deref(),
                 *priority,
             )
-            .await
             {
                 Ok(_) => {
                     println!("{}", "✅ Work item updated successfully!".green());
                 }
                 Err(e) => {
-                    eprintln!("❌ Failed to update work item: {}", e);
+                    eprintln!("❌ Failed to update work item: {e}");
                     return Err(e);
                 }
             }

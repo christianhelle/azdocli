@@ -58,10 +58,10 @@ async fn main() -> anyhow::Result<()> {
         Some(Commands::Project { project_name }) => match project_name {
             Some(project) => {
                 save_default_project(project)?;
-                println!("✅ Default project set to: {}", project);
+                println!("✅ Default project set to: {project}");
             }
             None => match get_default_project() {
-                Ok(project) => println!("Current default project: {}", project),
+                Ok(project) => println!("Current default project: {project}"),
                 Err(_) => println!("No default project configured"),
             },
         },

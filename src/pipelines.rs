@@ -119,7 +119,7 @@ async fn get_build(project: &str, pipeline_id: &str, build_id: &str) -> Result<m
     }
 }
 
-async fn run_pipeline(_project: &str, _pipeline_id: &str) -> Result<models::Run> {
+fn run_pipeline(_project: &str, _pipeline_id: &str) -> Result<models::Run> {
     // Not yet implemented
     Err(anyhow!("Running pipelines is not yet fully implemented"))
 }
@@ -151,7 +151,7 @@ fn display_pipeline_runs(runs: &[models::Run]) {
         println!("State: {:?}", run.state);
 
         if let Some(ref result) = run.result {
-            println!("Result: {:?}", result);
+            println!("Result: {result:?}");
         }
 
         println!();
@@ -165,11 +165,11 @@ fn display_build_details(run: &models::Run) {
     println!("State: {:?}", run.state);
 
     if let Some(ref result) = run.result {
-        println!("Result: {:?}", result);
+        println!("Result: {result:?}");
     }
 
     println!("\nFull details:");
-    println!("{:#?}", run);
+    println!("{run:#?}");
 }
 
 pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
@@ -187,16 +187,15 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
         PipelinesSubCommands::Run { id, project } => {
             let project_name = get_project_or_default(project.as_deref())?;
             println!(
-                "Starting pipeline with ID: {} in project: {}",
-                id, project_name
+                "Starting pipeline with ID: {id} in project: {project_name}"
             );
-            match run_pipeline(&project_name, id).await {
+            match run_pipeline(&project_name, id) {
                 Ok(run) => {
                     println!("Pipeline started successfully!");
                     display_build_details(&run);
                 }
                 Err(e) => {
-                    eprintln!("❌ Failed to start pipeline: {}", e);
+                    eprintln!("❌ Failed to start pipeline: {e}");
                     return Err(e);
                 }
             }
@@ -208,15 +207,14 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
             println!(
-                "Showing details for build {} of pipeline {} in project {}",
-                build_id, id, project_name
+                "Showing details for build {build_id} of pipeline {id} in project {project_name}"
             );
             match get_build(&project_name, id, build_id).await {
                 Ok(build) => {
                     display_build_details(&build);
                 }
                 Err(e) => {
-                    eprintln!("❌ Failed to retrieve build details: {}", e);
+                    eprintln!("❌ Failed to retrieve build details: {e}");
                     return Err(e);
                 }
             }
