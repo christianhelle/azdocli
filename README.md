@@ -276,6 +276,15 @@ azdocli pipelines run --id 42 --project MyProject
 The `boards work-item` commands allow you to manage work items in an Azure DevOps project:
 
 ```sh
+# List work items assigned to me (using default project)
+azdocli boards work-item list
+
+# List work items with filters
+azdocli boards work-item list --state "Active" --work-item-type "Bug" --limit 20
+
+# Or specify a project explicitly
+azdocli boards work-item list --project MyProject
+
 # Show details of a specific work item (using default project)
 azdocli boards work-item show --id 123
 
@@ -302,7 +311,9 @@ azdocli boards work-item delete --id 123 --soft-delete
 **Work Item Features:**
 
 - **Full CRUD operations**: Create, read, update, and delete work items
+- **List my work items**: View work items assigned to you with filtering options
 - **Multiple work item types**: Support for bug, task, user story, feature, and epic
+- **Filtering**: Filter by state, work item type, and limit number of results
 - **Web integration**: Open work items directly in browser with `--web` option
 - **Soft delete**: Option to change state to "Removed" instead of permanent deletion
 - **Field updates**: Update title, description, state, and priority

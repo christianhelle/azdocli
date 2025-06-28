@@ -59,6 +59,21 @@ pub enum WorkItemSubCommands {
         #[clap(long)]
         soft_delete: bool,
     },
+    /// List work items assigned to me
+    List {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Filter by work item state (e.g., 'Active', 'New', 'Resolved')
+        #[clap(long)]
+        state: Option<String>,
+        /// Filter by work item type (e.g., 'Bug', 'Task', 'User Story')
+        #[clap(long)]
+        work_item_type: Option<String>,
+        /// Maximum number of work items to return (default: 50)
+        #[clap(long, default_value = "50")]
+        limit: i32,
+    },
     /// Show details of a work item
     Show {
         /// ID of the work item to show
@@ -306,6 +321,186 @@ fn display_work_item(work_item: &models::WorkItem) {
     }
 }
 
+fn display_work_items_list(work_items: &[models::WorkItem]) {
+    println!();
+    println!("📋 My Work Items ({} items)", work_items.len());
+    let separator = "=".repeat(80);
+    println!("{}", separator);
+    println!("{:<8} {:<15} {:<20} {:<30}", "ID", "Type", "State", "Title");
+    let dash_separator = "-".repeat(80);
+    println!("{}", dash_separator);
+
+    for work_item in work_items {
+        let id = work_item.id;
+
+        let (work_item_type, state, title) = if let Some(fields) = work_item.fields.as_object() {
+            let wit_type = fields
+                .get("System.WorkItemType")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Unknown");
+
+            let state = fields
+                .get("System.State")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Unknown");
+
+            let title = fields
+                .get("System.Title")
+                .and_then(|v| v.as_str())
+                .unwrap_or("No Title");
+
+            (wit_type, state, title)
+        } else {
+            ("Unknown", "Unknown", "No Title")
+        };
+
+        // Truncate title if too long
+        let truncated_title = if title.len() > 30 {
+            format!("{}...", &title[..27])
+        } else {
+            title.to_string()
+        };
+
+        println!(
+            "{:<8} {:<15} {:<20} {:<30}",
+            id, work_item_type, state, truncated_title
+        );
+    }
+
+    println!();
+    println!("💡 Use 'azdocli boards work-item show --id <ID>' for detailed information");
+    println!("💡 Use 'azdocli boards work-item show --id <ID> --web' to open in browser");
+}
+
+async fn list_my_work_items(
+    project: &str,
+    state_filter: Option<&str>,
+    work_item_type_filter: Option<&str>,
+    limit: i32,
+) -> Result<()> {
+    match get_credentials() {
+        Ok(creds) => {
+            let client = create_client()?;
+
+            println!(
+                "📋 Listing work items assigned to you in project: {}",
+                project
+            );
+
+            if let Some(state) = state_filter {
+                println!("🔍 Filtering by state: {}", state);
+            }
+
+            if let Some(wit_type) = work_item_type_filter {
+                println!("🔍 Filtering by type: {}", wit_type);
+            }
+
+            println!("📊 Limit: {} items", limit);
+
+            let wiql_query = build_wiql_query(project, state_filter, work_item_type_filter);
+
+            // Create WIQL request body
+            let wiql_request = models::Wiql {
+                query: Some(wiql_query),
+            }; // Execute the WIQL query
+            match client
+                .wiql_client()
+                .query_by_wiql(
+                    creds.organization.clone(),
+                    wiql_request,
+                    project.to_string(),
+                    "".to_string(),
+                )
+                .await
+            {
+                Ok(query_result) => {
+                    let work_items = query_result.work_items;
+                    if work_items.is_empty() {
+                        display_empty_work_items_table();
+                        return Ok(());
+                    }
+
+                    // Take only the requested number of items
+                    let limited_items: Vec<_> =
+                        work_items.into_iter().take(limit as usize).collect();
+
+                    // Get detailed work item information by calling get_work_item for each ID
+                    let mut detailed_work_items = Vec::new();
+                    for work_item_ref in &limited_items {
+                        if let Some(id) = work_item_ref.id {
+                            match client
+                                .work_items_client()
+                                .get_work_item(creds.organization.clone(), id, project)
+                                .await
+                            {
+                                Ok(detailed_item) => detailed_work_items.push(detailed_item),
+                                Err(e) => eprintln!(
+                                    "❌ Failed to get details for work item {}: {}",
+                                    id, e
+                                ),
+                            }
+                        }
+                    }
+
+                    if !detailed_work_items.is_empty() {
+                        display_work_items_list(&detailed_work_items);
+                    } else {
+                        display_empty_work_items_table();
+                    }
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to execute WIQL query: {}", e);
+                    display_empty_work_items_table();
+                }
+            }
+
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("Unable to list work items");
+            Err(e)
+        }
+    }
+}
+
+fn build_wiql_query(
+    project: &str,
+    state_filter: Option<&str>,
+    work_item_type_filter: Option<&str>,
+) -> String {
+    let mut wiql_query = format!(
+        "SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType], [System.AssignedTo], [System.CreatedDate], [Microsoft.VSTS.Common.Priority] FROM WorkItems WHERE [System.TeamProject] = '{}' AND [System.AssignedTo] = @Me",
+        project
+    );
+
+    // Add state filter if provided
+    if let Some(state) = state_filter {
+        wiql_query.push_str(&format!(" AND [System.State] = '{}'", state));
+    }
+
+    // Add work item type filter if provided
+    if let Some(wit_type) = work_item_type_filter {
+        wiql_query.push_str(&format!(" AND [System.WorkItemType] = '{}'", wit_type));
+    }
+
+    wiql_query.push_str(" ORDER BY [System.CreatedDate] DESC");
+    wiql_query
+}
+
+fn display_empty_work_items_table() {
+    println!();
+    println!("📋 My Work Items (0 items)");
+    let separator = "=".repeat(80);
+    println!("{}", separator);
+    println!("{:<8} {:<15} {:<20} {:<30}", "ID", "Type", "State", "Title");
+    let dash_separator = "-".repeat(80);
+    println!("{}", dash_separator);
+    println!("No work items found assigned to you.");
+    println!();
+    println!("💡 Use 'azdocli boards work-item show --id <ID>' for detailed information");
+    println!("💡 Use 'azdocli boards work-item show --id <ID> --web' to open in browser");
+}
+
 pub async fn handle_command(subcommand: &BoardsSubCommands) -> Result<()> {
     let _credentials = get_credentials()?;
     match subcommand {
@@ -366,6 +561,31 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
                 }
                 Err(e) => {
                     eprintln!("❌ Failed to delete work item: {}", e);
+                    return Err(e);
+                }
+            }
+        }
+        WorkItemSubCommands::List {
+            project,
+            state,
+            work_item_type,
+            limit,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+
+            match list_my_work_items(
+                &project_name,
+                state.as_deref(),
+                work_item_type.as_deref(),
+                *limit,
+            )
+            .await
+            {
+                Ok(_) => {
+                    println!("{}", "✅ Work items listed successfully!".green());
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to list work items: {}", e);
                     return Err(e);
                 }
             }

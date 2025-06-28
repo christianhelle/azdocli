@@ -53,7 +53,7 @@
                 </div>
                 <div class="feature-card">
                     <h3>📋 Board Management</h3>
-                    <p>Comprehensive work item management with full CRUD operations, support for multiple work item types, and web integration.</p>
+                    <p>Comprehensive work item management with full CRUD operations, advanced filtering, list my work items, support for multiple work item types, and web integration.</p>
                 </div>
                 <div class="feature-card">
                     <h3>🔐 Secure Authentication</h3>
@@ -140,7 +140,13 @@ azdocli repos pr create --repo MyRepo --source "feature/my-feature" --title "My 
 
 # Pipeline management
 azdocli pipelines list
-azdocli pipelines runs --id 42</code></pre>
+azdocli pipelines runs --id 42
+
+# Board management - Work Items
+azdocli boards work-item list
+azdocli boards work-item list --state "Active" --work-item-type "Bug"
+azdocli boards work-item show --id 123
+azdocli boards work-item create bug --title "Fix login issue"</code></pre>
                 </div>
             </div>
         </section>

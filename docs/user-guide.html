@@ -439,7 +439,24 @@ azdocli pipelines run --id 42 --project MyProject</code></pre>
             <div class="command-section">
                 <h3>Work Item Management</h3>
                 <p>The boards work-item commands allow you to manage work items in an Azure DevOps project with full
-                    CRUD operations.</p>
+                    CRUD operations and advanced filtering capabilities.</p>
+
+                <div class="command-example">
+                    <h4>List My Work Items</h4>
+                    <pre><code># List work items assigned to me
+azdocli boards work-item list
+
+# List work items with filters
+azdocli boards work-item list --state "Active" --work-item-type "Bug" --limit 20
+
+# Or specify a project explicitly
+azdocli boards work-item list --project MyProject
+
+# Advanced filtering examples
+azdocli boards work-item list --state "New" --limit 10
+azdocli boards work-item list --work-item-type "User Story" --state "Active"</code></pre>
+                    <p><strong>Features</strong>: View work items assigned to you with filtering by state, work item type, and configurable result limits.</p>
+                </div>
 
                 <div class="command-example">
                     <h4>Show Work Item</h4>
@@ -482,8 +499,10 @@ azdocli boards work-item delete --id 123 --soft-delete</code></pre>
                 <h4>Work Item Features:</h4>
                 <ul>
                     <li><strong>Full CRUD operations</strong>: Create, read, update, and delete work items</li>
+                    <li><strong>List my work items</strong>: View work items assigned to you with advanced filtering options</li>
                     <li><strong>Multiple work item types</strong>: Support for bug, task, user story, feature, and epic
                     </li>
+                    <li><strong>Advanced filtering</strong>: Filter by state, work item type, and limit number of results</li>
                     <li><strong>Web integration</strong>: Open work items directly in browser with --web option</li>
                     <li><strong>Soft delete</strong>: Option to change state to "Removed" instead of permanent deletion
                     </li>
@@ -491,6 +510,7 @@ azdocli boards work-item delete --id 123 --soft-delete</code></pre>
                     <li><strong>Default project support</strong>: Use with default project or specify --project
                         explicitly</li>
                     <li><strong>Error handling</strong>: Clear feedback when work item not found or access denied</li>
+                    <li><strong>WIQL integration</strong>: Uses Azure DevOps Work Item Query Language for efficient data retrieval</li>
                 </ul>
             </div>
         </section>
