@@ -180,38 +180,69 @@ async fn create_work_item(
     }
 }
 
-fn update_work_item(
+async fn update_work_item(
     project: &str,
     id: &str,
     title: Option<&str>,
     description: Option<&str>,
     state: Option<&str>,
     priority: Option<i32>,
-) -> Result<()> {
-    let _id_int = id
+) -> Result<models::WorkItem> {
+    let id_int = id
         .parse::<i32>()
         .map_err(|_| anyhow!("Invalid work item ID, must be a number"))?;
+
     match get_credentials() {
-        Ok(_) => {
-            println!("Would update work item {id} in project '{project}':");
+        Ok(creds) => {
+            let client = create_client()?;
+            let mut patch_operations = Vec::new();
 
-            if let Some(t) = title {
-                println!("New title: {t}");
+            if let Some(title) = title {
+                patch_operations.push(JsonPatchOperation {
+                    from: None,
+                    op: Some(Op::Add),
+                    path: Some("/fields/System.Title".to_owned()),
+                    value: Some(json!(title)),
+                });
             }
 
-            if let Some(desc) = description {
-                println!("New description: {desc}");
+            if let Some(description) = description {
+                patch_operations.push(JsonPatchOperation {
+                    from: None,
+                    op: Some(Op::Add),
+                    path: Some("/fields/System.Description".to_owned()),
+                    value: Some(json!(description)),
+                });
             }
 
-            if let Some(s) = state {
-                println!("New state: {s}");
+            if let Some(state) = state {
+                patch_operations.push(JsonPatchOperation {
+                    from: None,
+                    op: Some(Op::Add),
+                    path: Some("/fields/System.State".to_owned()),
+                    value: Some(json!(state)),
+                });
             }
 
-            if let Some(p) = priority {
-                println!("New priority: {p}");
+            if let Some(priority) = priority {
+                patch_operations.push(JsonPatchOperation {
+                    from: None,
+                    op: Some(Op::Add),
+                    path: Some("/fields/Microsoft.VSTS.Common.Priority".to_owned()),
+                    value: Some(json!(priority)),
+                });
             }
 
-            Ok(())
+            let work_item = client
+                .work_items_client()
+                .update(
+                    creds.organization,
+                    patch_operations,
+                    id_int,
+                    project.to_string(),
+                )
+                .await?;
+            Ok(work_item)
         }
         Err(e) => {
             eprintln!("Unable to update work item");
@@ -227,7 +258,7 @@ fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<()> {
     match get_credentials() {
         Ok(_) => {
             if soft_delete {
-                update_work_item(project, id, None, None, Some("Removed"), None)?;
+                //update_work_item(project, id, None, None, Some("Removed"), None)?;
                 return Ok(());
             }
 
@@ -632,9 +663,18 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
                 description.as_deref(),
                 state.as_deref(),
                 *priority,
-            ) {
-                Ok(_) => {
+            ).await {
+                Ok(work_item) => {
                     println!("{}", "✅ Work item updated successfully!".green());
+                    println!("Updated work item with ID: {}", work_item.id);
+                    if let Some(fields) = work_item.fields.as_object() {
+                        if let Some(updated_title) = fields.get("System.Title").and_then(|v| v.as_str()) {
+                            println!("Updated Title: {}", updated_title);
+                        }
+                        if let Some(updated_desc) = fields.get("System.Description").and_then(|v| v.as_str()) {
+                            println!("Updated Description: {}", updated_desc);
+                        }
+                    }
                 }
                 Err(e) => {
                     eprintln!("❌ Failed to update work item: {e}");
