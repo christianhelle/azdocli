@@ -1,9 +1,12 @@
 use crate::auth::get_credentials;
 use crate::project::get_project_or_default;
 use anyhow::{anyhow, Result};
+use azure_devops_rust_api::wit::models::json_patch_operation::Op;
+use azure_devops_rust_api::wit::models::JsonPatchOperation;
 use azure_devops_rust_api::wit::{self, models, ClientBuilder};
 use clap::Subcommand;
 use colored::Colorize;
+use serde_json::json;
 use std::process::Command;
 
 #[derive(Subcommand, Clone)]
@@ -40,9 +43,6 @@ pub enum WorkItemSubCommands {
         /// Work item title
         #[clap(short, long)]
         title: String,
-        /// Work item description
-        #[clap(short, long)]
-        description: Option<String>,
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
@@ -142,31 +142,36 @@ async fn get_work_item(project: &str, id: &str) -> Result<models::WorkItem> {
     }
 }
 
-fn create_work_item(
+async fn create_work_item(
     project: &str,
     work_item_type: &WorkItemType,
     title: &str,
-    description: Option<&str>,
-) -> Result<()> {
+) -> Result<models::WorkItem> {
     match get_credentials() {
-        Ok(_) => {
-            let type_str = match work_item_type {
-                WorkItemType::Bug => "Bug",
-                WorkItemType::Task => "Task",
-                WorkItemType::UserStory => "User Story",
-                WorkItemType::Feature => "Feature",
-                WorkItemType::Epic => "Epic",
-            };
+        Ok(creds) => {
+            let client = create_client()?;
+            let work_item = client
+                .work_items_client()
+                .create(
+                    creds.organization.clone(),
+                    vec![JsonPatchOperation {
+                        from: None,
+                        op: Some(Op::Add),
+                        path: Some("/fields/System.Title".to_owned()),
+                        value: Some(json!(title)),
+                    }],
+                    project.to_string(),
+                    match work_item_type {
+                        WorkItemType::Bug => "Bug",
+                        WorkItemType::Task => "Task",
+                        WorkItemType::UserStory => "User Story",
+                        WorkItemType::Feature => "Feature",
+                        WorkItemType::Epic => "Epic",
+                    },
+                )
+                .await?;
 
-            println!(
-                "Would create a {type_str} work item with title '{title}' in project '{project}'"
-            );
-
-            if let Some(desc) = description {
-                println!("Description: {desc}");
-            }
-
-            Ok(())
+            Ok(work_item)
         }
         Err(e) => {
             eprintln!("Unable to create work item");
@@ -498,15 +503,23 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
         WorkItemSubCommands::Create {
             work_item_type,
             title,
-            description,
             project,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
             println!("Creating a {work_item_type:?} work item in project: {project_name}");
 
-            match create_work_item(&project_name, work_item_type, title, description.as_deref()) {
-                Ok(_) => {
+            match create_work_item(&project_name, work_item_type, title).await {
+                Ok(work_item) => {
                     println!("{}", "✅ Work item created successfully!".green());
+                    println!("Created work item with ID: {}", work_item.id);
+                    println!("Title: {}", title);
+                    if let Some(fields) = work_item.fields.as_object() {
+                        if let Some(desc) =
+                            fields.get("System.Description").and_then(|v| v.as_str())
+                        {
+                            println!("Description: {}", desc);
+                        }
+                    }
                 }
                 Err(e) => {
                     eprintln!("❌ Failed to create work item: {e}");
