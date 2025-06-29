@@ -264,11 +264,11 @@ async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<
                     .get("System.WorkItemType")
                     .and_then(|v| v.as_str());
                 let state = work_item_type
-                    .and_then(|wt| {
+                    .map(|wt| {
                         if wt == "Task" || wt == "User Story" || wt == "Feature" || wt == "Epic" {
-                            Some("Removed")
+                            "Removed"
                         } else {
-                            Some("Closed")
+                            "Closed"
                         }
                     })
                     .unwrap_or("Closed");
@@ -298,7 +298,7 @@ fn open_work_item_in_browser(organization: &str, id: &str) -> Result<()> {
     #[cfg(target_os = "windows")]
     {
         Command::new("cmd")
-            .args(&["/C", &format!("start {}", url)])
+            .args(["/C", &format!("start {}", url)])
             .spawn()?;
     }
 
