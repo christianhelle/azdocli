@@ -251,19 +251,38 @@ async fn update_work_item(
     }
 }
 
-fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<()> {
+async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<()> {
     let _id_int = id
         .parse::<i32>()
         .map_err(|_| anyhow!("Invalid work item ID, must be a number"))?;
     match get_credentials() {
-        Ok(_) => {
+        Ok(creds) => {
             if soft_delete {
-                //update_work_item(project, id, None, None, Some("Removed"), None)?;
-                return Ok(());
+                let work_item = get_work_item(project, id).await?;
+                let work_item_type = work_item
+                    .fields
+                    .get("System.WorkItemType")
+                    .and_then(|v| v.as_str());
+                let state = work_item_type
+                    .and_then(|wt| {
+                        if wt == "Task" || wt == "User Story" || wt == "Feature" || wt == "Epic" {
+                            Some("Removed")
+                        } else {
+                            Some("Closed")
+                        }
+                    })
+                    .unwrap_or("Closed");
+                update_work_item(project, id, None, None, Some(state), None).await?;
+            } else {
+                create_client()?
+                    .work_items_client()
+                    .delete(
+                        creds.organization,
+                        id.parse::<i32>().unwrap(),
+                        project.to_string(),
+                    )
+                    .await?;
             }
-
-            println!("Would permanently delete work item {id} in project '{project}'");
-
             Ok(())
         }
         Err(e) => {
@@ -571,7 +590,7 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
                 project_name
             );
 
-            match delete_work_item(&project_name, id, *soft_delete) {
+            match delete_work_item(&project_name, id, *soft_delete).await {
                 Ok(_) => {
                     if *soft_delete {
                         println!(
@@ -663,15 +682,21 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
                 description.as_deref(),
                 state.as_deref(),
                 *priority,
-            ).await {
+            )
+            .await
+            {
                 Ok(work_item) => {
                     println!("{}", "✅ Work item updated successfully!".green());
                     println!("Updated work item with ID: {}", work_item.id);
                     if let Some(fields) = work_item.fields.as_object() {
-                        if let Some(updated_title) = fields.get("System.Title").and_then(|v| v.as_str()) {
+                        if let Some(updated_title) =
+                            fields.get("System.Title").and_then(|v| v.as_str())
+                        {
                             println!("Updated Title: {}", updated_title);
                         }
-                        if let Some(updated_desc) = fields.get("System.Description").and_then(|v| v.as_str()) {
+                        if let Some(updated_desc) =
+                            fields.get("System.Description").and_then(|v| v.as_str())
+                        {
                             println!("Updated Description: {}", updated_desc);
                         }
                     }
