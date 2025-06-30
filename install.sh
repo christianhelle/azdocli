@@ -7,7 +7,7 @@ set -e
 # Usage examples:
 #   ./install.sh                                     # Install latest version  
 #   ./install.sh --version 1.0.0                    # Install specific version
-#   ./install.sh -v v1.0.0                          # Install specific version (with v prefix)
+#   ./install.sh -v v1.0.0                          # Install specific version (v prefix auto-removed)
 #   ./install.sh --install-dir /usr/local/bin       # Install to custom directory
 #   ./install.sh --help                             # Show help message
 
@@ -38,7 +38,7 @@ while [[ $# -gt 0 ]]; do
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo "Options:"
-            echo "  -v, --version VERSION    Specify version to install (e.g., v1.0.0 or 1.0.0)"
+            echo "  -v, --version VERSION    Specify version to install (e.g., 1.0.0 or v1.0.0 - v prefix auto-removed)"
             echo "  -d, --install-dir DIR    Specify installation directory (default: \$HOME/.local/bin)"
             echo "  -h, --help               Show this help message"
             exit 0
@@ -105,9 +105,9 @@ get_version() {
     local provided_version="$1"
     
     if [[ -n "${provided_version}" ]]; then
-        # Ensure version starts with 'v' if not already present
-        if [[ "${provided_version}" != v* ]]; then
-            provided_version="v${provided_version}"
+        # Remove 'v' prefix if present, as GitHub releases use versions without 'v'
+        if [[ "${provided_version}" = v* ]]; then
+            provided_version="${provided_version#v}"
         fi
         log_info "Using specified version: ${provided_version}" >&2
         echo "${provided_version}"

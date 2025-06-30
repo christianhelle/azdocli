@@ -4,7 +4,7 @@
 # Usage examples:
 #   .\install.ps1                                    # Install latest version
 #   .\install.ps1 -Version "1.0.0"                  # Install specific version
-#   .\install.ps1 -Version "v1.0.0"                 # Install specific version (with v prefix)
+#   .\install.ps1 -Version "v1.0.0"                 # Install specific version (v prefix auto-removed)
 #   .\install.ps1 -InstallPath "C:\tools\bin"       # Install to custom directory
 #   .\install.ps1 -AddToPath:$false                 # Don't add to PATH
 
@@ -67,9 +67,9 @@ function Get-Version {
     param([string]$ProvidedVersion)
     
     if (-not [string]::IsNullOrWhiteSpace($ProvidedVersion)) {
-        # Ensure version starts with 'v' if not already present
-        if ($ProvidedVersion -notmatch '^v') {
-            $ProvidedVersion = "v$ProvidedVersion"
+        # Remove 'v' prefix if present, as GitHub releases use versions without 'v'
+        if ($ProvidedVersion -match '^v(.+)') {
+            $ProvidedVersion = $matches[1]
         }
         Write-Info "Using specified version: $ProvidedVersion"
         return $ProvidedVersion
