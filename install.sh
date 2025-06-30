@@ -1,6 +1,16 @@
 #!/bin/bash
 set -e
 
+# Azure DevOps CLI (azdocli) Bash Installer
+# This script downloads and installs the latest release of azdocli from GitHub
+#
+# Usage examples:
+#   ./install.sh                                     # Install latest version  
+#   ./install.sh --version 1.0.0                    # Install specific version
+#   ./install.sh -v v1.0.0                          # Install specific version (with v prefix)
+#   ./install.sh --install-dir /usr/local/bin       # Install to custom directory
+#   ./install.sh --help                             # Show help message
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -12,6 +22,34 @@ NC='\033[0m' # No Color
 REPO="christianhelle/azdocli"
 BINARY_NAME="azdocli"
 INSTALL_DIR="$HOME/.local/bin"
+VERSION=""
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --version|-v)
+            VERSION="$2"
+            shift 2
+            ;;
+        --install-dir|-d)
+            INSTALL_DIR="$2"
+            shift 2
+            ;;
+        --help|-h)
+            echo "Usage: $0 [OPTIONS]"
+            echo "Options:"
+            echo "  -v, --version VERSION    Specify version to install (e.g., v1.0.0 or 1.0.0)"
+            echo "  -d, --install-dir DIR    Specify installation directory (default: \$HOME/.local/bin)"
+            echo "  -h, --help               Show this help message"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
 
 # Functions
 log_info() {
@@ -62,8 +100,20 @@ detect_platform() {
     echo "${os}-${arch}"
 }
 
-# Get latest release version from GitHub
-get_latest_version() {
+# Get latest release version from GitHub or use provided version
+get_version() {
+    local provided_version="$1"
+    
+    if [[ -n "${provided_version}" ]]; then
+        # Ensure version starts with 'v' if not already present
+        if [[ "${provided_version}" != v* ]]; then
+            provided_version="v${provided_version}"
+        fi
+        log_info "Using specified version: ${provided_version}" >&2
+        echo "${provided_version}"
+        return
+    fi
+    
     log_info "Fetching latest release information..." >&2
     
     if command -v curl >/dev/null 2>&1; then
@@ -179,13 +229,13 @@ main() {
     platform=$(detect_platform)
     log_info "Detected platform: ${platform}"
     
-    # Get latest version
+    # Get version (latest or specified)
     local version
-    version=$(get_latest_version)
+    version=$(get_version "${VERSION}")
     if [[ -z "${version}" ]]; then
-        log_error "Failed to get latest version information"
+        log_error "Failed to get version information"
     fi
-    log_info "Latest version: ${version}"
+    log_info "Version to install: ${version}"
     
     # Download and install
     download_and_install "${platform}" "${version}"

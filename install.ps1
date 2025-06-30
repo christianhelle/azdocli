@@ -1,9 +1,17 @@
 # Azure DevOps CLI (azdocli) PowerShell Installer
 # This script downloads and installs the latest release of azdocli from GitHub
+# 
+# Usage examples:
+#   .\install.ps1                                    # Install latest version
+#   .\install.ps1 -Version "1.0.0"                  # Install specific version
+#   .\install.ps1 -Version "v1.0.0"                 # Install specific version (with v prefix)
+#   .\install.ps1 -InstallPath "C:\tools\bin"       # Install to custom directory
+#   .\install.ps1 -AddToPath:$false                 # Don't add to PATH
 
 param(
     [string]$InstallPath = "$env:USERPROFILE\.local\bin",
-    [switch]$AddToPath = $true
+    [switch]$AddToPath = $true,
+    [string]$Version = ""
 )
 
 # Configuration
@@ -54,8 +62,19 @@ function Get-Platform {
     return "windows-$arch"
 }
 
-# Get latest release version from GitHub
-function Get-LatestVersion {
+# Get latest release version from GitHub or use provided version
+function Get-Version {
+    param([string]$ProvidedVersion)
+    
+    if (-not [string]::IsNullOrWhiteSpace($ProvidedVersion)) {
+        # Ensure version starts with 'v' if not already present
+        if ($ProvidedVersion -notmatch '^v') {
+            $ProvidedVersion = "v$ProvidedVersion"
+        }
+        Write-Info "Using specified version: $ProvidedVersion"
+        return $ProvidedVersion
+    }
+    
     Write-Info "Fetching latest release information..."
     
     try {
@@ -203,12 +222,12 @@ function Main {
     $platform = Get-Platform
     Write-Info "Detected platform: $platform"
     
-    # Get latest version
-    $version = Get-LatestVersion
+    # Get version (latest or specified)
+    $version = Get-Version -ProvidedVersion $Version
     if (-not $version) {
-        Write-Error "Failed to get latest version information"
+        Write-Error "Failed to get version information"
     }
-    Write-Info "Latest version: $version"
+    Write-Info "Version to install: $version"
     
     # Download and install
     $installedBinary = Install-AzDoCli -Platform $platform -Version $version
