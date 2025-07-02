@@ -64,10 +64,14 @@ jobs:
         with:
           path: artifacts
       - name: Update Version
+        working-directory: chocolatey
         shell: pwsh
         run: |
           $version = (Get-Content -Path azdocli.nuspec -Raw) -replace 'VERSION_PLACEHOLDER', '${{ env.VERSION }}'
           $version | Set-Content -Path azdocli.nuspec
+      - name: Update Checksum
+        shell: pwsh
+        run: |
           $checksum = (Get-FileHash -Path artifacts/x86_64-pc-windows-msvc/x86_64-pc-windows-msvc.zip -Algorithm SHA256).Hash
           (Get-Content -Path chocolatey/tools/chocolateyinstall.ps1 -Raw) -Replace 'SHA256_X64_PLACEHOLDER', $checksum | Set-Content -Path chocolatey/tools/chocolateyinstall.ps1
       - name: Create Chocolatey package
