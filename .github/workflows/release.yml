@@ -64,7 +64,6 @@ jobs:
         with:
           path: artifacts
       - name: Update Version
-        working-directory: chocolatey
         shell: pwsh
         run: |
           $version = (Get-Content -Path azdocli.nuspec -Raw) -replace 'VERSION_PLACEHOLDER', '${{ env.VERSION }}'
