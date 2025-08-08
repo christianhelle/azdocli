@@ -562,12 +562,12 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
                 Ok(work_item) => {
                     println!("{}", "✅ Work item created successfully!".green());
                     println!("Created work item with ID: {}", work_item.id);
-                    println!("Title: {}", title);
+                    println!("Title: {title}");
                     if let Some(fields) = work_item.fields.as_object() {
                         if let Some(desc) =
                             fields.get("System.Description").and_then(|v| v.as_str())
                         {
-                            println!("Description: {}", desc);
+                            println!("Description: {desc}");
                         }
                     }
                 }
@@ -692,12 +692,12 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
                         if let Some(updated_title) =
                             fields.get("System.Title").and_then(|v| v.as_str())
                         {
-                            println!("Updated Title: {}", updated_title);
+                            println!("Updated Title: {updated_title}");
                         }
                         if let Some(updated_desc) =
                             fields.get("System.Description").and_then(|v| v.as_str())
                         {
-                            println!("Updated Description: {}", updated_desc);
+                            println!("Updated Description: {updated_desc}");
                         }
                     }
                 }
