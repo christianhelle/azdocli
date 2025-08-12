@@ -124,9 +124,6 @@ pub async fn login() -> Result<()> {
         .with_prompt("Personal Access Token (PAT)")
         .with_confirmation("Confirm PAT", "PATs don't match")
         .interact()?;
-    println!("Validating credentials...");
-    // In a real implementation, you would validate the PAT with Azure DevOps API
-    // For now, we'll just save the credentials
 
     save_organization(&organization)?;
     save_pat(&pat)?;
