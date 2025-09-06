@@ -1,6 +1,6 @@
 {
 	"name": "Azure DevOps CLI (Rust)",
-	"image": "mcr.microsoft.com/devcontainers/rust:1-1-bullseye",
+	"image": "mcr.microsoft.com/devcontainers/rust:2-1-bullseye",
 	
 	"features": {
 		"ghcr.io/devcontainers/features/git:1": {},
