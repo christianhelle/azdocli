@@ -9,6 +9,12 @@ homepage = "https://christianhelle.com/azdocli"
 repository = "https://github.com/christianhelle/azdocli"
 readme = "src/README.md"
 
+[package.metadata.bundle]
+name = "Azure DevOps CLI"
+identifier = "com.christianhelle.azdocli"
+icon = ["images/icon.png"]
+category = "Developer Tool"
+
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -20,3 +26,6 @@ dialoguer = "0.12"
 colored = "3.0"
 azure_devops_rust_api = { version = "0.31.0", features = ["git", "pipelines", "wit"], default-features = false }
 chrono = { version = "0.4", features = ["serde"] }
+
+[build-dependencies]
+winres = "0.1"
