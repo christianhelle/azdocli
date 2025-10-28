@@ -13,7 +13,7 @@ mkdir -p snap-package-$VERSION
 cp -r snap/* snap-package-$VERSION/
 
 # Update version
-sed -i "s/version: '0.2.0'/version: '$VERSION'/g" snap-package-$VERSION/snapcraft.yaml
+sed -i "s/version: git/version: '$VERSION'/g" snap-package-$VERSION/snapcraft.yaml
 
 echo "Snapcraft package created in snap-package-$VERSION/"
 cat snap-package-$VERSION/snapcraft.yaml
