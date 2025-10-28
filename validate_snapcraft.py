@@ -44,10 +44,15 @@ def validate_snapcraft_yaml(filepath='snapcraft.yaml'):
     else:
         print("✓ Architectures defined:")
         for arch in config['architectures']:
-            if isinstance(arch, dict) and 'build-on' in arch:
-                print(f"  - {arch['build-on']}")
+            if isinstance(arch, dict):
+                if 'build-on' in arch:
+                    print(f"  - {arch['build-on']}")
+                else:
+                    warnings.append(f"Architecture dict entry missing 'build-on': {arch}")
+            elif isinstance(arch, str):
+                print(f"  - {arch}")
             else:
-                warnings.append(f"Architecture entry should have 'build-on': {arch}")
+                warnings.append(f"Invalid architecture entry format: {arch}")
     
     # Check confinement and plugs
     if config.get('confinement') == 'strict':
@@ -111,10 +116,5 @@ def validate_snapcraft_yaml(filepath='snapcraft.yaml'):
 
 if __name__ == '__main__':
     filepath = sys.argv[1] if len(sys.argv) > 1 else 'snapcraft.yaml'
-    
-    if not Path(filepath).exists():
-        print(f"Error: File '{filepath}' not found")
-        sys.exit(1)
-    
     success = validate_snapcraft_yaml(filepath)
     sys.exit(0 if success else 1)
