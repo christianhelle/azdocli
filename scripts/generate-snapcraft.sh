@@ -10,7 +10,7 @@ fi
 
 # Create Snapcraft package
 mkdir -p snap-package-$VERSION
-cp -r snap/* snap-package-$VERSION/
+cp snapcraft.yaml snap-package-$VERSION/
 
 # Update version
 sed -i "s/version: git/version: '$VERSION'/g" snap-package-$VERSION/snapcraft.yaml
