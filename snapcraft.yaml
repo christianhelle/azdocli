@@ -28,3 +28,7 @@ parts:
     build-packages:
       - libssl-dev
       - pkg-config
+      - git
+    stage-packages:
+      - libssl3
+      - ca-certificates
