@@ -7,6 +7,6 @@ fn main() {
         let mut res = winres::WindowsResource::new();
         res.set_icon("images/icon.ico");
         res.compile()
-            .expect("Failed to compile Windows icon resource");
+            .unwrap_or_else(|e| panic!("Failed to compile Windows icon resource: {}", e));
     }
 }
