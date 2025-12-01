@@ -86,7 +86,7 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
                 Err(e) => {
                     eprintln!(
                         "❌ Failed to create repository '{}' in project '{}'",
-                        name.as_deref().unwrap(),
+                        name.as_deref().unwrap_or("<unnamed>"),
                         project_name
                     );
                     return Err(e);
