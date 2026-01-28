@@ -24,7 +24,7 @@ anyhow = "1.0"
 dirs = "6.0"
 dialoguer = "0.12"
 colored = "3.0"
-azure_devops_rust_api = { version = "0.32.0", features = ["git", "pipelines", "wit"], default-features = false }
+azure_devops_rust_api = { version = "0.33.0", features = ["git", "pipelines", "wit"], default-features = false }
 chrono = { version = "0.4", features = ["serde"] }
 
 [build-dependencies]
