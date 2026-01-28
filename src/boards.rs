@@ -504,23 +504,33 @@ async fn list_my_work_items(
     }
 }
 
+/// Sanitizes a string for use in WIQL queries by escaping single quotes
+fn sanitize_wiql_value(value: &str) -> String {
+    value.replace('\'', "''")
+}
+
 fn build_wiql_query(
     project: &str,
     state_filter: Option<&str>,
     work_item_type_filter: Option<&str>,
 ) -> String {
+    let sanitized_project = sanitize_wiql_value(project);
     let mut wiql_query = format!(
-        "SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType], [System.AssignedTo], [System.CreatedDate], [Microsoft.VSTS.Common.Priority] FROM WorkItems WHERE [System.TeamProject] = '{project}' AND [System.AssignedTo] = @Me"
+        "SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType], [System.AssignedTo], [System.CreatedDate], [Microsoft.VSTS.Common.Priority] FROM WorkItems WHERE [System.TeamProject] = '{sanitized_project}' AND [System.AssignedTo] = @Me"
     );
 
     // Add state filter if provided
     if let Some(state) = state_filter {
-        wiql_query.push_str(&format!(" AND [System.State] = '{state}'"));
+        let sanitized_state = sanitize_wiql_value(state);
+        wiql_query.push_str(&format!(" AND [System.State] = '{sanitized_state}'"));
     }
 
     // Add work item type filter if provided
     if let Some(wit_type) = work_item_type_filter {
-        wiql_query.push_str(&format!(" AND [System.WorkItemType] = '{wit_type}'"));
+        let sanitized_wit_type = sanitize_wiql_value(wit_type);
+        wiql_query.push_str(&format!(
+            " AND [System.WorkItemType] = '{sanitized_wit_type}'"
+        ));
     }
 
     wiql_query.push_str(" ORDER BY [System.CreatedDate] DESC");
@@ -709,4 +719,51 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sanitize_wiql_value_escapes_single_quotes() {
+        assert_eq!(sanitize_wiql_value("test'value"), "test''value");
+        assert_eq!(sanitize_wiql_value("test''value"), "test''''value");
+        assert_eq!(sanitize_wiql_value("O'Brien"), "O''Brien");
+    }
+
+    #[test]
+    fn test_sanitize_wiql_value_preserves_safe_strings() {
+        assert_eq!(sanitize_wiql_value("Active"), "Active");
+        assert_eq!(sanitize_wiql_value("Bug"), "Bug");
+        assert_eq!(sanitize_wiql_value("User Story"), "User Story");
+    }
+
+    #[test]
+    fn test_sanitize_wiql_value_prevents_injection() {
+        // Attempt to inject WIQL by closing the quote
+        let malicious_input = "'; DROP TABLE WorkItems; --";
+        let sanitized = sanitize_wiql_value(malicious_input);
+        assert_eq!(sanitized, "''; DROP TABLE WorkItems; --");
+        // The doubled quote prevents breaking out of the string context
+    }
+
+    #[test]
+    fn test_build_wiql_query_sanitizes_project() {
+        let query = build_wiql_query("test'project", None, None);
+        assert!(query.contains("test''project"));
+        assert!(!query.contains("test'project' AND"));
+    }
+
+    #[test]
+    fn test_build_wiql_query_sanitizes_state() {
+        let query = build_wiql_query("project", Some("Active'Hack"), None);
+        assert!(query.contains("Active''Hack"));
+    }
+
+    #[test]
+    fn test_build_wiql_query_sanitizes_work_item_type() {
+        let query = build_wiql_query("project", None, Some("Bug'Injection"));
+        assert!(query.contains("Bug''Injection"));
+    }
 }

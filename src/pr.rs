@@ -139,19 +139,21 @@ async fn list_pull_request_commits(repo: &String, id: &String, project_name: Str
                 .get_pull_request_commits(creds.organization, repo, pr_id, project_name)
                 .await?;
 
-            if commits.count == Option::from(0) {
+            if commits.value.is_empty() {
                 println!("No commits found for pull request ID {id}");
             } else {
                 println!("Commits in pull request ID {id}:");
                 for commit in commits.value {
-                    println!("  - Commit ID: {}", commit.commit_id.unwrap());
+                    if let Some(commit_id) = commit.commit_id {
+                        println!("  - Commit ID: {commit_id}");
+                    }
                     if let Some(message) = commit.comment {
                         println!("    Message: {message}");
                     }
                     if let Some(author) = commit.author {
                         println!(
                             "    Author: {} ({})",
-                            author.name.unwrap(),
+                            author.name.unwrap_or_else(|| "Unknown".to_string()),
                             author.email.unwrap_or_default()
                         );
                     }
