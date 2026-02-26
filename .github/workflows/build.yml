@@ -58,7 +58,7 @@ jobs:
         mv target/release/azdocli* ./
         Compress-Archive azdocli*, README.md, LICENSE ${{ matrix.target }}.zip
     - name: Upload artifacts
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ matrix.target }}
         path: ${{ matrix.target }}.zip
