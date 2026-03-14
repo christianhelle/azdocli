@@ -9,6 +9,7 @@ CLI tool for interacting with Azure DevOps.
 
 - **Repository Management**: List, create, delete, clone, view, and manage pull requests in repositories
 - **Pipeline Management**: Manage Azure DevOps pipelines
+- **Project Management**: List and view Azure DevOps projects in your organization (azdocli projects list)
 - **Board Management**: Manage Azure DevOps boards
 - **Authentication**: Secure login using Personal Access Tokens (PAT)
 - **Default Project**: Set a default project to avoid specifying --project for every command
@@ -35,7 +36,7 @@ azdocli repos list --project Other  # Overrides default with "Other"
 
 - **Persistent storage**: Default project is saved in your user configuration
 - **Optional override**: Use `--project` to override the default for any command
-- **All modules supported**: Works with repos, pipelines, and boards
+- **All modules supported**: Works with repos, pipelines, boards, and projects
 - **Helpful error messages**: Clear feedback when no default is set and no --project is provided
 
 ### Repository Management Features
@@ -451,6 +452,9 @@ azdocli repos pr create --repo MyRepo --source "feature/my-feature" --title "My 
 azdocli pipelines list                       # List all pipelines
 azdocli pipelines runs --id 42               # Show pipeline runs
 azdocli pipelines show --id 42 --build-id 123 # Show build details
+
+# Projects management
+azdocli projects list                        # List all projects in the organization
 ```
 
 For detailed examples and features, see the respective sections below.

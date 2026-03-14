@@ -3,16 +3,53 @@ base: core22
 version: 0.3.4
 summary: CLI tool for interacting with Azure DevOps
 description: |
-  A powerful command-line interface for Azure DevOps that provides repository 
-  management, pipeline management, and board management capabilities.
+  A powerful, extensible command-line interface for Azure DevOps, designed for
+  developers, DevOps engineers, and automation workflows. azdocli is implemented
+  in Rust for speed and reliability and provides first-class support for
+  repository, pipeline, board, and project operations across Azure DevOps
+  organizations and projects.
   
-  Features include:
-  - Repository management (list, create, delete, clone, view, and manage pull requests)
-  - Pipeline management
-  - Board management  
-  - Authentication using Personal Access Tokens (PAT)
-  - Default project support
-
+  Key features:
+  - Repository management: list, create, delete, clone (bulk & parallel), show
+    metadata, and manage pull requests with automation-friendly flags and
+    progress reporting.
+  - Pipeline management: list pipelines, inspect run histories and build details,
+    and trigger pipeline runs with clear status reporting.
+  - Board & Work Item management: full CRUD for work items, filtering,
+    open-in-web integration, and support for multiple work item types
+    (bug, task, user-story, feature, epic).
+  - Projects discovery: organization-scoped "projects list" command that
+    enumerates projects (Name, ID, State, Visibility, Description) for quick
+    inventory and scripting.
+  - Authentication: secure login using Personal Access Tokens (PAT) with
+    guidance on required scopes and secure persistent storage of credentials.
+  - Default project support: persist a default project to simplify commands;
+    override with --project when needed.
+  - Automation friendly: non-interactive flags (e.g., --yes), concurrency
+    controls for bulk operations, predictable exit codes, and machine-readable
+    tabular output when needed.
+  - Modular and extensible: clear module patterns make it straightforward to add
+    new Azure DevOps API integrations.
+  
+  Installation options:
+  - Snap: 'snap install azdocli' (recommended on Snap-enabled Linux)
+  - Cargo: 'cargo install azdocli'
+  - One-line installer: curl -sSL https://christianhelle.com/azdocli/install | bash
+  - Pre-built binaries available on GitHub Releases for Windows, macOS, and Linux
+  
+  Usage examples:
+  - azdocli projects list
+  - azdocli repos clone --parallel --concurrency 6
+  - azdocli pipelines runs --id 42
+  
+  Notes:
+  - azdocli favors speed, predictability, and safe automation. Integration tests
+    that interact with Azure DevOps are included but ignored by default.
+  - Keep credentials secure: use least-privilege PAT scopes, rotate tokens
+    regularly, and never commit secrets to version control.
+  
+  For full documentation and examples, see the docs/ site and the GitHub
+  repository.
 grade: stable
 confinement: strict
 
