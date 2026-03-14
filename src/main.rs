@@ -8,6 +8,7 @@ mod config;
 mod pipelines;
 mod pr;
 mod project;
+mod projects;
 mod repos;
 
 #[derive(Parser)]
@@ -43,6 +44,11 @@ enum Commands {
         #[clap(subcommand)]
         subcommand: repos::ReposSubCommands,
     },
+    /// List Azure DevOps projects
+    Projects {
+        #[clap(subcommand)]
+        subcommand: projects::ProjectsSubCommands,
+    },
 }
 
 #[tokio::main]
@@ -73,6 +79,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Repos { subcommand }) => {
             repos::handle_command(subcommand).await?;
+        }
+        Some(Commands::Projects { subcommand }) => {
+            projects::handle_command(subcommand).await?;
         }
         None => {
             Cli::command().print_help()?;
