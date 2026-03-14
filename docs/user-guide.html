@@ -158,7 +158,7 @@
         </section>
 
         <section id="projects">
-            <h2>📁 Default Project Management</h2>
+            <h2>📁 Projects and Default Project Management</h2>
             <div class="command-section">
                 <h3>Project Commands</h3>
                 <p>The project command allows you to set and view a default project, eliminating the need to specify
@@ -174,11 +174,23 @@
                     <pre><code>azdocli project</code></pre>
                 </div>
 
+                <h3>Listing Projects</h3>
+                <p>List all Azure DevOps projects in your organization using the <code>projects list</code> command. This
+                   organization-scoped command authenticates with your stored credentials and displays a formatted table
+                   with Name, ID, State, Visibility, and a short Description. Example:</p>
+
+                <div class="command-example">
+                    <pre><code>azdocli projects list</code></pre>
+                </div>
+
+                <p>Note: <code>azdocli projects list</code> is organization-scoped and does not require a project argument. Make
+                   sure you have authenticated with <code>azdocli login</code> before running it.</p>
+
                 <h4>Features:</h4>
                 <ul>
                     <li><strong>Persistent storage</strong>: Default project is saved in your user configuration</li>
                     <li><strong>Optional override</strong>: Use --project to override the default for any command</li>
-                    <li><strong>All modules supported</strong>: Works with repos, pipelines, and boards</li>
+                    <li><strong>All modules supported</strong>: Works with repos, pipelines, boards, and projects</li>
                     <li><strong>Helpful error messages</strong>: Clear feedback when no default is set and no --project
                         is provided</li>
                 </ul>
