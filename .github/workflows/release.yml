@@ -49,7 +49,7 @@ jobs:
         mv target/release/azdocli* ./
         Compress-Archive azdocli*, README.md, LICENSE ${{ matrix.target }}.zip
     - name: Upload artifacts
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ matrix.target }}
         path: ${{ matrix.target }}.zip
@@ -72,7 +72,7 @@ jobs:
             sha: context.sha
           })
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         path: artifacts
     - name: Create release
@@ -165,7 +165,7 @@ jobs:
     steps:
     - uses: actions/checkout@v6
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         path: artifacts
     - name: Calculate SHA256 checksums
@@ -177,7 +177,7 @@ jobs:
       run: |
         ./scripts/generate-homebrew.sh "${{ env.VERSION }}" "${{ steps.checksums.outputs.macos_x64_sha }}" "${{ steps.checksums.outputs.macos_arm64_sha }}"
     - name: Upload Homebrew artifacts
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: homebrew-package
         path: homebrew/azdocli-${{ env.VERSION }}.rb
@@ -198,7 +198,7 @@ jobs:
     steps:
     - uses: actions/checkout@v6
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         path: artifacts
     - name: Update Version
@@ -225,7 +225,7 @@ jobs:
     steps:
     - uses: actions/checkout@v6
     - name: Download artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         path: artifacts
     - name: Calculate SHA256 checksums
@@ -237,7 +237,7 @@ jobs:
       run: |
         ./scripts/generate-winget.sh "${{ env.VERSION }}" "${{ steps.checksums.outputs.windows_x64_sha }}" "${{ steps.checksums.outputs.windows_arm64_sha }}"
     - name: Upload WinGet artifacts
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: winget-package
         path: winget-${{ env.VERSION }}/
