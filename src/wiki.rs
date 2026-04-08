@@ -1,8 +1,8 @@
 use crate::auth::get_credentials;
 use crate::project::get_project_or_default;
 use anyhow::{anyhow, Result};
-use azure_devops_rust_api::wiki::{self, models};
 use azure_devops_rust_api::search::{self, models as search_models};
+use azure_devops_rust_api::wiki::{self, models};
 use clap::Subcommand;
 use colored::Colorize;
 
@@ -146,14 +146,25 @@ fn display_wikis(wikis: &[models::WikiV2]) {
         return;
     }
 
-    println!("{:<40} {:<40} {:<10}", "ID".bold(), "Name".bold(), "Type".bold());
+    println!(
+        "{:<40} {:<40} {:<10}",
+        "ID".bold(),
+        "Name".bold(),
+        "Type".bold()
+    );
     println!("{}", "-".repeat(95));
 
     for wiki in wikis {
         println!(
             "{:<40} {:<40} {:?}",
-            wiki.id.as_ref().map(|id| id.to_string()).unwrap_or_default(),
-            wiki.wiki_create_base_parameters.name.as_deref().unwrap_or_default(),
+            wiki.id
+                .as_ref()
+                .map(|id| id.to_string())
+                .unwrap_or_default(),
+            wiki.wiki_create_base_parameters
+                .name
+                .as_deref()
+                .unwrap_or_default(),
             wiki.wiki_create_base_parameters.type_
         );
     }
@@ -161,9 +172,26 @@ fn display_wikis(wikis: &[models::WikiV2]) {
 
 fn display_wiki_details(wiki: &models::WikiV2) {
     println!("{}", "Wiki Details".bold().underline());
-    println!("{:<15} {}", "ID:", wiki.id.as_ref().map(|id| id.to_string()).unwrap_or_default());
-    println!("{:<15} {}", "Name:", wiki.wiki_create_base_parameters.name.as_deref().unwrap_or_default());
-    println!("{:<15} {:?}", "Type:", wiki.wiki_create_base_parameters.type_);
+    println!(
+        "{:<15} {}",
+        "ID:",
+        wiki.id
+            .as_ref()
+            .map(|id| id.to_string())
+            .unwrap_or_default()
+    );
+    println!(
+        "{:<15} {}",
+        "Name:",
+        wiki.wiki_create_base_parameters
+            .name
+            .as_deref()
+            .unwrap_or_default()
+    );
+    println!(
+        "{:<15} {:?}",
+        "Type:", wiki.wiki_create_base_parameters.type_
+    );
     if let Some(ref remote_url) = wiki.remote_url {
         println!("{:<15} {}", "Remote URL:", remote_url);
     }
@@ -177,11 +205,10 @@ async fn resolve_wiki(project: &str, wiki_identifier: Option<&str>) -> Result<mo
 
     if let Some(identifier) = wiki_identifier {
         // Try to find by ID first
-        if let Some(wiki) = wikis.iter().find(|w| {
-            w.id.as_ref()
-                .map(|id| *id == identifier)
-                .unwrap_or(false)
-        }) {
+        if let Some(wiki) = wikis
+            .iter()
+            .find(|w| w.id.as_ref().map(|id| *id == identifier).unwrap_or(false))
+        {
             return Ok(wiki.clone());
         }
         // Try to find by name
@@ -233,9 +260,13 @@ async fn handle_page_command(subcommand: &WikiPageSubCommands) -> Result<()> {
                     #[cfg(target_os = "macos")]
                     std::process::Command::new("open").arg(remote_url).spawn()?;
                     #[cfg(target_os = "linux")]
-                    std::process::Command::new("xdg-open").arg(remote_url).spawn()?;
+                    std::process::Command::new("xdg-open")
+                        .arg(remote_url)
+                        .spawn()?;
                     #[cfg(target_os = "windows")]
-                    std::process::Command::new("explorer").arg(remote_url).spawn()?;
+                    std::process::Command::new("explorer")
+                        .arg(remote_url)
+                        .spawn()?;
                 } else {
                     println!("Web URL not available for this page.");
                 }
@@ -365,7 +396,10 @@ fn display_pages(pages: &[models::WikiPage]) {
         println!(
             "{:<40} {}",
             page.path.as_deref().unwrap_or_default(),
-            page.id.as_ref().map(|id| id.to_string()).unwrap_or_default()
+            page.id
+                .as_ref()
+                .map(|id| id.to_string())
+                .unwrap_or_default()
         );
     }
 }
@@ -410,7 +444,8 @@ fn display_search_results(results: &search_models::WikiSearchResponse, show_cont
                         .trim()
                         .to_string();
 
-                    if !clean_highlight.is_empty() && seen_highlights.insert(clean_highlight.clone())
+                    if !clean_highlight.is_empty()
+                        && seen_highlights.insert(clean_highlight.clone())
                     {
                         println!("Snippet: {}\n", clean_highlight);
                     }
