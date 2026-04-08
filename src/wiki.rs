@@ -581,27 +581,8 @@ async fn move_page(
         }
     };
 
-    // Resolve target path (try exact, fallback to normalized)
-    let resolved_new_path = match client
-        .pages_client()
-        .get_page(&creds.organization, project, wiki_id)
-        .path(new_path)
-        .await
-    {
-        Ok(_) => new_path.to_string(),
-        Err(_) => {
-            let normalized = normalize_name(new_path);
-            find_normalized_path(
-                &client,
-                &creds.organization,
-                project,
-                wiki_id,
-                new_path,
-                &normalized,
-            )
-            .await?
-        }
-    };
+    // Use the provided new_path directly as the target destination
+    let resolved_new_path = new_path.to_string();
 
     let request = models::WikiPageMoveParameters {
         path: Some(resolved_path),
