@@ -10,6 +10,7 @@ mod pr;
 mod project;
 mod projects;
 mod repos;
+mod wiki;
 
 #[derive(Parser)]
 #[clap(about, version)]
@@ -49,6 +50,11 @@ enum Commands {
         #[clap(subcommand)]
         subcommand: projects::ProjectsSubCommands,
     },
+    /// Manage Azure DevOps wikis
+    Wiki {
+        #[clap(subcommand)]
+        subcommand: wiki::WikiSubCommands,
+    },
 }
 
 #[tokio::main]
@@ -82,6 +88,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Projects { subcommand }) => {
             projects::handle_command(subcommand).await?;
+        }
+        Some(Commands::Wiki { subcommand }) => {
+            wiki::handle_command(subcommand).await?;
         }
         None => {
             Cli::command().print_help()?;
