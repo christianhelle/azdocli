@@ -1,0 +1,34 @@
+name: Changelog
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: read
+  issues: read
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate changelog
+        id: changelog
+        uses: christianhelle/changelog-generator-action@v1
+        with:
+          output: CHANGELOG.md
+
+      - name: Commit changelog
+        if: steps.changelog.outputs.changed == 'true'
+        run: |
+          git config user.name "Christian Helle"
+          git config user.email "christian.helle@outlook.com"
+          git add CHANGELOG.md
+          git commit -m "Update changelog [skip ci]"
+          git push
