@@ -3,6 +3,8 @@
 ## [Unreleased Changes]
 
 ### Merged Pull Requests
+- Update actions/checkout action to v6 ([#103](https://github.com/christianhelle/azdocli/pull/103)) (@renovate[bot])
+- Add comprehensive GitHub Copilot instructions for azdocli development workflow ([#74](https://github.com/christianhelle/azdocli/pull/74)) (@Copilot)
 - Update actions/deploy-pages action to v5 ([#97](https://github.com/christianhelle/azdocli/pull/97)) (@renovate[bot])
 - Update actions/configure-pages action to v6 ([#98](https://github.com/christianhelle/azdocli/pull/98)) (@renovate[bot])
 - Update Rust crate azure_devops_rust_api to 0.34.0 ([#93](https://github.com/christianhelle/azdocli/pull/93)) (@renovate[bot])
@@ -23,7 +25,6 @@
 - Update actions/download-artifact action to v5 ([#70](https://github.com/christianhelle/azdocli/pull/70)) (@renovate[bot])
 
 ### Features
-- Add comprehensive GitHub Copilot instructions for azdocli development workflow ([#74](https://github.com/christianhelle/azdocli/pull/74)) (@Copilot)
 - Fix cargo clippy uninlined format args warnings ([#72](https://github.com/christianhelle/azdocli/pull/72)) (@Copilot)
 - Fix potential panics and WIQL injection vulnerability ([#90](https://github.com/christianhelle/azdocli/pull/90)) (@Copilot)
 - Add application icon support ([#83](https://github.com/christianhelle/azdocli/pull/83)) ([@christianhelle](https://github.com/christianhelle/))
