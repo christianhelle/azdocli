@@ -3,6 +3,7 @@
 ## [Unreleased Changes]
 
 ### Merged Pull Requests
+- Update actions/github-script action to v9 ([#104](https://github.com/christianhelle/azdocli/pull/104)) (@renovate[bot])
 - Update actions/checkout action to v6 ([#103](https://github.com/christianhelle/azdocli/pull/103)) (@renovate[bot])
 - Add comprehensive GitHub Copilot instructions for azdocli development workflow ([#74](https://github.com/christianhelle/azdocli/pull/74)) (@Copilot)
 - Update actions/deploy-pages action to v5 ([#97](https://github.com/christianhelle/azdocli/pull/97)) (@renovate[bot])
@@ -44,15 +45,15 @@
 - Fix Clippy Linting Errors - Reduced from 124 to 0 Warnings ([#68](https://github.com/christianhelle/azdocli/pull/68)) (@Copilot)
 - Implement Work Item subcommand to List "My" work items ([#66](https://github.com/christianhelle/azdocli/pull/66)) ([@christianhelle](https://github.com/christianhelle/))
 - Add installer scripts for automatic download and installation ([#63](https://github.com/christianhelle/azdocli/pull/63)) (@Copilot)
-- Modernize documentation website with dark mode support and enhanced styling ([#61](https://github.com/christianhelle/azdocli/pull/61)) (@Copilot)
 - Add snap installation instructions to docs ([#57](https://github.com/christianhelle/azdocli/pull/57)) ([@christianhelle](https://github.com/christianhelle/))
+- Modernize documentation website with dark mode support and enhanced styling ([#61](https://github.com/christianhelle/azdocli/pull/61)) (@Copilot)
 
 
 ## [0.3.1](https://github.com/christianhelle/azdocli/releases/tag/0.3.1) (2025-06-10)
 
 ### Features
-- Rename binary to azdocli ([#56](https://github.com/christianhelle/azdocli/pull/56)) ([@christianhelle](https://github.com/christianhelle/))
 - Reduce dependencies ([#54](https://github.com/christianhelle/azdocli/pull/54)) ([@christianhelle](https://github.com/christianhelle/))
+- Rename binary to azdocli ([#56](https://github.com/christianhelle/azdocli/pull/56)) ([@christianhelle](https://github.com/christianhelle/))
 - Snapcraft ([#55](https://github.com/christianhelle/azdocli/pull/55)) ([@christianhelle](https://github.com/christianhelle/))
 
 
