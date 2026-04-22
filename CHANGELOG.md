@@ -3,6 +3,7 @@
 ## [Unreleased Changes]
 
 ### Merged Pull Requests
+- Update Rust crate azure_devops_rust_api to 0.36.0 ([#99](https://github.com/christianhelle/azdocli/pull/99)) (@renovate[bot])
 - Update actions/upload-pages-artifact action to v5 ([#105](https://github.com/christianhelle/azdocli/pull/105)) (@renovate[bot])
 - Update actions/github-script action to v9 ([#104](https://github.com/christianhelle/azdocli/pull/104)) (@renovate[bot])
 - Update actions/checkout action to v6 ([#103](https://github.com/christianhelle/azdocli/pull/103)) (@renovate[bot])
