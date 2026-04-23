@@ -34,7 +34,7 @@ description: |
   Installation options:
   - Snap: 'snap install azdocli' (recommended on Snap-enabled Linux)
   - Cargo: 'cargo install azdocli'
-  - One-line installer: curl -sSL https://christianhelle.com/azdocli/install | bash
+  - One-line installer: curl -sSL https://christianhelle.com/azdocli/install.sh | bash
   - Pre-built binaries available on GitHub Releases for Windows, macOS, and Linux
   
   Usage examples:

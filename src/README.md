@@ -342,7 +342,7 @@ SUBCOMMANDS:
 
 **Linux and macOS:**
 ```bash
-curl -sSL https://christianhelle.com/azdocli/install | bash
+curl -sSL https://christianhelle.com/azdocli/install.sh | bash
 ```
 
 **Windows (PowerShell):**
