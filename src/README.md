@@ -341,11 +341,13 @@ SUBCOMMANDS:
 ### Quick Install (Recommended)
 
 **Linux and macOS:**
+
 ```bash
 curl -sSL https://christianhelle.com/azdocli/install | bash
 ```
 
 **Windows (PowerShell):**
+
 ```powershell
 iwr -useb https://christianhelle.com/azdocli/install.ps1 | iex
 ```
@@ -377,7 +379,7 @@ This will install the latest stable version and automatically handle updates.
 You can also download pre-built binaries from the [GitHub Releases page](https://github.com/christianhelle/azdocli/releases):
 
 - Windows: `windows-x64.zip` or `windows-arm64.zip`
-- macOS: `macos-x64.zip` or `macos-arm64.zip`  
+- macOS: `macos-x64.zip` or `macos-arm64.zip`
 - Linux: `linux-x64.zip` or `linux-arm64.zip`
 
 Extract the binary and add it to your PATH.
@@ -401,7 +403,7 @@ Before using the CLI, you need to create a Personal Access Token (PAT) in Azure 
 
 3. **Configure Required Scopes**:
    - **Code**: Read & write (for repository operations)
-   - **Build**: Read & execute (for pipeline operations) 
+   - **Build**: Read & execute (for pipeline operations)
    - **Work Items**: Read & write (for board operations)
    - **Project and Team**: Read (for project operations)
 
@@ -411,6 +413,7 @@ Before using the CLI, you need to create a Personal Access Token (PAT) in Azure 
    - The token will not be shown again
 
 **Security Best Practices**:
+
 - Never commit your PAT to version control
 - Use environment variables or secure storage for automation
 - Regularly rotate your tokens
@@ -485,16 +488,15 @@ To run the integration tests, you need to create a test configuration file with 
 
 2. Edit `test_config.json` with your Azure DevOps details:
 
-  ```json
-   {
-     "organization": "your-organization-name",
-     "pat": "your-personal-access-token",
-     "project": "your-test-project-name"
-   }
-   ```
+```json
+{
+  "organization": "your-organization-name",
+  "pat": "your-personal-access-token",
+  "project": "your-test-project-name"
+}
+```
 
-3. Make sure you have:
-
+1. Make sure you have:
    - A valid Azure DevOps Personal Access Token (PAT) with repository permissions
    - Access to an Azure DevOps project where you can create/delete test repositories
    - Git installed and available in your PATH (for clone testing)
@@ -543,7 +545,7 @@ Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTIN
 
 - Code style and patterns
 - Development setup
-- Testing procedures  
+- Testing procedures
 - PR description requirements
 - How to keep documentation updated
 

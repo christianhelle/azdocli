@@ -8,7 +8,7 @@ description: |
   in Rust for speed and reliability and provides first-class support for
   repository, pipeline, board, and project operations across Azure DevOps
   organizations and projects.
-  
+
   Key features:
   - Repository management: list, create, delete, clone (bulk & parallel), show
     metadata, and manage pull requests with automation-friendly flags and
@@ -30,24 +30,18 @@ description: |
     tabular output when needed.
   - Modular and extensible: clear module patterns make it straightforward to add
     new Azure DevOps API integrations.
-  
-  Installation options:
-  - Snap: 'snap install azdocli' (recommended on Snap-enabled Linux)
-  - Cargo: 'cargo install azdocli'
-  - One-line installer: curl -sSL https://christianhelle.com/azdocli/install | bash
-  - Pre-built binaries available on GitHub Releases for Windows, macOS, and Linux
-  
+
   Usage examples:
   - azdocli projects list
   - azdocli repos clone --parallel --concurrency 6
   - azdocli pipelines runs --id 42
-  
+
   Notes:
   - azdocli favors speed, predictability, and safe automation. Integration tests
     that interact with Azure DevOps are included but ignored by default.
   - Keep credentials secure: use least-privilege PAT scopes, rotate tokens
     regularly, and never commit secrets to version control.
-  
+
   For full documentation and examples, see the docs/ site and the GitHub
   repository.
 grade: stable

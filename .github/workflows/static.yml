@@ -5,7 +5,10 @@ on:
   # Runs on pushes targeting the default branch
   push:
     paths:
-      - docs/*
+      - docs/**
+      - install.sh
+      - install.ps1
+      - .github/workflows/static.yml
     branches: ["main"]
 
   # Allows you to run this workflow manually from the Actions tab
@@ -37,8 +40,15 @@ jobs:
         uses: actions/configure-pages@v6
       - name: Copy install scripts
         run: |
+          touch docs/.nojekyll
           cp install.sh docs/install
+          cp install.sh docs/install.sh
           cp install.ps1 docs/install.ps1
+      - name: Verify install scripts
+        run: |
+          test -s docs/install    || { echo "ERROR: docs/install is missing or empty"; exit 1; }
+          test -s docs/install.sh || { echo "ERROR: docs/install.sh is missing or empty"; exit 1; }
+          test -s docs/install.ps1 || { echo "ERROR: docs/install.ps1 is missing or empty"; exit 1; }
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
@@ -46,3 +56,14 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+      - name: Smoke test installer URLs
+        run: |
+          BASE="${{ steps.deployment.outputs.page_url }}"
+          for URL in "${BASE}install.sh" "${BASE}install.ps1"; do
+            STATUS=$(curl -sSo /dev/null -w "%{http_code}" "$URL")
+            if [ "$STATUS" != "200" ]; then
+              echo "ERROR: $URL returned HTTP $STATUS"
+              exit 1
+            fi
+            echo "OK: $URL ($STATUS)"
+          done
