@@ -55,8 +55,8 @@
 ## [0.3.1](https://github.com/christianhelle/azdocli/releases/tag/0.3.1) (2025-06-10)
 
 ### Features
-- Reduce dependencies ([#54](https://github.com/christianhelle/azdocli/pull/54)) ([@christianhelle](https://github.com/christianhelle/))
 - Rename binary to azdocli ([#56](https://github.com/christianhelle/azdocli/pull/56)) ([@christianhelle](https://github.com/christianhelle/))
+- Reduce dependencies ([#54](https://github.com/christianhelle/azdocli/pull/54)) ([@christianhelle](https://github.com/christianhelle/))
 - Snapcraft ([#55](https://github.com/christianhelle/azdocli/pull/55)) ([@christianhelle](https://github.com/christianhelle/))
 
 
