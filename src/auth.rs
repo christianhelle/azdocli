@@ -13,6 +13,90 @@ pub struct Credentials {
     pub pat: String,
 }
 
+fn profiles_dir() -> Result<PathBuf> {
+    let dir = get_config_dir()?.join("profiles");
+    if !dir.exists() {
+        fs::create_dir_all(&dir)?;
+    }
+    Ok(dir)
+}
+
+fn profile_file(name: &str) -> Result<PathBuf> {
+    Ok(profiles_dir()?.join(format!("{}.json", sanitize_profile_name(name))))
+}
+
+fn sanitize_profile_name(name: &str) -> String {
+    name.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+/// Save credentials for a named profile.
+fn save_profile(name: &str, creds: &Credentials) -> Result<()> {
+    let path = profile_file(name)?;
+    let json = serde_json::to_string_pretty(creds)?;
+    let mut file = fs::File::create(&path)?;
+    file.write_all(json.as_bytes())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&path)?.permissions();
+        perms.set_mode(0o600);
+        fs::set_permissions(&path, perms)?;
+    }
+    Ok(())
+}
+
+/// Load credentials for a named profile.
+fn load_profile(name: &str) -> Result<Credentials> {
+    let path = profile_file(name)?;
+    if !path.exists() {
+        return Err(anyhow!(
+            "Profile '{}' not found. Run 'azdocli login --profile {}' first.",
+            name,
+            name
+        ));
+    }
+    let s = fs::read_to_string(&path)?;
+    Ok(serde_json::from_str(&s)?)
+}
+
+/// List known profile names (excluding the legacy default).
+#[allow(dead_code)]
+pub fn list_profiles() -> Result<Vec<String>> {
+    let dir = profiles_dir()?;
+    let mut out = Vec::new();
+    if !dir.exists() {
+        return Ok(out);
+    }
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) == Some("json") {
+            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                out.push(stem.to_string());
+            }
+        }
+    }
+    out.sort();
+    Ok(out)
+}
+
+#[allow(dead_code)]
+pub fn delete_profile(name: &str) -> Result<()> {
+    let path = profile_file(name)?;
+    if path.exists() {
+        fs::remove_file(path)?;
+    }
+    Ok(())
+}
+
 fn save_organization(organization: &str) -> Result<()> {
     let config_dir = get_config_dir()?;
     let config_file = config_dir.join("config.json");
@@ -111,7 +195,9 @@ fn show_pat_instructions() {
     println!();
 }
 
-pub async fn login() -> Result<()> {
+/// Interactive login. If `profile` is provided, credentials are saved under
+/// that named profile; otherwise the legacy default location is used.
+pub async fn login(profile: Option<&str>) -> Result<()> {
     println!("{}", "Login to Azure DevOps".bold());
 
     show_pat_instructions();
@@ -125,13 +211,18 @@ pub async fn login() -> Result<()> {
         .with_confirmation("Confirm PAT", "PATs don't match")
         .interact()?;
     println!("Validating credentials...");
-    // In a real implementation, you would validate the PAT with Azure DevOps API
-    // For now, we'll just save the credentials
 
-    save_organization(&organization)?;
-    save_pat(&pat)?;
-
-    println!("{}", "Login successful!".green());
+    match profile {
+        Some(name) => {
+            save_profile(name, &Credentials { organization, pat })?;
+            println!("{} (profile: {})", "Login successful!".green(), name);
+        }
+        None => {
+            save_organization(&organization)?;
+            save_pat(&pat)?;
+            println!("{}", "Login successful!".green());
+        }
+    }
     Ok(())
 }
 
@@ -151,9 +242,18 @@ pub fn logout() -> Result<()> {
     Ok(())
 }
 
+/// Load credentials for the default profile (legacy single-org store).
 pub fn get_credentials() -> Result<Credentials> {
     let organization = get_organization()?;
     let pat = get_pat()?;
 
     Ok(Credentials { organization, pat })
+}
+
+/// Load credentials for a specific named profile, or the default if `None`.
+pub fn get_credentials_for(profile: Option<&str>) -> Result<Credentials> {
+    match profile {
+        Some(name) => load_profile(name),
+        None => get_credentials(),
+    }
 }
