@@ -6,8 +6,6 @@ on:
   push:
     paths:
       - docs/**
-      - install.sh
-      - install.ps1
       - .github/workflows/static.yml
     branches: ["main"]
 
@@ -38,21 +36,22 @@ jobs:
         uses: actions/checkout@v6
       - name: Setup Pages
         uses: actions/configure-pages@v6
-      - name: Copy install scripts
+      - name: Prepare Pages content
         run: |
-          touch docs/.nojekyll
-          cp install.sh docs/install
-          cp install.sh docs/install.sh
-          cp install.ps1 docs/install.ps1
+          mkdir -p site
+          cp -R docs/web/. site/
+          cp docs/install.sh site/install
+          cp docs/install.sh site/install.sh
+          cp docs/install.ps1 site/install.ps1
       - name: Verify install scripts
         run: |
-          test -s docs/install    || { echo "ERROR: docs/install is missing or empty"; exit 1; }
-          test -s docs/install.sh || { echo "ERROR: docs/install.sh is missing or empty"; exit 1; }
-          test -s docs/install.ps1 || { echo "ERROR: docs/install.ps1 is missing or empty"; exit 1; }
+          test -s site/install    || { echo "ERROR: site/install is missing or empty"; exit 1; }
+          test -s site/install.sh || { echo "ERROR: site/install.sh is missing or empty"; exit 1; }
+          test -s site/install.ps1 || { echo "ERROR: site/install.ps1 is missing or empty"; exit 1; }
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: 'docs'
+          path: 'site'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
