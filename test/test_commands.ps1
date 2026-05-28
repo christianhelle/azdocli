@@ -28,5 +28,20 @@ Write-Host "`nTesting repos list help..." -ForegroundColor Yellow
 Write-Host "`nTesting repos clone help..." -ForegroundColor Yellow
 & $exe repos clone --help
 
+Write-Host "`nTesting projects help..." -ForegroundColor Yellow
+& $exe projects --help
+
+Write-Host "`nTesting projects list help..." -ForegroundColor Yellow
+& $exe projects list --help
+
+Write-Host "`nTesting projects show help..." -ForegroundColor Yellow
+& $exe projects show --help
+
+Write-Host "`nTesting projects create help..." -ForegroundColor Yellow
+& $exe projects create --help
+
+Write-Host "`nTesting projects delete help..." -ForegroundColor Yellow
+& $exe projects delete --help
+
 Write-Host "`nAll command-line interface tests completed successfully!" -ForegroundColor Green
 Write-Host "Note: Actual functionality requires Azure DevOps authentication." -ForegroundColor Cyan
