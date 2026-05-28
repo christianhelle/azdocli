@@ -392,7 +392,7 @@ fn open_project_in_browser(organization: &str, project_name: &str) -> Result<()>
 }
 
 fn is_valid_project_id(id: &str) -> bool {
-    if id.len() != 36 {
+    if id.chars().count() != 36 {
         return false;
     }
 
@@ -414,7 +414,7 @@ fn percent_encode_path_segment(input: &str) -> String {
         .iter()
         .flat_map(|byte| {
             if byte.is_ascii_alphanumeric() || matches!(*byte, b'-' | b'.' | b'_' | b'~') {
-                vec![(*byte) as char]
+                vec![char::from(*byte)]
             } else {
                 format!("%{byte:02X}").chars().collect::<Vec<_>>()
             }
@@ -483,6 +483,26 @@ mod tests {
     #[test]
     fn test_is_valid_project_id_rejects_non_guid() {
         assert!(!is_valid_project_id("MyProject"));
+    }
+
+    #[test]
+    fn test_is_valid_project_id_rejects_invalid_length() {
+        assert!(!is_valid_project_id("123e4567-e89b-12d3-a456-42661417400"));
+    }
+
+    #[test]
+    fn test_is_valid_project_id_rejects_missing_hyphens() {
+        assert!(!is_valid_project_id("123e4567e89b12d3a456426614174000"));
+    }
+
+    #[test]
+    fn test_is_valid_project_id_rejects_invalid_hex_characters() {
+        assert!(!is_valid_project_id("123e4567-e89b-12d3-a456-42661417400g"));
+    }
+
+    #[test]
+    fn test_is_valid_project_id_rejects_wrong_hyphen_positions() {
+        assert!(!is_valid_project_id("123e4567e-89b1-2d3a-4564-26614174000"));
     }
 
     #[test]
