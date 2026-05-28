@@ -3,6 +3,7 @@
 ## [Unreleased Changes]
 
 ### Merged Pull Requests
+- Add user management commands ([#112](https://github.com/christianhelle/azdocli/pull/112)) ([@christianhelle](https://github.com/christianhelle/))
 - Reorganize docs layout for installers and website ([#109](https://github.com/christianhelle/azdocli/pull/109)) ([@christianhelle](https://github.com/christianhelle/))
 - Fix 404 on installer URLs ([#106](https://github.com/christianhelle/azdocli/pull/106)) ([@christianhelle](https://github.com/christianhelle/))
 - Update Rust crate azure_devops_rust_api to 0.36.0 ([#99](https://github.com/christianhelle/azdocli/pull/99)) (@renovate[bot])
@@ -50,8 +51,8 @@
 - Fix Clippy Linting Errors - Reduced from 124 to 0 Warnings ([#68](https://github.com/christianhelle/azdocli/pull/68)) (@Copilot)
 - Implement Work Item subcommand to List "My" work items ([#66](https://github.com/christianhelle/azdocli/pull/66)) ([@christianhelle](https://github.com/christianhelle/))
 - Add installer scripts for automatic download and installation ([#63](https://github.com/christianhelle/azdocli/pull/63)) (@Copilot)
-- Add snap installation instructions to docs ([#57](https://github.com/christianhelle/azdocli/pull/57)) ([@christianhelle](https://github.com/christianhelle/))
 - Modernize documentation website with dark mode support and enhanced styling ([#61](https://github.com/christianhelle/azdocli/pull/61)) (@Copilot)
+- Add snap installation instructions to docs ([#57](https://github.com/christianhelle/azdocli/pull/57)) ([@christianhelle](https://github.com/christianhelle/))
 
 
 ## [0.3.1](https://github.com/christianhelle/azdocli/releases/tag/0.3.1) (2025-06-10)
@@ -77,8 +78,8 @@
 - Implement comprehensive unit tests for repository operations ([#19](https://github.com/christianhelle/azdocli/pull/19)) (@Copilot)
 - Add dev container configuration for GitHub Codespaces development ([#17](https://github.com/christianhelle/azdocli/pull/17)) (@Copilot)
 - Implement artifacts subcommands for download and publish universal Azure DevOps artifacts ([#11](https://github.com/christianhelle/azdocli/pull/11)) (@Copilot)
-- Implement delete command in repos module with soft/hard delete and confirmation prompts ([#9](https://github.com/christianhelle/azdocli/pull/9)) (@Copilot)
 - Implement the work-items subcommand with create, show, delete, and update capabilities ([#7](https://github.com/christianhelle/azdocli/pull/7)) (@Copilot)
+- Implement delete command in repos module with soft/hard delete and confirmation prompts ([#9](https://github.com/christianhelle/azdocli/pull/9)) (@Copilot)
 - Implement work-item commands for boards module ([#5](https://github.com/christianhelle/azdocli/pull/5)) (@Copilot)
 - Add support for setting default team project ([#3](https://github.com/christianhelle/azdocli/pull/3)) ([@christianhelle](https://github.com/christianhelle/))
 - Implement Azure DevOps Pipeline Commands ([#2](https://github.com/christianhelle/azdocli/pull/2)) (@Copilot)
