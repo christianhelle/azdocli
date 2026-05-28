@@ -10,6 +10,7 @@ mod pr;
 mod project;
 mod projects;
 mod repos;
+mod user;
 mod wiki;
 
 #[derive(Parser)]
@@ -50,6 +51,11 @@ enum Commands {
         #[clap(subcommand)]
         subcommand: projects::ProjectsSubCommands,
     },
+    /// Manage users
+    User {
+        #[clap(subcommand)]
+        subcommand: user::UserSubCommands,
+    },
     /// Manage Azure DevOps wikis
     Wiki {
         #[clap(subcommand)]
@@ -88,6 +94,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Projects { subcommand }) => {
             projects::handle_command(subcommand).await?;
+        }
+        Some(Commands::User { subcommand }) => {
+            user::handle_command(subcommand).await?;
         }
         Some(Commands::Wiki { subcommand }) => {
             wiki::handle_command(subcommand).await?;
