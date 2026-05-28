@@ -2,6 +2,7 @@ use crate::auth::{login, logout};
 use crate::project::{get_default_project, save_default_project};
 use clap::{CommandFactory, Parser, Subcommand};
 
+mod artifacts;
 mod auth;
 mod boards;
 mod config;
@@ -25,6 +26,11 @@ enum Commands {
     Login,
     /// Logout from Azure DevOps
     Logout,
+    /// Manage Azure Artifacts
+    Artifacts {
+        #[clap(subcommand)]
+        subcommand: artifacts::ArtifactsSubCommands,
+    },
     /// Set or view the default project
     Project {
         /// Project name to set as default (if not provided, shows current default)
@@ -66,6 +72,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Logout) => {
             logout()?;
+        }
+        Some(Commands::Artifacts { subcommand }) => {
+            artifacts::handle_command(subcommand).await?;
         }
         Some(Commands::Project { project_name }) => match project_name {
             Some(project) => {
