@@ -18,13 +18,14 @@ azdocli/
 │   ├── pr.rs              # Pull request operations
 │   ├── pipelines.rs       # Pipeline & build management
 │   └── boards.rs          # Work item CRUD, WIQL queries
-├── docs/                  # Static documentation site (GitHub Pages)
+├── docs/
+│   ├── web/               # Static documentation site (GitHub Pages)
+│   ├── install.sh         # Linux/macOS installer
+│   └── install.ps1        # Windows installer
 ├── scripts/               # Package manager generation scripts
 ├── .github/workflows/     # CI/CD (build, PR gate, release, audit)
 ├── Cargo.toml             # Dependencies & build config
-├── build.rs               # Windows icon resource compilation
-├── install.sh             # Linux/macOS installer
-└── install.ps1            # Windows installer
+└── build.rs               # Windows icon resource compilation
 ```
 
 ## Module Architecture
