@@ -37,7 +37,7 @@ pub enum ProjectsSubCommands {
     },
     /// Delete team project
     Delete {
-        /// The id of the project to delete
+        /// The GUID of the project to delete
         #[clap(long)]
         id: String,
         /// Do not prompt for confirmation
@@ -116,6 +116,13 @@ pub async fn handle_command(subcommand: &ProjectsSubCommands) -> Result<()> {
             }
         }
         ProjectsSubCommands::Delete { id, yes } => {
+            if !is_valid_project_id(id) {
+                return Err(anyhow!(
+                    "Invalid project ID '{}'. The --id flag only accepts a GUID.",
+                    id
+                ));
+            }
+
             let project = get_project(id).await?;
             let project_id = project
                 .team_project_reference
@@ -278,7 +285,7 @@ async fn resolve_process_template_id(
 async fn wait_for_project_to_be_ready(project: &str) -> Result<models::TeamProject> {
     let mut last_error = None;
 
-    for _ in 0..CREATE_OPEN_WAIT_RETRIES {
+    for attempt in 0..CREATE_OPEN_WAIT_RETRIES {
         match get_project(project).await {
             Ok(team_project) => {
                 let state = team_project.team_project_reference.state.clone();
@@ -294,7 +301,9 @@ async fn wait_for_project_to_be_ready(project: &str) -> Result<models::TeamProje
             }
         }
 
-        sleep(CREATE_OPEN_WAIT_INTERVAL).await;
+        if attempt + 1 < CREATE_OPEN_WAIT_RETRIES {
+            sleep(CREATE_OPEN_WAIT_INTERVAL).await;
+        }
     }
 
     if let Some(error) = last_error {
@@ -347,25 +356,70 @@ fn display_operation_reference(label: &str, operation: &models::OperationReferen
 }
 
 fn open_project_in_browser(organization: &str, project_name: &str) -> Result<()> {
-    let project_url = format!("https://dev.azure.com/{organization}/{project_name}");
+    let encoded_organization = percent_encode_path_segment(organization);
+    let encoded_project_name = percent_encode_path_segment(project_name);
+    let project_url =
+        format!("https://dev.azure.com/{encoded_organization}/{encoded_project_name}");
 
     #[cfg(target_os = "windows")]
     {
         Command::new("explorer").arg(&project_url).spawn()?;
+        println!("Opening project in browser: {project_url}");
+        return Ok(());
     }
 
     #[cfg(target_os = "macos")]
     {
         Command::new("open").arg(&project_url).spawn()?;
+        println!("Opening project in browser: {project_url}");
+        return Ok(());
     }
 
     #[cfg(target_os = "linux")]
     {
         Command::new("xdg-open").arg(&project_url).spawn()?;
+        println!("Opening project in browser: {project_url}");
+        return Ok(());
     }
 
-    println!("Opening project in browser: {project_url}");
-    Ok(())
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    {
+        Err(anyhow!(
+            "Opening project in browser is not supported on this platform: {}",
+            std::env::consts::OS
+        ))
+    }
+}
+
+fn is_valid_project_id(id: &str) -> bool {
+    if id.len() != 36 {
+        return false;
+    }
+
+    for (index, character) in id.chars().enumerate() {
+        match index {
+            8 | 13 | 18 | 23 if character == '-' => continue,
+            8 | 13 | 18 | 23 => return false,
+            _ if character.is_ascii_hexdigit() => continue,
+            _ => return false,
+        }
+    }
+
+    true
+}
+
+fn percent_encode_path_segment(input: &str) -> String {
+    input
+        .as_bytes()
+        .iter()
+        .flat_map(|byte| {
+            if byte.is_ascii_alphanumeric() || matches!(*byte, b'-' | b'.' | b'_' | b'~') {
+                vec![(*byte) as char]
+            } else {
+                format!("%{byte:02X}").chars().collect::<Vec<_>>()
+            }
+        })
+        .collect()
 }
 
 async fn list_projects() -> Result<()> {
@@ -415,4 +469,27 @@ async fn list_projects() -> Result<()> {
 
     println!("\nTotal: {} projects", projects.len());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_valid_project_id, percent_encode_path_segment};
+
+    #[test]
+    fn test_is_valid_project_id_accepts_guid() {
+        assert!(is_valid_project_id("123e4567-e89b-12d3-a456-426614174000"));
+    }
+
+    #[test]
+    fn test_is_valid_project_id_rejects_non_guid() {
+        assert!(!is_valid_project_id("MyProject"));
+    }
+
+    #[test]
+    fn test_percent_encode_path_segment_encodes_unsafe_characters() {
+        assert_eq!(
+            percent_encode_path_segment("My Org/Projéct"),
+            "My%20Org%2FProj%C3%A9ct"
+        );
+    }
 }
