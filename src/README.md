@@ -7,6 +7,7 @@ CLI tool for interacting with Azure DevOps.
 - **Repository Management**: List, create, delete, clone, view, and manage pull requests in repositories
 - **Pipeline Management**: Manage Azure DevOps pipelines
 - **Board Management**: Manage Azure DevOps boards
+- **User Management**: Add, list, show, remove, and update organization users
 - **Authentication**: Secure login using Personal Access Tokens (PAT)
 - **Default Project**: Set a default project to avoid specifying --project for every command
 
@@ -266,6 +267,37 @@ azdocli pipelines run --id 42 --project MyProject
 - **Live updates**: See details of the running build in real-time
 - **Error handling**: Clear feedback when pipeline cannot be started
 
+### User Management Features
+
+The `user` commands allow you to manage users and licenses in your Azure DevOps organization:
+
+```sh
+# Add a user with a license
+azdocli user add --email user@contoso.com --license express
+
+# List users (excluding users added via AAD groups)
+azdocli user list
+
+# Show user details by ID or email
+azdocli user show --id 00000000-0000-0000-0000-000000000000
+azdocli user show --email user@contoso.com
+
+# Remove a user by ID or email
+azdocli user remove --id 00000000-0000-0000-0000-000000000000
+azdocli user remove --email user@contoso.com
+
+# Update a user's license type
+azdocli user update --email user@contoso.com --license stakeholder
+```
+
+**User Features:**
+
+- **Organization-wide management**: Manage user access at the organization level
+- **Flexible user targeting**: Use either user ID or email for show, remove, and update
+- **License updates**: Set raw Azure DevOps account license types (`none`, `earlyAdopter`, `express`, `professional`, `advanced`, `stakeholder`)
+- **AAD-group filtering**: User list excludes accounts whose entitlement is inherited from AAD group rules
+- **Error handling**: Clear guidance for missing users and ambiguous email matches
+
 ### Board Management Features
 
 #### Work Item Management
@@ -334,6 +366,7 @@ SUBCOMMANDS:
     logout       Logout from Azure DevOps
     pipelines    Manage Azure DevOps pipelines
     repos        Manage Azure DevOps repos
+    user         Manage users
 ```
 
 ## Installation
@@ -451,6 +484,11 @@ azdocli repos pr create --repo MyRepo --source "feature/my-feature" --title "My 
 azdocli pipelines list                       # List all pipelines
 azdocli pipelines runs --id 42               # Show pipeline runs
 azdocli pipelines show --id 42 --build-id 123 # Show build details
+
+# User management
+azdocli user list                            # List organization users
+azdocli user show --email user@contoso.com   # Show user details
+azdocli user update --email user@contoso.com --license advanced # Update a user's license
 ```
 
 For detailed examples and features, see the respective sections below.
