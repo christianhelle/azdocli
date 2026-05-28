@@ -13,7 +13,7 @@ azdocli/
 │   ├── auth.rs            # Credential storage/retrieval, login/logout
 │   ├── config.rs          # Config directory (~/.azdocli/) management
 │   ├── project.rs         # Default project get/set
-│   ├── projects.rs        # "projects list" command (core API)
+│   ├── projects.rs        # Team project management commands (core API)
 │   ├── repos.rs           # Repository CRUD, bulk clone
 │   ├── pr.rs              # Pull request operations
 │   ├── pipelines.rs       # Pipeline & build management
@@ -218,7 +218,7 @@ azdocli artifacts list  # Test against a real organization
 ### Conventions to Follow
 
 - **Project argument**: Commands scoped to a project should accept `--project` / `-p` and fall back to `get_project_or_default()`.
-- **Organization-scoped commands**: Commands that only need the organization (like `projects list`) can skip the project argument entirely and read it from `get_credentials().organization`.
+- **Organization-scoped commands**: Commands that only need the organization (like `projects list/create/delete/show`) can skip the project argument entirely and read it from `get_credentials().organization`.
 - **Error messages**: Use `eprintln!("...")` for errors. Prefix with a relevant emoji if appropriate.
 - **Output format**: Use `println!` with fixed-width columns for tabular data. Truncate long fields.
 - **Confirmation prompts**: Destructive operations (delete, etc.) should use `dialoguer::Confirm` and support a `--yes` / `-y` flag to skip.

@@ -18,8 +18,8 @@
 - Update actions/checkout action to v6 ([#89](https://github.com/christianhelle/azdocli/pull/89)) (@renovate[bot])
 - Update Rust crate azure_devops_rust_api to 0.32.0 ([#87](https://github.com/christianhelle/azdocli/pull/87)) (@renovate[bot])
 - Update GitHub Artifact Actions (major) ([#82](https://github.com/christianhelle/azdocli/pull/82)) (@renovate[bot])
-- Update actions/github-script action to v8 ([#79](https://github.com/christianhelle/azdocli/pull/79)) (@renovate[bot])
 - Update Rust crate azure_devops_rust_api to 0.31.0 ([#81](https://github.com/christianhelle/azdocli/pull/81)) (@renovate[bot])
+- Update actions/github-script action to v8 ([#79](https://github.com/christianhelle/azdocli/pull/79)) (@renovate[bot])
 - Update mcr.microsoft.com/devcontainers/rust Docker tag to v2 ([#80](https://github.com/christianhelle/azdocli/pull/80)) (@renovate[bot])
 - Update Rust crate dialoguer to 0.12 ([#77](https://github.com/christianhelle/azdocli/pull/77)) (@renovate[bot])
 - Update actions/upload-pages-artifact action to v4 ([#76](https://github.com/christianhelle/azdocli/pull/76)) (@renovate[bot])
@@ -29,10 +29,11 @@
 - Update actions/download-artifact action to v5 ([#70](https://github.com/christianhelle/azdocli/pull/70)) (@renovate[bot])
 
 ### Features
+- Add create, delete, and show subcommands to projects ([#110](https://github.com/christianhelle/azdocli/pull/110)) ([@christianhelle](https://github.com/christianhelle/))
 - Fix cargo clippy uninlined format args warnings ([#72](https://github.com/christianhelle/azdocli/pull/72)) (@Copilot)
 - Fix potential panics and WIQL injection vulnerability ([#90](https://github.com/christianhelle/azdocli/pull/90)) (@Copilot)
-- Add application icon support ([#83](https://github.com/christianhelle/azdocli/pull/83)) ([@christianhelle](https://github.com/christianhelle/))
 - Reduce binary size ([#88](https://github.com/christianhelle/azdocli/pull/88)) ([@christianhelle](https://github.com/christianhelle/))
+- Add application icon support ([#83](https://github.com/christianhelle/azdocli/pull/83)) ([@christianhelle](https://github.com/christianhelle/))
 - Added list of projects ([#95](https://github.com/christianhelle/azdocli/pull/95)) ([@mdnmdn](https://github.com/mdnmdn/))
 - devops wiki support ([#102](https://github.com/christianhelle/azdocli/pull/102)) ([@mdnmdn](https://github.com/mdnmdn/))
 - Add projects command feature to docs ([#96](https://github.com/christianhelle/azdocli/pull/96)) ([@christianhelle](https://github.com/christianhelle/))
@@ -55,8 +56,8 @@
 ## [0.3.1](https://github.com/christianhelle/azdocli/releases/tag/0.3.1) (2025-06-10)
 
 ### Features
-- Rename binary to azdocli ([#56](https://github.com/christianhelle/azdocli/pull/56)) ([@christianhelle](https://github.com/christianhelle/))
 - Reduce dependencies ([#54](https://github.com/christianhelle/azdocli/pull/54)) ([@christianhelle](https://github.com/christianhelle/))
+- Rename binary to azdocli ([#56](https://github.com/christianhelle/azdocli/pull/56)) ([@christianhelle](https://github.com/christianhelle/))
 - Snapcraft ([#55](https://github.com/christianhelle/azdocli/pull/55)) ([@christianhelle](https://github.com/christianhelle/))
 
 

@@ -242,23 +242,36 @@
             <pre><code>azdocli project</code></pre>
           </div>
 
-          <h3>Listing Projects</h3>
+          <h3>Project Management Commands</h3>
           <p>
-            List all Azure DevOps projects in your organization using the
-            <code>projects list</code> command. This organization-scoped command
-            authenticates with your stored credentials and displays a formatted
-            table with Name, ID, State, Visibility, and a short Description.
-            Example:
+            Manage team projects in your Azure DevOps organization with the
+            <code>projects</code> command group.
           </p>
 
           <div class="command-example">
+            <h4>List projects</h4>
             <pre><code>azdocli projects list</code></pre>
           </div>
 
+          <div class="command-example">
+            <h4>Show a project</h4>
+            <pre><code>azdocli projects show --project MyProject</code></pre>
+          </div>
+
+          <div class="command-example">
+            <h4>Create a project</h4>
+            <pre><code>azdocli projects create --name MyProject --description "Team workspace" --process Agile --source-control git --visibility private</code></pre>
+          </div>
+
+          <div class="command-example">
+            <h4>Delete a project</h4>
+            <pre><code>azdocli projects delete --id 00000000-0000-0000-0000-000000000000 --yes</code></pre>
+          </div>
+
           <p>
-            Note: <code>azdocli projects list</code> is organization-scoped and
-            does not require a project argument. Make sure you have
-            authenticated with <code>azdocli login</code> before running it.
+            Note: <code>azdocli projects</code> commands are organization-scoped
+            and rely on your stored credentials from
+            <code>azdocli login</code>.
           </p>
 
           <h4>Features:</h4>
