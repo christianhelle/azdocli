@@ -214,6 +214,7 @@ jobs:
           choco pack
       - name: Publish to Chocolatey
         working-directory: chocolatey
+        continue-on-error: true
         run: |
           choco push ./azdocli.${{ env.VERSION }}.nupkg --source https://push.chocolatey.org/ --api-key ${{ secrets.CHOCOLATEY_API_KEY }}
 
