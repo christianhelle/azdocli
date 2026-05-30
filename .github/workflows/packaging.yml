@@ -1,0 +1,154 @@
+name: Packaging
+
+# Generates validated package manager artifacts (Homebrew, Chocolatey, WinGet)
+# from a published GitHub release. Artifacts are NOT auto-published; they are
+# uploaded as workflow artifacts for manual submission to the respective
+# package managers.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag/version to package (e.g. 0.4.1). Must already exist as a published release."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - name: Resolve version
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${{ github.event.release.tag_name }}"
+          fi
+          if [ -z "$VERSION" ]; then
+            echo "Could not determine version" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $VERSION"
+
+  homebrew:
+    name: Generate & validate Homebrew formula
+    needs: prepare
+    runs-on: macos-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download release assets
+        run: |
+          gh release download "$VERSION" \
+            --repo "${{ github.repository }}" \
+            --pattern "macos-x64.zip" \
+            --pattern "macos-arm64.zip" \
+            --dir assets
+      - name: Calculate SHA256 checksums
+        id: checksums
+        run: |
+          echo "macos_x64_sha=$(shasum -a 256 assets/macos-x64.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "macos_arm64_sha=$(shasum -a 256 assets/macos-arm64.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - name: Generate Homebrew formula
+        run: |
+          ./scripts/generate-homebrew.sh "$VERSION" \
+            "${{ steps.checksums.outputs.macos_x64_sha }}" \
+            "${{ steps.checksums.outputs.macos_arm64_sha }}"
+      - name: Validate formula (brew style)
+        run: |
+          brew style "output/homebrew/azdocli-$VERSION.rb"
+      - name: Upload Homebrew artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: homebrew-formula
+          path: output/homebrew/azdocli-${{ env.VERSION }}.rb
+
+  chocolatey:
+    name: Generate & validate Chocolatey package
+    needs: prepare
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download release assets
+        shell: bash
+        run: |
+          gh release download "$VERSION" \
+            --repo "${{ github.repository }}" \
+            --pattern "windows-x64.zip" \
+            --dir assets
+      - name: Calculate SHA256 checksum
+        id: checksums
+        shell: bash
+        run: |
+          echo "windows_x64_sha=$(sha256sum assets/windows-x64.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - name: Generate Chocolatey package
+        shell: bash
+        run: |
+          ./scripts/generate-chocolatey.sh "$VERSION" \
+            "${{ steps.checksums.outputs.windows_x64_sha }}"
+      - name: Validate package (choco pack)
+        shell: pwsh
+        run: |
+          Set-Location "output/chocolatey"
+          choco pack
+      - name: Upload Chocolatey artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: chocolatey-package
+          path: |
+            output/chocolatey/**
+            !output/chocolatey/**/*.tmp
+
+  winget:
+    name: Generate & validate WinGet manifests
+    needs: prepare
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download release assets
+        shell: bash
+        run: |
+          gh release download "$VERSION" \
+            --repo "${{ github.repository }}" \
+            --pattern "windows-x64.zip" \
+            --pattern "windows-arm64.zip" \
+            --dir assets
+      - name: Calculate SHA256 checksums
+        id: checksums
+        shell: bash
+        run: |
+          echo "windows_x64_sha=$(sha256sum assets/windows-x64.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "windows_arm64_sha=$(sha256sum assets/windows-arm64.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - name: Generate WinGet manifests
+        shell: bash
+        run: |
+          ./scripts/generate-winget.sh "$VERSION" \
+            "${{ steps.checksums.outputs.windows_x64_sha }}" \
+            "${{ steps.checksums.outputs.windows_arm64_sha }}"
+      - name: Validate manifests (winget validate)
+        shell: pwsh
+        run: |
+          winget validate --manifest "output/winget-$env:VERSION"
+      - name: Upload WinGet artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: winget-manifests
+          path: output/winget-${{ env.VERSION }}/
