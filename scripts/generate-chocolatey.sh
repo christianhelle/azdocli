@@ -9,14 +9,21 @@ if [ -z "$VERSION" ] || [ -z "$WIN_X64_SHA" ]; then
     exit 1
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+DIST_DIR="$REPO_ROOT/dist/chocolatey"
+OUTPUT_DIR="${OUTPUT_DIR:-$REPO_ROOT/output}/chocolatey"
+
+rm -rf "$OUTPUT_DIR"
+mkdir -p "$OUTPUT_DIR"
+
 # Create Chocolatey package
-mkdir -p chocolatey-package-$VERSION
-cp -r chocolatey/* chocolatey-package-$VERSION/
+cp -r "$DIST_DIR/." "$OUTPUT_DIR/"
 
 # Update version and SHA256
-sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" chocolatey-package-$VERSION/azdocli.nuspec
-sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" chocolatey-package-$VERSION/tools/chocolateyinstall.ps1
-sed -i "s/SHA256_X64_PLACEHOLDER/$WIN_X64_SHA/g" chocolatey-package-$VERSION/tools/chocolateyinstall.ps1
+sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" "$OUTPUT_DIR/azdocli.nuspec"
+sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" "$OUTPUT_DIR/tools/chocolateyinstall.ps1"
+sed -i "s/SHA256_X64_PLACEHOLDER/$WIN_X64_SHA/g" "$OUTPUT_DIR/tools/chocolateyinstall.ps1"
 
-echo "Chocolatey package created in chocolatey-package-$VERSION/"
-ls -la chocolatey-package-$VERSION/
+echo "Chocolatey package created in $OUTPUT_DIR/"
+ls -la "$OUTPUT_DIR/"
