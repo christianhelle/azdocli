@@ -26,12 +26,34 @@ This directory contains configuration files and scripts for distributing azdocli
 
 ## Automation
 
-The distribution process is automated through the GitHub Actions release workflow:
+Homebrew, Chocolatey, and WinGet artifacts are produced by the dedicated
+`.github/workflows/packaging.yml` workflow (separate from the release workflow):
 
-1. **Build**: Cross-platform binaries are built for Windows, macOS, and Linux
-2. **Release**: GitHub release is created with binary assets
-3. **Distribution**: Package configurations are generated with correct versions and checksums
-4. **Publication**: Configurations are ready for manual or automated publication
+1. **Trigger**: Runs automatically when a GitHub release is **published**, or
+   manually via `workflow_dispatch` with a `version` input (the release for that
+   version must already exist).
+2. **Download**: The published release assets (`macos-x64.zip`,
+   `macos-arm64.zip`, `windows-x64.zip`, `windows-arm64.zip`) are downloaded
+   with `gh release download`.
+3. **Generate**: The `scripts/generate-{homebrew,chocolatey,winget}.sh` scripts
+   produce versioned configs into `output/` using SHA256 checksums computed from
+   the downloaded assets. The scripts read their templates from `dist/`.
+4. **Validate**: Each artifact is verified with native tooling before upload —
+   `brew style` (Homebrew), `choco pack` (Chocolatey), and `winget validate`
+   (WinGet).
+5. **Publish**: The validated artifacts are uploaded as workflow artifacts
+   (`homebrew-formula`, `chocolatey-package`, `winget-manifests`) for **manual**
+   publication using the steps below. They are not pushed automatically.
+
+To generate the artifacts locally, run the scripts directly, e.g.:
+
+```bash
+./scripts/generate-homebrew.sh <version> <macos-x64-sha256> <macos-arm64-sha256>
+./scripts/generate-chocolatey.sh <version> <windows-x64-sha256>
+./scripts/generate-winget.sh <version> <windows-x64-sha256> <windows-arm64-sha256>
+```
+
+Outputs are written to the `output/` directory (git-ignored).
 
 ## Manual Publication Steps
 
@@ -70,7 +92,7 @@ brew tap christianhelle/azdocli
 # https://chocolatey.org/install
 
 # Navigate to generated package
-cd chocolatey-package-<version>/
+cd output/chocolatey/
 
 # Pack the package
 choco pack
@@ -85,6 +107,7 @@ choco push azdocli.<version>.nupkg --source https://push.chocolatey.org/
 git clone https://github.com/microsoft/winget-pkgs.git
 
 # Copy generated manifests to appropriate directory
+# (from output/winget-<version>/) to:
 # manifests/c/ChristianHelle/AzureDevOpsCLI/<version>/
 
 # Submit PR to winget-pkgs repository
