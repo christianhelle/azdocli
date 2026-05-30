@@ -10,11 +10,18 @@ if [ -z "$VERSION" ] || [ -z "$MACOS_X64_SHA" ] || [ -z "$MACOS_ARM64_SHA" ]; th
     exit 1
 fi
 
-# Create Homebrew formula
-cp homebrew/azdocli.rb homebrew/azdocli-$VERSION.rb
-sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" homebrew/azdocli-$VERSION.rb
-sed -i "s/SHA256_X64_PLACEHOLDER/$MACOS_X64_SHA/g" homebrew/azdocli-$VERSION.rb
-sed -i "s/SHA256_ARM64_PLACEHOLDER/$MACOS_ARM64_SHA/g" homebrew/azdocli-$VERSION.rb
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+DIST_DIR="$REPO_ROOT/dist/homebrew"
+OUTPUT_DIR="${OUTPUT_DIR:-$REPO_ROOT/output}/homebrew"
 
-echo "Homebrew formula created: homebrew/azdocli-$VERSION.rb"
-cat homebrew/azdocli-$VERSION.rb
+mkdir -p "$OUTPUT_DIR"
+
+# Create Homebrew formula
+cp "$DIST_DIR/azdocli.rb" "$OUTPUT_DIR/azdocli-$VERSION.rb"
+sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" "$OUTPUT_DIR/azdocli-$VERSION.rb"
+sed -i "s/SHA256_X64_PLACEHOLDER/$MACOS_X64_SHA/g" "$OUTPUT_DIR/azdocli-$VERSION.rb"
+sed -i "s/SHA256_ARM64_PLACEHOLDER/$MACOS_ARM64_SHA/g" "$OUTPUT_DIR/azdocli-$VERSION.rb"
+
+echo "Homebrew formula created: $OUTPUT_DIR/azdocli-$VERSION.rb"
+cat "$OUTPUT_DIR/azdocli-$VERSION.rb"
