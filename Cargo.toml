@@ -24,11 +24,35 @@ anyhow = "1.0"
 dirs = "6.0"
 dialoguer = "0.12"
 colored = "3.0"
-azure_devops_rust_api = { version = "0.36.0", features = ["git", "pipelines", "wit", "core", "wiki", "search", "build", "release", "dashboard", "distributed_task", "processes", "processadmin", "service_endpoint", "test", "test_plan", "work", "graph", "operations"], default-features = false }
+azure_devops_rust_api = { version = "0.36.0", features = [
+  "git",
+  "pipelines",
+  "wit",
+  "core",
+  "wiki",
+  "search",
+  "build",
+  "release",
+  "dashboard",
+  "distributed_task",
+  "processes",
+  "processadmin",
+  "service_endpoint",
+  "test",
+  "test_plan",
+  "work",
+  "graph",
+  "operations",
+  "member_entitlement_management",
+], default-features = false }
 chrono = { version = "0.4", features = ["serde"] }
 indicatif = "0.17"
 async-trait = "0.1"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = [
+  "rustls-tls",
+  "json",
+  "stream",
+] }
 futures = "0.3"
 
 [build-dependencies]
