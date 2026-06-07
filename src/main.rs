@@ -67,7 +67,7 @@ enum Commands {
         #[clap(subcommand)]
         subcommand: wiki::WikiSubCommands,
     },
-    /// Migrate one or more team projects between organizations
+    /// Migrate one or more team projects between organizations (Experimental)
     Migrate {
         #[clap(subcommand)]
         subcommand: migrate::MigrateSubCommands,
