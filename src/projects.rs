@@ -1,6 +1,8 @@
+use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use anyhow::{anyhow, Result};
-use azure_devops_rust_api::core::{models, ClientBuilder};
+use azure_devops_rust_api::core::models;
+use azure_devops_rust_api::core as azure_core;
 use clap::{Subcommand, ValueEnum};
 use dialoguer::Confirm;
 use serde_json::json;
@@ -152,6 +154,12 @@ pub async fn handle_command(subcommand: &ProjectsSubCommands) -> Result<()> {
     Ok(())
 }
 
+async fn create_core_client() -> Result<azure_core::Client> {
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds);
+    Ok(factory.build_core())
+}
+
 async fn create_project(
     name: &str,
     description: Option<&str>,
@@ -160,8 +168,7 @@ async fn create_project(
     visibility: &ProjectVisibility,
 ) -> Result<models::OperationReference> {
     let creds = get_credentials()?;
-    let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
-    let client = ClientBuilder::new(credential).build();
+    let client = create_core_client().await?;
     let process_template_id =
         resolve_process_template_id(&client, &creds.organization, process).await?;
 
@@ -187,8 +194,7 @@ async fn create_project(
 
 async fn delete_project(project_id: &str) -> Result<models::OperationReference> {
     let creds = get_credentials()?;
-    let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
-    let client = ClientBuilder::new(credential).build();
+    let client = create_core_client().await?;
 
     Ok(client
         .projects_client()
@@ -198,8 +204,7 @@ async fn delete_project(project_id: &str) -> Result<models::OperationReference> 
 
 async fn get_project(project: &str) -> Result<models::TeamProject> {
     let creds = get_credentials()?;
-    let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
-    let client = ClientBuilder::new(credential).build();
+    let client = create_core_client().await?;
 
     Ok(client
         .projects_client()
@@ -370,8 +375,7 @@ fn open_project_in_browser(organization: &str, project_name: &str) -> Result<()>
 
 async fn list_projects() -> Result<()> {
     let creds = get_credentials()?;
-    let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
-    let client = ClientBuilder::new(credential).build();
+    let client = create_core_client().await?;
 
     let projects = client
         .projects_client()
