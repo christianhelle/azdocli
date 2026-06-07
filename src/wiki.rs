@@ -1,3 +1,4 @@
+use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::project::get_project_or_default;
 use anyhow::{anyhow, Result};
@@ -131,14 +132,14 @@ fn normalize_name(name: &str) -> String {
 
 fn create_wiki_client() -> Result<wiki::Client> {
     let creds = get_credentials()?;
-    let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
-    Ok(wiki::ClientBuilder::new(credential).build())
+    let factory = CredentialClientFactory::new(&creds);
+    Ok(factory.build_wiki())
 }
 
 fn create_search_client() -> Result<search::Client> {
     let creds = get_credentials()?;
-    let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
-    Ok(search::ClientBuilder::new(credential).build())
+    let factory = CredentialClientFactory::new(&creds);
+    Ok(factory.build_search())
 }
 
 async fn list_wikis(project: &str) -> Result<Vec<models::WikiV2>> {
