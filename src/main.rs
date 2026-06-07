@@ -5,6 +5,7 @@ use clap::{CommandFactory, Parser, Subcommand};
 mod auth;
 mod boards;
 mod config;
+mod migrate;
 mod pipelines;
 mod pr;
 mod project;
@@ -23,7 +24,12 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Login to Azure DevOps with a Personal Access Token (PAT)
-    Login,
+    Login {
+        /// Optional named credential profile (used by `azdocli migrate`).
+        /// Omit to use the legacy default credentials store.
+        #[clap(long)]
+        profile: Option<String>,
+    },
     /// Logout from Azure DevOps
     Logout,
     /// Set or view the default project
@@ -61,14 +67,19 @@ enum Commands {
         #[clap(subcommand)]
         subcommand: wiki::WikiSubCommands,
     },
+    /// Migrate one or more team projects between organizations (Experimental)
+    Migrate {
+        #[clap(subcommand)]
+        subcommand: migrate::MigrateSubCommands,
+    },
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match &cli.command {
-        Some(Commands::Login) => {
-            login().await?;
+        Some(Commands::Login { profile }) => {
+            login(profile.as_deref()).await?;
         }
         Some(Commands::Logout) => {
             logout()?;
@@ -100,6 +111,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Wiki { subcommand }) => {
             wiki::handle_command(subcommand).await?;
+        }
+        Some(Commands::Migrate { subcommand }) => {
+            migrate::handle_command(subcommand).await?;
         }
         None => {
             Cli::command().print_help()?;
