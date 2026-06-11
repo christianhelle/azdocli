@@ -3,7 +3,7 @@
 ## [Unreleased Changes]
 
 ### Merged Pull Requests
-- Introduce experimental migrate command ([#114](https://github.com/christianhelle/azdocli/pull/114)) ([@christianhelle](https://github.com/christianhelle/))
+- Refactor: Extract ClientFactory ([#115](https://github.com/christianhelle/azdocli/pull/115)) ([@christianhelle](https://github.com/christianhelle/))
 - Add user management commands ([#112](https://github.com/christianhelle/azdocli/pull/112)) ([@christianhelle](https://github.com/christianhelle/))
 - Reorganize docs layout for installers and website ([#109](https://github.com/christianhelle/azdocli/pull/109)) ([@christianhelle](https://github.com/christianhelle/))
 - Fix 404 on installer URLs ([#106](https://github.com/christianhelle/azdocli/pull/106)) ([@christianhelle](https://github.com/christianhelle/))
@@ -21,8 +21,8 @@
 - Update actions/checkout action to v6 ([#89](https://github.com/christianhelle/azdocli/pull/89)) (@renovate[bot])
 - Update Rust crate azure_devops_rust_api to 0.32.0 ([#87](https://github.com/christianhelle/azdocli/pull/87)) (@renovate[bot])
 - Update GitHub Artifact Actions (major) ([#82](https://github.com/christianhelle/azdocli/pull/82)) (@renovate[bot])
-- Update actions/github-script action to v8 ([#79](https://github.com/christianhelle/azdocli/pull/79)) (@renovate[bot])
 - Update Rust crate azure_devops_rust_api to 0.31.0 ([#81](https://github.com/christianhelle/azdocli/pull/81)) (@renovate[bot])
+- Update actions/github-script action to v8 ([#79](https://github.com/christianhelle/azdocli/pull/79)) (@renovate[bot])
 - Update mcr.microsoft.com/devcontainers/rust Docker tag to v2 ([#80](https://github.com/christianhelle/azdocli/pull/80)) (@renovate[bot])
 - Update Rust crate dialoguer to 0.12 ([#77](https://github.com/christianhelle/azdocli/pull/77)) (@renovate[bot])
 - Update actions/upload-pages-artifact action to v4 ([#76](https://github.com/christianhelle/azdocli/pull/76)) (@renovate[bot])
@@ -32,6 +32,7 @@
 - Update actions/download-artifact action to v5 ([#70](https://github.com/christianhelle/azdocli/pull/70)) (@renovate[bot])
 
 ### Features
+- Introduce experimental migrate command ([#114](https://github.com/christianhelle/azdocli/pull/114)) ([@christianhelle](https://github.com/christianhelle/))
 - Add create, delete, and show subcommands to projects ([#110](https://github.com/christianhelle/azdocli/pull/110)) ([@christianhelle](https://github.com/christianhelle/))
 - Fix cargo clippy uninlined format args warnings ([#72](https://github.com/christianhelle/azdocli/pull/72)) (@Copilot)
 - Fix potential panics and WIQL injection vulnerability ([#90](https://github.com/christianhelle/azdocli/pull/90)) (@Copilot)
