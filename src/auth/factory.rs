@@ -75,7 +75,9 @@ impl ClientFactory for CredentialClientFactory {
     }
 
     fn build_entitlements(&self) -> azure_devops_rust_api::member_entitlement_management::Client {
-        azure_devops_rust_api::member_entitlement_management::ClientBuilder::new(self.credential.clone())
-            .build()
+        azure_devops_rust_api::member_entitlement_management::ClientBuilder::new(
+            self.credential.clone(),
+        )
+        .build()
     }
 }

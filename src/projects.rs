@@ -1,8 +1,8 @@
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use anyhow::{anyhow, Result};
-use azure_devops_rust_api::core::models;
 use azure_devops_rust_api::core as azure_core;
+use azure_devops_rust_api::core::models;
 use clap::{Subcommand, ValueEnum};
 use dialoguer::Confirm;
 use serde_json::json;
