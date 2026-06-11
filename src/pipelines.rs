@@ -1,7 +1,8 @@
+use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::project::get_project_or_default;
 use anyhow::{anyhow, Result};
-use azure_devops_rust_api::pipelines::{self, models, ClientBuilder};
+use azure_devops_rust_api::pipelines::{self, models};
 use clap::Subcommand;
 use colored::Colorize;
 
@@ -45,21 +46,16 @@ pub enum PipelinesSubCommands {
     },
 }
 
-fn create_client() -> Result<pipelines::Client> {
-    match get_credentials() {
-        Ok(creds) => {
-            let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
-            let client = ClientBuilder::new(credential).build();
-            Ok(client)
-        }
-        Err(e) => Err(e),
-    }
+fn create_pipelines_client() -> Result<pipelines::Client> {
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds);
+    Ok(factory.build_pipelines())
 }
 
 async fn list_pipelines(project: &str) -> Result<Vec<models::Pipeline>> {
     match get_credentials() {
         Ok(creds) => {
-            let client = create_client()?;
+            let client = create_pipelines_client()?;
             Ok(client
                 .pipelines_client()
                 .list(creds.organization, project)
@@ -76,7 +72,7 @@ async fn list_pipelines(project: &str) -> Result<Vec<models::Pipeline>> {
 async fn get_pipeline_runs(project: &str, pipeline_id: &str) -> Result<Vec<models::Run>> {
     match get_credentials() {
         Ok(creds) => {
-            let client = create_client()?;
+            let client = create_pipelines_client()?;
             let pipeline_id_int = pipeline_id
                 .parse::<i32>()
                 .map_err(|_| anyhow!("Invalid pipeline ID, must be a number"))?;
@@ -97,7 +93,7 @@ async fn get_pipeline_runs(project: &str, pipeline_id: &str) -> Result<Vec<model
 async fn get_build(project: &str, pipeline_id: &str, build_id: &str) -> Result<models::Run> {
     match get_credentials() {
         Ok(creds) => {
-            let client = create_client()?;
+            let client = create_pipelines_client()?;
             let pipeline_id_int = pipeline_id
                 .parse::<i32>()
                 .map_err(|_| anyhow!("Invalid pipeline ID, must be a number"))?;

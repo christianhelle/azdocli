@@ -6,12 +6,13 @@ Write-Host "Testing azdocli command-line interface..." -ForegroundColor Green
 # Build the project first
 Write-Host "`nBuilding project..." -ForegroundColor Yellow
 cargo build
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Build failed!" -ForegroundColor Red
-    exit 1
+if ($LASTEXITCODE -ne 0)
+{
+  Write-Host "Build failed!" -ForegroundColor Red
+  exit 1
 }
 
-$exe = ".\target\debug\azdocli.exe"
+$exe = "..\target\debug\azdocli.exe"
 
 Write-Host "`nTesting main help..." -ForegroundColor Yellow
 & $exe --help

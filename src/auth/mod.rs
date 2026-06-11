@@ -1,3 +1,5 @@
+pub mod factory;
+
 use crate::config::get_config_dir;
 use anyhow::{anyhow, Result};
 use colored::Colorize;

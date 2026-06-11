@@ -1,8 +1,9 @@
+use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::project::get_project_or_default;
 use crate::repos;
 use anyhow::Result;
-use azure_devops_rust_api::git::{self, ClientBuilder};
+use azure_devops_rust_api::git;
 use clap::Subcommand;
 
 #[derive(Subcommand, Clone)]
@@ -73,15 +74,10 @@ pub enum PullRequestsSubCommands {
     },
 }
 
-fn create_client() -> Result<git::Client> {
-    match get_credentials() {
-        Ok(creds) => {
-            let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
-            let client = ClientBuilder::new(credential).build();
-            Ok(client)
-        }
-        Err(e) => Err(e),
-    }
+fn create_git_client() -> Result<git::Client> {
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds);
+    Ok(factory.build_git())
 }
 
 pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Result<()> {
@@ -128,7 +124,7 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
 async fn list_pull_request_commits(repo: &String, id: &String, project_name: String) -> Result<()> {
     match get_credentials() {
         Ok(creds) => {
-            let client = create_client()?;
+            let client = create_git_client()?;
             let pr_client = client.pull_request_commits_client();
 
             let pr_id = id
@@ -178,7 +174,7 @@ async fn create_pull_request(
 ) -> Result<()> {
     match get_credentials() {
         Ok(creds) => {
-            let client = create_client()?;
+            let client = create_git_client()?;
 
             let repository = repos::get_repo(project, repo).await?;
 
@@ -241,7 +237,7 @@ async fn create_pull_request(
 async fn list_pull_requests(project: &str, repo: &str) -> Result<()> {
     match get_credentials() {
         Ok(creds) => {
-            let client = create_client()?;
+            let client = create_git_client()?;
             let pr_client = client.pull_requests_client();
 
             let pull_requests = pr_client
@@ -279,7 +275,7 @@ async fn list_pull_requests(project: &str, repo: &str) -> Result<()> {
 async fn show_pull_request(project: &str, _repo: &str, id: &str) -> Result<()> {
     match get_credentials() {
         Ok(creds) => {
-            let client = create_client()?;
+            let client = create_git_client()?;
             let pr_client = client.pull_requests_client();
 
             let pr_id = id

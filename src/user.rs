@@ -1,6 +1,7 @@
-use crate::auth::get_credentials;
+use crate::auth::factory::{ClientFactory, CredentialClientFactory};
+use crate::auth::{get_credentials, Credentials};
 use anyhow::{anyhow, Result};
-use azure_devops_rust_api::member_entitlement_management::{self, models, ClientBuilder};
+use azure_devops_rust_api::member_entitlement_management::{self, models};
 use clap::{Subcommand, ValueEnum};
 use colored::Colorize;
 use reqwest::header::CONTENT_TYPE;
@@ -153,8 +154,12 @@ pub async fn handle_command(subcommand: &UserSubCommands) -> Result<()> {
 }
 
 fn create_client(pat: String) -> member_entitlement_management::Client {
-    let credential = azure_devops_rust_api::Credential::Pat(pat);
-    ClientBuilder::new(credential).build()
+    let creds = Credentials {
+        organization: String::new(),
+        pat,
+    };
+    let factory = CredentialClientFactory::new(&creds);
+    factory.build_entitlements()
 }
 
 async fn add_user(

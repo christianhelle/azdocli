@@ -1,9 +1,10 @@
+use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::project::get_project_or_default;
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::wit::models::json_patch_operation::Op;
 use azure_devops_rust_api::wit::models::JsonPatchOperation;
-use azure_devops_rust_api::wit::{self, models, ClientBuilder};
+use azure_devops_rust_api::wit::{self, models};
 use clap::Subcommand;
 use colored::Colorize;
 use serde_json::json;
@@ -109,15 +110,10 @@ pub enum WorkItemSubCommands {
     },
 }
 
-fn create_client() -> Result<wit::Client> {
-    match get_credentials() {
-        Ok(creds) => {
-            let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
-            let client = ClientBuilder::new(credential).build();
-            Ok(client)
-        }
-        Err(e) => Err(e),
-    }
+fn create_wit_client() -> Result<wit::Client> {
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds);
+    Ok(factory.build_wit())
 }
 
 async fn get_work_item(project: &str, id: &str) -> Result<models::WorkItem> {
@@ -127,7 +123,7 @@ async fn get_work_item(project: &str, id: &str) -> Result<models::WorkItem> {
 
     match get_credentials() {
         Ok(creds) => {
-            let client = create_client()?;
+            let client = create_wit_client()?;
             let work_item = client
                 .work_items_client()
                 .get_work_item(creds.organization, id_int, project)
@@ -149,7 +145,7 @@ async fn create_work_item(
 ) -> Result<models::WorkItem> {
     match get_credentials() {
         Ok(creds) => {
-            let client = create_client()?;
+            let client = create_wit_client()?;
             let work_item = client
                 .work_items_client()
                 .create(
@@ -194,7 +190,7 @@ async fn update_work_item(
 
     match get_credentials() {
         Ok(creds) => {
-            let client = create_client()?;
+            let client = create_wit_client()?;
             let mut patch_operations = Vec::new();
 
             if let Some(title) = title {
@@ -274,7 +270,7 @@ async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<
                     .unwrap_or("Closed");
                 update_work_item(project, id, None, None, Some(state), None).await?;
             } else {
-                create_client()?
+                create_wit_client()?
                     .work_items_client()
                     .delete(
                         creds.organization,
@@ -425,7 +421,7 @@ async fn list_my_work_items(
 ) -> Result<()> {
     match get_credentials() {
         Ok(creds) => {
-            let client = create_client()?;
+            let client = create_wit_client()?;
 
             println!("📋 Listing work items assigned to you in project: {project}");
 

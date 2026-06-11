@@ -1,8 +1,9 @@
+use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::pr::{self, PullRequestsSubCommands};
 use crate::project::get_project_or_default;
 use anyhow::Result;
-use azure_devops_rust_api::git::{self, models::GitRepositoryCreateOptions, ClientBuilder};
+use azure_devops_rust_api::git::{self, models::GitRepositoryCreateOptions};
 use clap::Subcommand;
 use dialoguer::Confirm;
 use std::sync::Arc;
@@ -184,47 +185,40 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
     Ok(())
 }
 
+fn create_git_client() -> Result<git::Client> {
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds);
+    Ok(factory.build_git())
+}
+
 async fn create_repo(
     project: &str,
     name: &Option<String>,
 ) -> Result<git::models::GitRepository, anyhow::Error> {
-    match get_credentials() {
-        Ok(creds) => {
-            let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
-            let client = ClientBuilder::new(credential).build();
-            Ok(client
-                .repositories_client()
-                .create(
-                    creds.organization,
-                    GitRepositoryCreateOptions {
-                        name: name.clone(),
-                        parent_repository: None,
-                        project: None,
-                    },
-                    project,
-                )
-                .await?)
-        }
-        Err(e) => Err(e),
-    }
+    let creds = get_credentials()?;
+    let client = create_git_client()?;
+    Ok(client
+        .repositories_client()
+        .create(
+            creds.organization,
+            GitRepositoryCreateOptions {
+                name: name.clone(),
+                parent_repository: None,
+                project: None,
+            },
+            project,
+        )
+        .await?)
 }
 
 async fn list_repos(project: &str) -> Result<Vec<git::models::GitRepository>, anyhow::Error> {
-    match get_credentials() {
-        Ok(creds) => {
-            let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
-            let client = ClientBuilder::new(credential).build();
-            Ok(client
-                .repositories_client()
-                .list(creds.organization, project)
-                .await?
-                .value)
-        }
-        Err(e) => {
-            println!("Unable to retrieve repositories");
-            Err(e)
-        }
-    }
+    let creds = get_credentials()?;
+    let client = create_git_client()?;
+    Ok(client
+        .repositories_client()
+        .list(creds.organization, project)
+        .await?
+        .value)
 }
 
 pub async fn get_repo(project: &str, repository_id: &str) -> Result<git::models::GitRepository> {
@@ -264,38 +258,30 @@ pub async fn get_repo(project: &str, repository_id: &str) -> Result<git::models:
 }
 
 async fn delete_repo(project: &str, repository_id: &str, hard_delete: bool) -> Result<()> {
-    match get_credentials() {
-        Ok(creds) => {
-            let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
-            let client = ClientBuilder::new(credential).build();
+    let creds = get_credentials()?;
+    let client = create_git_client()?;
 
-            let repo = get_repo(project, repository_id).await?;
+    let repo = get_repo(project, repository_id).await?;
 
-            println!("Performing soft delete (recycling repository)...");
-            match client
-                .repositories_client()
-                .delete(&creds.organization, &repo.id, project)
-                .await
-            {
-                Ok(_) => {
-                    println!("Repository soft deleted (moved to recycle bin)");
+    println!("Performing soft delete (recycling repository)...");
+    match client
+        .repositories_client()
+        .delete(&creds.organization, &repo.id, project)
+        .await
+    {
+        Ok(_) => {
+            println!("Repository soft deleted (moved to recycle bin)");
 
-                    if hard_delete {
-                        println!("Performing hard delete (permanent deletion)...");
-                        // Note: The Azure DevOps API may not support permanent deletion through the REST API
-                        // This would typically be done through the web interface or PowerShell
-                        println!("Warning: Hard delete may require manual deletion from the recycle bin in Azure DevOps web interface");
-                    }
-
-                    Ok(())
-                }
-                Err(e) => Err(anyhow::anyhow!("Failed to delete repository: {}", e)),
+            if hard_delete {
+                println!("Performing hard delete (permanent deletion)...");
+                // Note: The Azure DevOps API may not support permanent deletion through the REST API
+                // This would typically be done through the web interface or PowerShell
+                println!("Warning: Hard delete may require manual deletion from the recycle bin in Azure DevOps web interface");
             }
+
+            Ok(())
         }
-        Err(e) => {
-            eprintln!("Unable to delete repository");
-            Err(e)
-        }
+        Err(e) => Err(anyhow::anyhow!("Failed to delete repository: {}", e)),
     }
 }
 
@@ -599,8 +585,8 @@ mod tests {
 
     async fn create_test_repo(project: &str, name: &str) -> Result<git::models::GitRepository> {
         let creds = get_test_credentials()?;
-        let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
-        let client = ClientBuilder::new(credential).build();
+        let factory = CredentialClientFactory::new(&creds);
+        let client = factory.build_git();
 
         client
             .repositories_client()
@@ -619,8 +605,8 @@ mod tests {
 
     async fn delete_test_repo(project: &str, repo_id: &str) -> Result<()> {
         let creds = get_test_credentials()?;
-        let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
-        let client = ClientBuilder::new(credential).build();
+        let factory = CredentialClientFactory::new(&creds);
+        let client = factory.build_git();
 
         client
             .repositories_client()
@@ -631,8 +617,8 @@ mod tests {
 
     async fn list_test_repos(project: &str) -> Result<Vec<git::models::GitRepository>> {
         let creds = get_test_credentials()?;
-        let credential = azure_devops_rust_api::Credential::Pat(creds.pat);
-        let client = ClientBuilder::new(credential).build();
+        let factory = CredentialClientFactory::new(&creds);
+        let client = factory.build_git();
 
         client
             .repositories_client()
