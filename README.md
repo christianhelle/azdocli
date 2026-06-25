@@ -10,7 +10,6 @@ CLI tool for interacting with Azure DevOps.
 - **Repository Management**: List, create, delete, clone, view, and manage pull requests in repositories
 - **Pipeline Management**: Manage Azure DevOps pipelines
 - **Project Management**: Create, delete, list, and show Azure DevOps team projects in your organization
-- **Project Management**: List and view Azure DevOps projects in your organization (azdocli projects list)
 - **Migration**: Cross-tenant team-project migration with `azdocli migrate` (see [src/README.md](src/README.md#migrate) for the full guide)
 - **Board Management**: Manage Azure DevOps boards
 - **Authentication**: Secure login using Personal Access Tokens (PAT)
