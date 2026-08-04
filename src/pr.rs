@@ -4,6 +4,7 @@ use crate::project::get_project_or_default;
 use crate::repos;
 use anyhow::Result;
 use azure_devops_rust_api::git;
+use azure_devops_rust_api::git::models::git_pull_request;
 use clap::Subcommand;
 use std::process::Command;
 
@@ -51,13 +52,13 @@ pub enum PullRequestsSubCommands {
         #[clap(short, long)]
         project: Option<String>,
 
-        /// Name of the repository to show pull requests from
+        /// Name of the repository to show pull requests from (auto-detected if omitted and --id is not set)
         #[clap(short, long)]
-        repo: String,
+        repo: Option<String>,
 
-        /// ID of the pull request to show
+        /// ID of the pull request to show (if omitted, shows active PR for current branch)
         #[clap(short, long)]
-        id: String,
+        id: Option<String>,
     },
     /// Show commits in a pull request
     Commits {
@@ -365,8 +366,7 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
             list_pull_requests(&project_name, repo).await?;
         }
         PullRequestsSubCommands::Show { project, repo, id } => {
-            let project_name = get_project_or_default(project.as_deref())?;
-            show_pull_request(&project_name, repo, id).await?;
+            show_pull_request(project.as_deref(), repo.as_deref(), id.as_deref()).await?;
         }
         PullRequestsSubCommands::Commits {
             ref project,
@@ -550,32 +550,82 @@ async fn list_pull_requests(project: &str, repo: &str) -> Result<()> {
     }
 }
 
-async fn show_pull_request(project: &str, _repo: &str, id: &str) -> Result<()> {
+fn print_pull_request_details(pull_request: &git::models::GitPullRequest) {
+    println!("Pull Request Details:");
+    println!("  ID: {}", pull_request.pull_request_id);
+    println!("  Title: {}", pull_request.title.clone().unwrap_or_default());
+    if let Some(description) = pull_request.description.clone() {
+        if !description.is_empty() {
+            println!("  Description: {description}");
+        }
+    }
+    println!("  Status: {:?}", pull_request.status);
+    println!("  Source Branch: {}", pull_request.source_ref_name);
+    println!("  Target Branch: {}", pull_request.target_ref_name);
+    println!("  Created: {}", pull_request.creation_date);
+}
+
+async fn show_pull_request(project: Option<&str>, repo: Option<&str>, id: Option<&str>) -> Result<()> {
     match get_credentials() {
         Ok(creds) => {
             let client = create_git_client()?;
             let pr_client = client.pull_requests_client();
 
-            let pr_id = id
-                .parse::<i32>()
-                .map_err(|_| anyhow::anyhow!("Invalid pull request ID, must be a number"))?;
+            if let Some(id_value) = id {
+                let project_name = get_project_or_default(project)?;
+                let pr_id = id_value
+                    .parse::<i32>()
+                    .map_err(|_| anyhow::anyhow!("Invalid pull request ID, must be a number"))?;
 
-            let pull_request = pr_client
-                .get_pull_request_by_id(creds.organization, pr_id, project)
+                let pull_request = pr_client
+                    .get_pull_request_by_id(creds.organization, pr_id, &project_name)
+                    .await?;
+
+                print_pull_request_details(&pull_request);
+                return Ok(());
+            }
+
+            let (project_name, repo_name) = resolve_repo_and_project(project, repo)?;
+            let source_branch = resolve_source_branch(None)?;
+            let source_ref = if source_branch.starts_with("refs/heads/") {
+                source_branch.to_string()
+            } else {
+                format!("refs/heads/{source_branch}")
+            };
+
+            let pull_requests = pr_client
+                .get_pull_requests_by_project(creds.organization, &project_name)
                 .await?;
 
-            println!("Pull Request Details:");
-            println!("  ID: {}", pull_request.pull_request_id);
-            println!("  Title: {}", pull_request.title.unwrap_or_default());
-            if let Some(description) = pull_request.description {
-                if !description.is_empty() {
-                    println!("  Description: {description}");
+            let matching_prs: Vec<_> = pull_requests
+                .value
+                .into_iter()
+                .filter(|pr| {
+                    pr.repository.name == repo_name
+                        && pr.source_ref_name == source_ref
+                        && pr.status == git_pull_request::Status::Active
+                })
+                .collect();
+
+            match matching_prs.len() {
+                0 => {
+                    println!(
+                        "No active pull request found for branch '{}' in repository '{}'.",
+                        source_branch, repo_name
+                    );
+                }
+                1 => {
+                    print_pull_request_details(&matching_prs[0]);
+                }
+                _ => {
+                    return Err(anyhow::anyhow!(
+                        "Found {} active pull requests for branch '{}' in repository '{}'. Use --id to select one explicitly.",
+                        matching_prs.len(),
+                        source_branch,
+                        repo_name
+                    ));
                 }
             }
-            println!("  Status: {:?}", pull_request.status);
-            println!("  Source Branch: {}", pull_request.source_ref_name);
-            println!("  Target Branch: {}", pull_request.target_ref_name);
-            println!("  Created: {}", pull_request.creation_date);
 
             Ok(())
         }
