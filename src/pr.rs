@@ -293,6 +293,27 @@ fn resolve_target_branch(target: Option<&str>, source_branch: &str) -> String {
         .unwrap_or_else(|| "main".to_string())
 }
 
+fn build_pull_request_web_url(
+    organization: &str,
+    project: &str,
+    repo: &str,
+    pull_request_id: i32,
+    repository_web_url: Option<&str>,
+) -> String {
+    if let Some(web_url) = repository_web_url {
+        return format!(
+            "{}/pullrequest/{}",
+            web_url.trim_end_matches('/'),
+            pull_request_id
+        );
+    }
+
+    format!(
+        "https://dev.azure.com/{}/{}/_git/{}/pullrequest/{}",
+        organization, project, repo, pull_request_id
+    )
+}
+
 pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Result<()> {
     match subcommand {
         PullRequestsSubCommands::Create {
@@ -431,10 +452,17 @@ async fn create_pull_request(
                 .await
             {
                 Ok(created_pr) => {
+                    let pr_web_url = build_pull_request_web_url(
+                        &creds.organization,
+                        &project_name,
+                        &repo_name,
+                        created_pr.pull_request_id,
+                        repository.web_url.as_deref(),
+                    );
                     println!("✅ Pull request created successfully!");
                     println!("  ID: {}", created_pr.pull_request_id);
                     println!("  Title: {}", created_pr.title.unwrap_or_default());
-                    println!("  URL: {}", created_pr.url);
+                    println!("  URL: {pr_web_url}");
                     Ok(())
                 }
                 Err(e) => {
