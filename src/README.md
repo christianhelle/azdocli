@@ -250,6 +250,9 @@ azdocli repos pr list --repo MyRepository --project MyProject
 ##### Show Pull Request Details
 
 ```sh
+# Show active PR for current branch (auto-detects repo/project from git context)
+azdocli repos pr show
+
 # Show details of a specific pull request (using default project)
 azdocli repos pr show --repo MyRepository --id 123
 
@@ -286,7 +289,7 @@ azdocli repos pr commits --repo MyRepository --id 123 --project MyProject
 **Pull Request Features:**
 
 - **Repository filtering**: List shows only pull requests for the specified repository
-- **Comprehensive details**: Show command displays ID, title, description, status, branches, and creation date
+- **Comprehensive details**: Show command displays ID, title, description, status, branches, and creation date (by `--id` or current branch)
 - **Branch detection**: Automatically detects source branch and uses upstream target when available (fallback to `main`)
 - **Flexible creation**: If omitted, title defaults to the latest commit subject and description defaults to the latest commit body
 - **Branch validation**: Automatic formatting of branch names with refs/heads/ prefix
@@ -581,7 +584,8 @@ azdocli repos clone                          # Clone all repositories
 
 # Pull request management
 azdocli repos pr list --repo MyRepo          # List pull requests for a repository
-azdocli repos pr show --repo MyRepo --id 123 # Show pull request details
+azdocli repos pr show                         # Show active PR for current branch
+azdocli repos pr show --repo MyRepo --id 123 # Show a specific pull request
 azdocli repos pr create                       # Create PR from current repo and branch
 azdocli repos pr create --title "My Feature" # Create PR with detected repo/branch and custom title
 
