@@ -5,6 +5,7 @@ use crate::repos;
 use anyhow::Result;
 use azure_devops_rust_api::git;
 use clap::Subcommand;
+use std::process::Command;
 
 #[derive(Subcommand, Clone)]
 pub enum PullRequestsSubCommands {
@@ -14,9 +15,9 @@ pub enum PullRequestsSubCommands {
         #[clap(short, long)]
         project: Option<String>,
 
-        /// Name of the repository to create a pull request in
+        /// Name of the repository to create a pull request in (auto-detected from git remote if omitted)
         #[clap(short, long)]
-        repo: String,
+        repo: Option<String>,
 
         /// Title of the pull request
         #[clap(short, long)]
@@ -26,13 +27,13 @@ pub enum PullRequestsSubCommands {
         #[clap(short, long)]
         description: Option<String>,
 
-        /// Source branch for the pull request (e.g., 'feature/my-feature')
+        /// Source branch for the pull request (auto-detected from current git branch if omitted)
         #[clap(short, long)]
-        source: String,
+        source: Option<String>,
 
-        /// Target branch for the pull request (defaults to 'main')
-        #[clap(long, default_value = "main")]
-        target: String,
+        /// Target branch for the pull request (auto-detected from upstream, then defaults to 'main')
+        #[clap(long)]
+        target: Option<String>,
     },
     /// List pull requests
     List {
@@ -80,6 +81,203 @@ fn create_git_client() -> Result<git::Client> {
     Ok(factory.build_git())
 }
 
+#[derive(Clone)]
+struct DetectedRemoteContext {
+    project: String,
+    repo: String,
+}
+
+fn run_git_command(args: &[&str]) -> Result<String> {
+    let output = Command::new("git")
+        .args(args)
+        .output()
+        .map_err(|e| anyhow::anyhow!("Failed to run git {}: {}", args.join(" "), e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(anyhow::anyhow!(
+            "Git command failed (git {}): {}",
+            args.join(" "),
+            stderr
+        ));
+    }
+
+    String::from_utf8(output.stdout)
+        .map(|s| s.trim().to_string())
+        .map_err(|e| anyhow::anyhow!("Git output was not valid UTF-8: {}", e))
+}
+
+fn strip_refs_heads_prefix(branch: &str) -> &str {
+    branch
+        .trim()
+        .strip_prefix("refs/heads/")
+        .unwrap_or(branch.trim())
+}
+
+fn extract_target_from_upstream(upstream_ref: &str) -> Option<String> {
+    let upstream_ref = upstream_ref.trim();
+    if upstream_ref.is_empty() || upstream_ref == "HEAD" {
+        return None;
+    }
+
+    upstream_ref
+        .split_once('/')
+        .map(|(_, branch)| branch.to_string())
+        .or_else(|| Some(upstream_ref.to_string()))
+}
+
+fn detect_current_branch() -> Result<String> {
+    let branch = run_git_command(&["rev-parse", "--abbrev-ref", "HEAD"])?;
+    if branch == "HEAD" {
+        return Err(anyhow::anyhow!(
+            "Unable to detect source branch from git: HEAD is detached. Pass --source explicitly."
+        ));
+    }
+    Ok(branch)
+}
+
+fn detect_upstream_target_branch(source_branch: &str) -> Option<String> {
+    let source = strip_refs_heads_prefix(source_branch);
+    let upstream_ref = format!("{source}@{{upstream}}");
+    let upstream = run_git_command(&["rev-parse", "--abbrev-ref", &upstream_ref]).ok()?;
+    extract_target_from_upstream(&upstream)
+}
+
+fn strip_git_suffix(remote_url: &str) -> String {
+    remote_url
+        .trim()
+        .trim_end_matches('/')
+        .trim_end_matches(".git")
+        .to_string()
+}
+
+fn parse_azure_remote_context(remote_url: &str) -> Option<DetectedRemoteContext> {
+    let normalized = strip_git_suffix(remote_url);
+
+    if let Some(index) = normalized.find("dev.azure.com/") {
+        let path = &normalized[index + "dev.azure.com/".len()..];
+        let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+        if segments.len() >= 4 && segments[2] == "_git" {
+            return Some(DetectedRemoteContext {
+                project: segments[1].to_string(),
+                repo: segments[3].to_string(),
+            });
+        }
+    }
+
+    if let Some(index) = normalized.find(".visualstudio.com/") {
+        let path = &normalized[index + ".visualstudio.com/".len()..];
+        let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+        if segments.len() >= 3 && segments[1] == "_git" {
+            return Some(DetectedRemoteContext {
+                project: segments[0].to_string(),
+                repo: segments[2].to_string(),
+            });
+        }
+    }
+
+    if let Some(index) = normalized.find("ssh.dev.azure.com:v3/") {
+        let path = &normalized[index + "ssh.dev.azure.com:v3/".len()..];
+        let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+        if segments.len() >= 3 {
+            return Some(DetectedRemoteContext {
+                project: segments[1].to_string(),
+                repo: segments[2].to_string(),
+            });
+        }
+    }
+
+    None
+}
+
+fn detect_selected_azure_remote_context() -> Result<DetectedRemoteContext> {
+    let remotes_output = run_git_command(&["remote"]).map_err(|_| {
+        anyhow::anyhow!(
+            "Unable to detect git remotes. Run this command inside a git repository or pass --repo and --source explicitly."
+        )
+    })?;
+
+    let remotes: Vec<String> = remotes_output
+        .lines()
+        .map(|line| line.trim().to_string())
+        .filter(|line| !line.is_empty())
+        .collect();
+
+    if remotes.is_empty() {
+        return Err(anyhow::anyhow!(
+            "No git remotes found. Pass --repo explicitly."
+        ));
+    }
+
+    let mut azure_contexts: Vec<(String, DetectedRemoteContext)> = Vec::new();
+    for remote in remotes {
+        if let Ok(url) = run_git_command(&["remote", "get-url", &remote]) {
+            if let Some(context) = parse_azure_remote_context(&url) {
+                azure_contexts.push((remote, context));
+            }
+        }
+    }
+
+    if let Some((_, context)) = azure_contexts.iter().find(|(name, _)| name == "origin") {
+        return Ok(context.clone());
+    }
+
+    match azure_contexts.len() {
+        0 => Err(anyhow::anyhow!(
+            "No Azure DevOps remotes found. Pass --repo explicitly."
+        )),
+        1 => Ok(azure_contexts.remove(0).1),
+        _ => Err(anyhow::anyhow!(
+            "Multiple Azure DevOps remotes found and 'origin' is not Azure DevOps. Pass --repo explicitly."
+        )),
+    }
+}
+
+fn resolve_repo_and_project(project: Option<&str>, repo: Option<&str>) -> Result<(String, String)> {
+    let mut detected_context: Option<DetectedRemoteContext> = None;
+
+    let resolved_repo = match repo {
+        Some(repo_name) => repo_name.to_string(),
+        None => {
+            let context = detect_selected_azure_remote_context()?;
+            let repo_name = context.repo.clone();
+            detected_context = Some(context);
+            repo_name
+        }
+    };
+
+    let resolved_project = match project {
+        Some(project_name) => project_name.to_string(),
+        None => {
+            if detected_context.is_none() {
+                detected_context = detect_selected_azure_remote_context().ok();
+            }
+
+            if let Some(context) = detected_context {
+                context.project
+            } else {
+                get_project_or_default(None)?
+            }
+        }
+    };
+
+    Ok((resolved_project, resolved_repo))
+}
+
+fn resolve_source_branch(source: Option<&str>) -> Result<String> {
+    match source {
+        Some(source_branch) => Ok(strip_refs_heads_prefix(source_branch).to_string()),
+        None => detect_current_branch().map(|branch| strip_refs_heads_prefix(&branch).to_string()),
+    }
+}
+
+fn resolve_target_branch(target: Option<&str>, source_branch: &str) -> String {
+    target
+        .map(|target_branch| strip_refs_heads_prefix(target_branch).to_string())
+        .or_else(|| detect_upstream_target_branch(source_branch))
+        .unwrap_or_else(|| "main".to_string())
+}
+
 pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Result<()> {
     match subcommand {
         PullRequestsSubCommands::Create {
@@ -90,14 +288,13 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
             source,
             target,
         } => {
-            let project_name = get_project_or_default(project.as_deref())?;
             create_pull_request(
-                &project_name,
-                repo,
+                project.as_deref(),
+                repo.as_deref(),
                 title.as_deref(),
                 description.as_deref(),
-                source,
-                target,
+                source.as_deref(),
+                target.as_deref(),
             )
             .await?;
         }
@@ -165,36 +362,40 @@ async fn list_pull_request_commits(repo: &String, id: &String, project_name: Str
 }
 
 async fn create_pull_request(
-    project: &str,
-    repo: &str,
+    project: Option<&str>,
+    repo: Option<&str>,
     title: Option<&str>,
     description: Option<&str>,
-    source: &str,
-    target: &str,
+    source: Option<&str>,
+    target: Option<&str>,
 ) -> Result<()> {
     match get_credentials() {
         Ok(creds) => {
             let client = create_git_client()?;
+            let (project_name, repo_name) = resolve_repo_and_project(project, repo)?;
+            let source_branch = resolve_source_branch(source)?;
+            let target_branch = resolve_target_branch(target, &source_branch);
 
-            let repository = repos::get_repo(project, repo).await?;
+            let repository = repos::get_repo(&project_name, &repo_name).await?;
 
             let pr_client = client.pull_requests_client();
 
-            let source_ref = if source.starts_with("refs/heads/") {
-                source.to_string()
+            let source_ref = if source_branch.starts_with("refs/heads/") {
+                source_branch.to_string()
             } else {
-                format!("refs/heads/{source}")
+                format!("refs/heads/{source_branch}")
             };
 
-            let target_ref = if target.starts_with("refs/heads/") {
-                target.to_string()
+            let target_ref = if target_branch.starts_with("refs/heads/") {
+                target_branch.to_string()
             } else {
-                format!("refs/heads/{target}")
+                format!("refs/heads/{target_branch}")
             };
             println!("Creating pull request:");
-            println!("  Repository: {repo}");
-            println!("  Source branch: {source}");
-            println!("  Target branch: {target}");
+            println!("  Project: {project_name}");
+            println!("  Repository: {repo_name}");
+            println!("  Source branch: {source_branch}");
+            println!("  Target branch: {target_branch}");
             println!("  Title: {}", title.unwrap_or("Default title"));
 
             let pr_options = git::models::GitPullRequestCreateOptions {
@@ -211,7 +412,7 @@ async fn create_pull_request(
             };
 
             match pr_client
-                .create(&creds.organization, &repository.id, project, pr_options)
+                .create(&creds.organization, &repository.id, &project_name, pr_options)
                 .await
             {
                 Ok(created_pr) => {
