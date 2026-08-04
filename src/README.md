@@ -288,7 +288,7 @@ azdocli repos pr commits --repo MyRepository --id 123 --project MyProject
 - **Repository filtering**: List shows only pull requests for the specified repository
 - **Comprehensive details**: Show command displays ID, title, description, status, branches, and creation date
 - **Branch detection**: Automatically detects source branch and uses upstream target when available (fallback to `main`)
-- **Flexible creation**: Create pull requests with or without title/description
+- **Flexible creation**: If omitted, title defaults to the latest commit subject and description defaults to the latest commit body
 - **Branch validation**: Automatic formatting of branch names with refs/heads/ prefix
 - **Repository detection**: Automatically detects Azure DevOps repository from git remotes (`origin` preferred)
 - **Repository validation**: Verify repository exists before creating pull request
