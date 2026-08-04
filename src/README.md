@@ -289,6 +289,19 @@ azdocli repos pr commits --repo MyRepository --id 123
 azdocli repos pr commits --repo MyRepository --id 123 --project MyProject
 ```
 
+##### Merge Pull Request
+
+```sh
+# Merge active PR for current branch (auto-detects repo/project from git context)
+azdocli repos pr merge
+
+# Merge a specific pull request by ID
+azdocli repos pr merge --id 123 --project MyProject
+
+# Merge and open pull request in browser
+azdocli repos pr merge --web
+```
+
 **Pull Request Features:**
 
 - **Repository filtering**: List shows only pull requests for the specified repository
@@ -302,6 +315,7 @@ azdocli repos pr commits --repo MyRepository --id 123 --project MyProject
 - **Project detection**: Uses project from remote URL when possible, otherwise default project or explicit `--project`
 - **Error handling**: Clear feedback for invalid pull request IDs or missing repositories
 - **Commit tracking**: View all commits included in a pull request with detailed information
+- **Branch-aware merge**: Merge active pull request from current branch or explicit `--id`
 
 ### Pipeline Management Features
 
@@ -592,6 +606,7 @@ azdocli repos pr show --web                   # Show + open active PR in browser
 azdocli repos pr show --repo MyRepo --id 123 # Show a specific pull request
 azdocli repos pr create                       # Create PR from current repo and branch
 azdocli repos pr create --title "My Feature" # Create PR with detected repo/branch and custom title
+azdocli repos pr merge                        # Merge active PR for current branch
 
 # Pipeline management
 azdocli pipelines list                       # List all pipelines
