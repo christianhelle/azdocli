@@ -6,6 +6,7 @@ use anyhow::Result;
 use azure_devops_rust_api::git;
 use azure_devops_rust_api::git::models::git_pull_request;
 use clap::Subcommand;
+use reqwest::Client as HttpClient;
 use std::process::Command;
 
 #[derive(Subcommand, Clone)]
@@ -517,7 +518,12 @@ async fn create_pull_request(
             };
 
             match pr_client
-                .create(&creds.organization, &repository.id, &project_name, pr_options)
+                .create(
+                    &creds.organization,
+                    &repository.id,
+                    &project_name,
+                    pr_options,
+                )
                 .await
             {
                 Ok(created_pr) => {
@@ -598,7 +604,10 @@ fn open_url_in_browser(url: &str) -> Result<()> {
 fn print_pull_request_details(pull_request: &git::models::GitPullRequest, web_url: &str) {
     println!("Pull Request Details:");
     println!("  ID: {}", pull_request.pull_request_id);
-    println!("  Title: {}", pull_request.title.clone().unwrap_or_default());
+    println!(
+        "  Title: {}",
+        pull_request.title.clone().unwrap_or_default()
+    );
     if let Some(description) = pull_request.description.clone() {
         if !description.is_empty() {
             println!("  Description: {description}");
@@ -764,10 +773,9 @@ async fn merge_pull_request(
                         ));
                     }
                     1 => {
-                        let pull_request = matching_prs
-                            .into_iter()
-                            .next()
-                            .ok_or_else(|| anyhow::anyhow!("Failed to select matching pull request"))?;
+                        let pull_request = matching_prs.into_iter().next().ok_or_else(|| {
+                            anyhow::anyhow!("Failed to select matching pull request")
+                        })?;
                         (project_name, pull_request, repo_name)
                     }
                     _ => {
@@ -787,21 +795,8 @@ async fn merge_pull_request(
                     pull_request.pull_request_id
                 ));
             }
-
-            let update_options = git::models::GitPullRequestUpdateOptions {
-                status: Some(git::models::PullRequestStatus::Completed),
-                ..Default::default()
-            };
-
-            let merged_pull_request = pr_client
-                .update(
-                    &creds.organization,
-                    &pull_request.repository.id,
-                    &project_name,
-                    pull_request.pull_request_id,
-                    update_options,
-                )
-                .await?;
+            let merged_pull_request =
+                complete_pull_request(&creds.organization, &creds.pat, pull_request).await?;
 
             let pr_web_url = build_pull_request_web_url(
                 &creds.organization,
@@ -813,10 +808,7 @@ async fn merge_pull_request(
 
             println!("✅ Pull request merged successfully!");
             println!("  ID: {}", merged_pull_request.pull_request_id);
-            println!(
-                "  Title: {}",
-                merged_pull_request.title.unwrap_or_default()
-            );
+            println!("  Title: {}", merged_pull_request.title.unwrap_or_default());
             println!("  Status: {:?}", merged_pull_request.status);
             println!("  URL: {pr_web_url}");
 
@@ -832,4 +824,63 @@ async fn merge_pull_request(
             Err(e)
         }
     }
+}
+
+async fn complete_pull_request(
+    organization: &str,
+    pat: &str,
+    pull_request: git::models::GitPullRequest,
+) -> Result<git::models::GitPullRequest> {
+    let last_merge_source_commit = pull_request
+        .last_merge_source_commit
+        .as_ref()
+        .and_then(|commit| commit.commit_id.clone())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Unable to merge pull request #{}: missing LastMergeSourceCommit.",
+                pull_request.pull_request_id
+            )
+        })?;
+
+    let patch_url = if pull_request.url.contains('?') {
+        format!("{}&api-version=7.1-preview", pull_request.url)
+    } else {
+        format!("{}?api-version=7.1-preview", pull_request.url)
+    };
+
+    let body = serde_json::json!({
+        "status": "completed",
+        "lastMergeSourceCommit": {
+            "commitId": last_merge_source_commit
+        }
+    });
+
+    let response = HttpClient::new()
+        .patch(&patch_url)
+        .basic_auth("", Some(pat))
+        .header("Content-Type", "application/json")
+        .header("Accept", "application/json")
+        .header("X-TFS-FedAuthRedirect", "Suppress")
+        .header("X-VSS-ReauthenticationAction", "Suppress")
+        .header("X-VSS-ForceMsaPassThrough", "true")
+        .header(
+            "X-VSS-E2EID",
+            format!("azdocli-pr-merge-{}", pull_request.pull_request_id),
+        )
+        .header(
+            "User-Agent",
+            format!("azdocli/{}", env!("CARGO_PKG_VERSION")),
+        )
+        .header("X-Azure-DevOps-Organization", organization)
+        .json(&body)
+        .send()
+        .await?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let body_text = response.text().await.unwrap_or_default();
+        return Err(anyhow::anyhow!("{}: {}", status.as_u16(), body_text));
+    }
+
+    Ok(response.json::<git::models::GitPullRequest>().await?)
 }
