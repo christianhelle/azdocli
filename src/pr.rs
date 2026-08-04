@@ -78,6 +78,24 @@ pub enum PullRequestsSubCommands {
         #[clap(short, long)]
         id: String,
     },
+    /// Merge a pull request
+    Merge {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+
+        /// Name of the repository to merge pull requests in (auto-detected if omitted and --id is not set)
+        #[clap(short, long)]
+        repo: Option<String>,
+
+        /// ID of the pull request to merge (if omitted, merges active PR for current branch)
+        #[clap(short, long)]
+        id: Option<String>,
+
+        /// Open the pull request in the default browser after merge
+        #[clap(long)]
+        web: bool,
+    },
 }
 
 fn create_git_client() -> Result<git::Client> {
@@ -385,6 +403,14 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
             let project_name = get_project_or_default(project.as_deref())?;
             list_pull_request_commits(repo, id, project_name).await?;
         }
+        PullRequestsSubCommands::Merge {
+            project,
+            repo,
+            id,
+            web,
+        } => {
+            merge_pull_request(project.as_deref(), repo.as_deref(), id.as_deref(), *web).await?;
+        }
     }
     Ok(())
 }
@@ -680,6 +706,129 @@ async fn show_pull_request(
         }
         Err(e) => {
             eprintln!("Unable to retrieve pull request");
+            Err(e)
+        }
+    }
+}
+
+async fn merge_pull_request(
+    project: Option<&str>,
+    repo: Option<&str>,
+    id: Option<&str>,
+    web: bool,
+) -> Result<()> {
+    match get_credentials() {
+        Ok(creds) => {
+            let client = create_git_client()?;
+            let pr_client = client.pull_requests_client();
+
+            let (project_name, pull_request, repo_name) = if let Some(id_value) = id {
+                let project_name = get_project_or_default(project)?;
+                let pr_id = id_value
+                    .parse::<i32>()
+                    .map_err(|_| anyhow::anyhow!("Invalid pull request ID, must be a number"))?;
+                let pull_request = pr_client
+                    .get_pull_request_by_id(&creds.organization, pr_id, &project_name)
+                    .await?;
+                let repo_name = pull_request.repository.name.clone();
+                (project_name, pull_request, repo_name)
+            } else {
+                let (project_name, repo_name) = resolve_repo_and_project(project, repo)?;
+                let source_branch = resolve_source_branch(None)?;
+                let source_ref = if source_branch.starts_with("refs/heads/") {
+                    source_branch.to_string()
+                } else {
+                    format!("refs/heads/{source_branch}")
+                };
+
+                let pull_requests = pr_client
+                    .get_pull_requests_by_project(&creds.organization, &project_name)
+                    .await?;
+
+                let matching_prs: Vec<_> = pull_requests
+                    .value
+                    .into_iter()
+                    .filter(|pr| {
+                        pr.repository.name == repo_name
+                            && pr.source_ref_name == source_ref
+                            && pr.status == git_pull_request::Status::Active
+                    })
+                    .collect();
+
+                match matching_prs.len() {
+                    0 => {
+                        return Err(anyhow::anyhow!(
+                            "No active pull request found for branch '{}' in repository '{}'.",
+                            source_branch,
+                            repo_name
+                        ));
+                    }
+                    1 => {
+                        let pull_request = matching_prs
+                            .into_iter()
+                            .next()
+                            .ok_or_else(|| anyhow::anyhow!("Failed to select matching pull request"))?;
+                        (project_name, pull_request, repo_name)
+                    }
+                    _ => {
+                        return Err(anyhow::anyhow!(
+                            "Found {} active pull requests for branch '{}' in repository '{}'. Use --id to select one explicitly.",
+                            matching_prs.len(),
+                            source_branch,
+                            repo_name
+                        ));
+                    }
+                }
+            };
+
+            if pull_request.status != git_pull_request::Status::Active {
+                return Err(anyhow::anyhow!(
+                    "Pull request #{} is not active and cannot be merged.",
+                    pull_request.pull_request_id
+                ));
+            }
+
+            let update_options = git::models::GitPullRequestUpdateOptions {
+                status: Some(git::models::PullRequestStatus::Completed),
+                ..Default::default()
+            };
+
+            let merged_pull_request = pr_client
+                .update(
+                    &creds.organization,
+                    &pull_request.repository.id,
+                    &project_name,
+                    pull_request.pull_request_id,
+                    update_options,
+                )
+                .await?;
+
+            let pr_web_url = build_pull_request_web_url(
+                &creds.organization,
+                &project_name,
+                &repo_name,
+                merged_pull_request.pull_request_id,
+                merged_pull_request.repository.web_url.as_deref(),
+            );
+
+            println!("✅ Pull request merged successfully!");
+            println!("  ID: {}", merged_pull_request.pull_request_id);
+            println!(
+                "  Title: {}",
+                merged_pull_request.title.unwrap_or_default()
+            );
+            println!("  Status: {:?}", merged_pull_request.status);
+            println!("  URL: {pr_web_url}");
+
+            if web {
+                println!("Opening {} in browser...", pr_web_url);
+                open_url_in_browser(&pr_web_url)?;
+            }
+
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("Unable to merge pull request");
             Err(e)
         }
     }
