@@ -293,6 +293,32 @@ fn resolve_target_branch(target: Option<&str>, source_branch: &str) -> String {
         .unwrap_or_else(|| "main".to_string())
 }
 
+fn detect_last_commit_title_and_description() -> (Option<String>, Option<String>) {
+    let title = run_git_command(&["log", "-1", "--pretty=format:%s"])
+        .ok()
+        .and_then(|value| {
+            let trimmed = value.trim().to_string();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed)
+            }
+        });
+
+    let description = run_git_command(&["log", "-1", "--pretty=format:%b"])
+        .ok()
+        .and_then(|value| {
+            let trimmed = value.trim().to_string();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed)
+            }
+        });
+
+    (title, description)
+}
+
 fn build_pull_request_web_url(
     organization: &str,
     project: &str,
@@ -411,6 +437,14 @@ async fn create_pull_request(
             let (project_name, repo_name) = resolve_repo_and_project(project, repo)?;
             let source_branch = resolve_source_branch(source)?;
             let target_branch = resolve_target_branch(target, &source_branch);
+            let (detected_title, detected_description) = detect_last_commit_title_and_description();
+            let resolved_title = title
+                .map(|value| value.to_string())
+                .or(detected_title)
+                .unwrap_or_else(|| "Pull Request".to_string());
+            let resolved_description = description
+                .map(|value| value.to_string())
+                .or(detected_description);
 
             let repository = repos::get_repo(&project_name, &repo_name).await?;
 
@@ -432,13 +466,13 @@ async fn create_pull_request(
             println!("  Repository: {repo_name}");
             println!("  Source branch: {source_branch}");
             println!("  Target branch: {target_branch}");
-            println!("  Title: {}", title.unwrap_or("Default title"));
+            println!("  Title: {resolved_title}");
 
             let pr_options = git::models::GitPullRequestCreateOptions {
                 source_ref_name: source_ref.clone(),
                 target_ref_name: target_ref.clone(),
-                title: title.unwrap_or("Pull Request").to_string(),
-                description: description.map(|d| d.to_string()),
+                title: resolved_title,
+                description: resolved_description,
                 is_draft: Some(false),
                 labels: Vec::new(),
                 merge_options: None,
