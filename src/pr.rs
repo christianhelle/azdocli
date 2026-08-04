@@ -114,18 +114,6 @@ fn strip_refs_heads_prefix(branch: &str) -> &str {
         .unwrap_or(branch.trim())
 }
 
-fn extract_target_from_upstream(upstream_ref: &str) -> Option<String> {
-    let upstream_ref = upstream_ref.trim();
-    if upstream_ref.is_empty() || upstream_ref == "HEAD" {
-        return None;
-    }
-
-    upstream_ref
-        .split_once('/')
-        .map(|(_, branch)| branch.to_string())
-        .or_else(|| Some(upstream_ref.to_string()))
-}
-
 fn detect_current_branch() -> Result<String> {
     let branch = run_git_command(&["rev-parse", "--abbrev-ref", "HEAD"])?;
     if branch == "HEAD" {
@@ -138,9 +126,36 @@ fn detect_current_branch() -> Result<String> {
 
 fn detect_upstream_target_branch(source_branch: &str) -> Option<String> {
     let source = strip_refs_heads_prefix(source_branch);
-    let upstream_ref = format!("{source}@{{upstream}}");
-    let upstream = run_git_command(&["rev-parse", "--abbrev-ref", &upstream_ref]).ok()?;
-    extract_target_from_upstream(&upstream)
+
+    // Walk decorated commit ancestry to find the first remote branch that isn't
+    // the source branch's own remote tracking ref.
+    let log_output = run_git_command(&[
+        "log",
+        "--pretty=format:%D",
+        "--simplify-by-decoration",
+        "HEAD",
+    ])
+    .ok()?;
+
+    for line in log_output.lines() {
+        for decoration in line.split(',') {
+            let decoration = decoration.trim();
+            if decoration.is_empty()
+                || decoration.starts_with("HEAD")
+                || decoration.starts_with("tag:")
+                || decoration.ends_with("/HEAD")
+                || decoration == source
+                || decoration.ends_with(&format!("/{source}"))
+            {
+                continue;
+            }
+            if let Some((_, branch_name)) = decoration.split_once('/') {
+                return Some(branch_name.to_string());
+            }
+        }
+    }
+
+    None
 }
 
 fn strip_git_suffix(remote_url: &str) -> String {
