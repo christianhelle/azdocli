@@ -59,6 +59,10 @@ pub enum PullRequestsSubCommands {
         /// ID of the pull request to show (if omitted, shows active PR for current branch)
         #[clap(short, long)]
         id: Option<String>,
+
+        /// Open the pull request in the default browser
+        #[clap(long)]
+        web: bool,
     },
     /// Show commits in a pull request
     Commits {
@@ -365,8 +369,13 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
             let project_name = get_project_or_default(project.as_deref())?;
             list_pull_requests(&project_name, repo).await?;
         }
-        PullRequestsSubCommands::Show { project, repo, id } => {
-            show_pull_request(project.as_deref(), repo.as_deref(), id.as_deref()).await?;
+        PullRequestsSubCommands::Show {
+            project,
+            repo,
+            id,
+            web,
+        } => {
+            show_pull_request(project.as_deref(), repo.as_deref(), id.as_deref(), *web).await?;
         }
         PullRequestsSubCommands::Commits {
             ref project,
@@ -550,7 +559,17 @@ async fn list_pull_requests(project: &str, repo: &str) -> Result<()> {
     }
 }
 
-fn print_pull_request_details(pull_request: &git::models::GitPullRequest) {
+fn open_url_in_browser(url: &str) -> Result<()> {
+    #[cfg(target_os = "macos")]
+    std::process::Command::new("open").arg(url).spawn()?;
+    #[cfg(target_os = "linux")]
+    std::process::Command::new("xdg-open").arg(url).spawn()?;
+    #[cfg(target_os = "windows")]
+    std::process::Command::new("explorer").arg(url).spawn()?;
+    Ok(())
+}
+
+fn print_pull_request_details(pull_request: &git::models::GitPullRequest, web_url: &str) {
     println!("Pull Request Details:");
     println!("  ID: {}", pull_request.pull_request_id);
     println!("  Title: {}", pull_request.title.clone().unwrap_or_default());
@@ -563,9 +582,15 @@ fn print_pull_request_details(pull_request: &git::models::GitPullRequest) {
     println!("  Source Branch: {}", pull_request.source_ref_name);
     println!("  Target Branch: {}", pull_request.target_ref_name);
     println!("  Created: {}", pull_request.creation_date);
+    println!("  URL: {web_url}");
 }
 
-async fn show_pull_request(project: Option<&str>, repo: Option<&str>, id: Option<&str>) -> Result<()> {
+async fn show_pull_request(
+    project: Option<&str>,
+    repo: Option<&str>,
+    id: Option<&str>,
+    web: bool,
+) -> Result<()> {
     match get_credentials() {
         Ok(creds) => {
             let client = create_git_client()?;
@@ -578,10 +603,22 @@ async fn show_pull_request(project: Option<&str>, repo: Option<&str>, id: Option
                     .map_err(|_| anyhow::anyhow!("Invalid pull request ID, must be a number"))?;
 
                 let pull_request = pr_client
-                    .get_pull_request_by_id(creds.organization, pr_id, &project_name)
+                    .get_pull_request_by_id(&creds.organization, pr_id, &project_name)
                     .await?;
 
-                print_pull_request_details(&pull_request);
+                let repo_name = pull_request.repository.name.clone();
+                let pr_web_url = build_pull_request_web_url(
+                    &creds.organization,
+                    &project_name,
+                    &repo_name,
+                    pull_request.pull_request_id,
+                    pull_request.repository.web_url.as_deref(),
+                );
+                print_pull_request_details(&pull_request, &pr_web_url);
+                if web {
+                    println!("Opening {} in browser...", pr_web_url);
+                    open_url_in_browser(&pr_web_url)?;
+                }
                 return Ok(());
             }
 
@@ -594,7 +631,7 @@ async fn show_pull_request(project: Option<&str>, repo: Option<&str>, id: Option
             };
 
             let pull_requests = pr_client
-                .get_pull_requests_by_project(creds.organization, &project_name)
+                .get_pull_requests_by_project(&creds.organization, &project_name)
                 .await?;
 
             let matching_prs: Vec<_> = pull_requests
@@ -615,7 +652,19 @@ async fn show_pull_request(project: Option<&str>, repo: Option<&str>, id: Option
                     );
                 }
                 1 => {
-                    print_pull_request_details(&matching_prs[0]);
+                    let pull_request = &matching_prs[0];
+                    let pr_web_url = build_pull_request_web_url(
+                        &creds.organization,
+                        &project_name,
+                        &repo_name,
+                        pull_request.pull_request_id,
+                        pull_request.repository.web_url.as_deref(),
+                    );
+                    print_pull_request_details(pull_request, &pr_web_url);
+                    if web {
+                        println!("Opening {} in browser...", pr_web_url);
+                        open_url_in_browser(&pr_web_url)?;
+                    }
                 }
                 _ => {
                     return Err(anyhow::anyhow!(
