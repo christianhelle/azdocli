@@ -260,17 +260,17 @@ azdocli repos pr show --repo MyRepository --id 123 --project MyProject
 ##### Create Pull Request
 
 ```sh
-# Create a new pull request with source and target branches (using default project)
-azdocli repos pr create --repo MyRepository --source "feature/my-feature" --target "main" --title "My Feature" --description "Description"
+# Create from the current repository and current branch
+azdocli repos pr create
 
-# Create with minimal information - target defaults to 'main'
-azdocli repos pr create --repo MyRepository --source "feature/my-feature" --title "My Feature"
+# Create with detected repo/branch and custom title
+azdocli repos pr create --title "My Feature"
 
-# Or specify a project explicitly
-azdocli repos pr create --repo MyRepository --source "feature/my-feature" --target "develop" --title "My Feature" --description "Description" --project MyProject
+# Mix explicit and detected values
+azdocli repos pr create --source "feature/my-feature" --title "My Feature"
 
-# Source branch is required, target defaults to 'main' if not specified
-azdocli repos pr create --repo MyRepository --source "bugfix/fix-login"
+# Override target explicitly
+azdocli repos pr create --repo MyRepository --source "feature/my-feature" --target "develop" --description "Description" --project MyProject
 ```
 
 ##### Show Pull Request Commits
@@ -287,12 +287,13 @@ azdocli repos pr commits --repo MyRepository --id 123 --project MyProject
 
 - **Repository filtering**: List shows only pull requests for the specified repository
 - **Comprehensive details**: Show command displays ID, title, description, status, branches, and creation date
-- **Branch specification**: Specify source branch (required) and target branch (defaults to 'main')
+- **Branch detection**: Automatically detects source branch and uses upstream target when available (fallback to `main`)
 - **Flexible creation**: Create pull requests with or without title/description
 - **Branch validation**: Automatic formatting of branch names with refs/heads/ prefix
+- **Repository detection**: Automatically detects Azure DevOps repository from git remotes (`origin` preferred)
 - **Repository validation**: Verify repository exists before creating pull request
 - **Authentication handling**: Proper error messages when not logged in
-- **Default project support**: Use with default project or specify --project explicitly
+- **Project detection**: Uses project from remote URL when possible, otherwise default project or explicit `--project`
 - **Error handling**: Clear feedback for invalid pull request IDs or missing repositories
 - **Commit tracking**: View all commits included in a pull request with detailed information
 
@@ -581,7 +582,8 @@ azdocli repos clone                          # Clone all repositories
 # Pull request management
 azdocli repos pr list --repo MyRepo          # List pull requests for a repository
 azdocli repos pr show --repo MyRepo --id 123 # Show pull request details
-azdocli repos pr create --repo MyRepo --source "feature/my-feature" --title "My Feature" # Create a new pull request
+azdocli repos pr create                       # Create PR from current repo and branch
+azdocli repos pr create --title "My Feature" # Create PR with detected repo/branch and custom title
 
 # Pipeline management
 azdocli pipelines list                       # List all pipelines
