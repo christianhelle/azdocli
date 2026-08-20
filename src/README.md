@@ -42,7 +42,7 @@ The `migrate` command clones one or more Azure DevOps team projects from a sourc
 
 #### Prerequisites
 
-Create two named credential profiles, one for each side of the migration:
+Create two named credential profiles, one for each side of the migration. You can use either cloud organizations or enterprise/on-premises Azure DevOps base URLs when logging in:
 
 ```sh
 azdocli login --profile source

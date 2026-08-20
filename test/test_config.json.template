@@ -1,5 +1,6 @@
 {
   "organization": "your-organization-name",
   "pat": "your-personal-access-token",
-  "project": "your-test-project-name"
+  "project": "your-test-project-name",
+  "base_url": "https://dev.azure.com"
 }
