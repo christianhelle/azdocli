@@ -1,12 +1,11 @@
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use azure_devops_rust_api::git::{
-    models::{GitRepository, GitRepositoryCreateOptions},
-    ClientBuilder as GitClientBuilder,
-};
+use azure_devops_rust_api::git::models::{GitRepository, GitRepositoryCreateOptions};
 use std::path::Path;
 use std::process::Command;
 
+use crate::auth::factory::ClientFactory;
+use crate::auth::url::normalize_base_url;
 use crate::migrate::context::MigrationContext;
 use crate::migrate::phase::{Phase, PhaseSummary};
 
@@ -19,8 +18,8 @@ impl Phase for ReposPhase {
     }
 
     async fn execute(&self, ctx: &mut MigrationContext) -> Result<PhaseSummary> {
-        let source_client = GitClientBuilder::new(ctx.source_credential.clone()).build();
-        let target_client = GitClientBuilder::new(ctx.target_credential.clone()).build();
+        let source_client = ctx.source_factory().build_git();
+        let target_client = ctx.target_factory().build_git();
 
         let source_repos = ctx
             .executor
@@ -102,6 +101,7 @@ async fn migrate_repository(
     let target_repo =
         ensure_target_repo(ctx, target_client, target_repos, &source_repo.name).await?;
     let target_url = ado_git_url(
+        ctx.target_base_url(),
         &ctx.target_creds.organization,
         &ctx.opts.target_project,
         &target_repo.name,
@@ -116,6 +116,7 @@ async fn migrate_repository(
     }
 
     let source_url = ado_git_url(
+        ctx.source_base_url(),
         &ctx.source_creds.organization,
         &ctx.opts.source_project,
         &source_repo.name,
@@ -232,10 +233,15 @@ fn run_git(cmd: &mut Command, operation: &str, secrets: &[&str]) -> Result<Strin
     Err(anyhow!("git {operation} failed: {details}"))
 }
 
-fn ado_git_url(organization: &str, project: &str, repo: &str, pat: &str) -> String {
+fn ado_git_url(base_url: &str, organization: &str, project: &str, repo: &str, pat: &str) -> String {
+    let normalized = normalize_base_url(base_url);
+    let host_and_path = normalized
+        .trim_start_matches("https://")
+        .trim_start_matches("http://");
     format!(
-        "https://azdocli:{}@dev.azure.com/{}/{}/_git/{}",
+        "https://azdocli:{}@{}/{}/{}/_git/{}",
         percent_encode(pat),
+        host_and_path,
         percent_encode(organization),
         percent_encode(project),
         percent_encode(repo)

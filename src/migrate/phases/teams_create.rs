@@ -1,11 +1,9 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use azure_devops_rust_api::core::{
-    models::{WebApiTeam, WebApiTeamRef},
-    ClientBuilder as CoreClientBuilder,
-};
+use azure_devops_rust_api::core::models::{WebApiTeam, WebApiTeamRef};
 use std::collections::HashMap;
 
+use crate::auth::factory::ClientFactory;
 use crate::migrate::context::MigrationContext;
 use crate::migrate::phase::{Phase, PhaseSummary};
 
@@ -18,8 +16,8 @@ impl Phase for TeamsCreatePhase {
     }
 
     async fn execute(&self, ctx: &mut MigrationContext) -> Result<PhaseSummary> {
-        let source_client = CoreClientBuilder::new(ctx.source_credential.clone()).build();
-        let target_client = CoreClientBuilder::new(ctx.target_credential.clone()).build();
+        let source_client = ctx.source_factory().build_core();
+        let target_client = ctx.target_factory().build_core();
 
         let source_teams_client = source_client.teams_client();
         let target_teams_client = target_client.teams_client();

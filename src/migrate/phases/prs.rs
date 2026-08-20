@@ -2,10 +2,11 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use azure_devops_rust_api::git::{
     models::{git_pull_request, GitPullRequest, GitPullRequestCreateOptions, GitRepository},
-    Client, ClientBuilder as GitClientBuilder,
+    Client,
 };
 use serde_json::Value;
 
+use crate::auth::factory::ClientFactory;
 use crate::migrate::context::MigrationContext;
 use crate::migrate::phase::{Phase, PhaseSummary};
 
@@ -20,8 +21,8 @@ impl Phase for PrsPhase {
     }
 
     async fn execute(&self, ctx: &mut MigrationContext) -> Result<PhaseSummary> {
-        let source_client = GitClientBuilder::new(ctx.source_credential.clone()).build();
-        let target_client = GitClientBuilder::new(ctx.target_credential.clone()).build();
+        let source_client = ctx.source_factory().build_git();
+        let target_client = ctx.target_factory().build_git();
         let repo_map = ctx
             .state
             .id_map("repos")

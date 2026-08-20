@@ -1,15 +1,12 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use azure_devops_rust_api::core::ClientBuilder as CoreClientBuilder;
-use azure_devops_rust_api::distributed_task::{
-    models::{
-        ProjectReference, VariableGroup, VariableGroupParameters, VariableGroupProjectReference,
-    },
-    ClientBuilder as DistributedTaskClientBuilder,
+use azure_devops_rust_api::distributed_task::models::{
+    ProjectReference, VariableGroup, VariableGroupParameters, VariableGroupProjectReference,
 };
 use serde_json::Value;
 use std::fs;
 
+use crate::auth::factory::ClientFactory;
 use crate::migrate::context::MigrationContext;
 use crate::migrate::phase::{Phase, PhaseSummary};
 
@@ -26,8 +23,7 @@ impl Phase for VariableGroupsPhase {
         fs::create_dir_all(&output_dir)
             .with_context(|| format!("Creating output dir '{}'", output_dir.display()))?;
 
-        let source_client =
-            DistributedTaskClientBuilder::new(ctx.source_credential.clone()).build();
+        let source_client = ctx.source_factory().build_distributed_task();
         let groups = source_client
             .variablegroups_client()
             .get_variable_groups(&ctx.source_creds.organization, &ctx.opts.source_project)
@@ -46,8 +42,7 @@ impl Phase for VariableGroupsPhase {
             Some(target_project_reference(ctx).await?)
         };
 
-        let target_client =
-            DistributedTaskClientBuilder::new(ctx.target_credential.clone()).build();
+        let target_client = ctx.target_factory().build_distributed_task();
 
         for group in groups {
             let source_id = group
@@ -97,7 +92,7 @@ impl Phase for VariableGroupsPhase {
 }
 
 async fn target_project_reference(ctx: &MigrationContext) -> Result<ProjectReference> {
-    let target_core = CoreClientBuilder::new(ctx.target_credential.clone()).build();
+    let target_core = ctx.target_factory().build_core();
     let projects = target_core
         .projects_client()
         .list(&ctx.target_creds.organization)

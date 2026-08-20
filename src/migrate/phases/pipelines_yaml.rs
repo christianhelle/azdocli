@@ -1,12 +1,9 @@
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use azure_devops_rust_api::build::ClientBuilder as BuildClientBuilder;
-use azure_devops_rust_api::pipelines::{
-    models::{pipeline_configuration, Pipeline},
-    ClientBuilder as PipelinesClientBuilder,
-};
+use azure_devops_rust_api::pipelines::models::{pipeline_configuration, Pipeline};
 use serde_json::{json, Value};
 
+use crate::auth::factory::ClientFactory;
 use crate::migrate::context::MigrationContext;
 use crate::migrate::phase::{Phase, PhaseSummary};
 
@@ -19,9 +16,9 @@ impl Phase for PipelinesYamlPhase {
     }
 
     async fn execute(&self, ctx: &mut MigrationContext) -> Result<PhaseSummary> {
-        let source_client = PipelinesClientBuilder::new(ctx.source_credential.clone()).build();
-        let source_build_client = BuildClientBuilder::new(ctx.source_credential.clone()).build();
-        let target_build_client = BuildClientBuilder::new(ctx.target_credential.clone()).build();
+        let source_client = ctx.source_factory().build_pipelines();
+        let source_build_client = ctx.source_factory().build_build();
+        let target_build_client = ctx.target_factory().build_build();
         let http = reqwest::Client::new();
 
         let listed = ctx
@@ -206,7 +203,7 @@ async fn create_yaml_pipeline(
         &ctx.opts.target_project,
         "_apis/pipelines?api-version=7.1-preview.1",
         &body,
-        false,
+        ctx.target_base_url(),
     )
     .await
 }
@@ -312,13 +309,8 @@ async fn post_ado_json(
     project: &str,
     path_and_query: &str,
     body: &Value,
-    release_host: bool,
+    host: &str,
 ) -> Result<Value> {
-    let host = if release_host {
-        "https://vsrm.dev.azure.com"
-    } else {
-        "https://dev.azure.com"
-    };
     let url = format!(
         "{}/{}/{}/{}",
         host,

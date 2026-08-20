@@ -6,6 +6,7 @@ use azure_devops_rust_api::Credential;
 use chrono::Utc;
 use std::path::PathBuf;
 
+use crate::auth::factory::CredentialClientFactory;
 use crate::auth::Credentials;
 
 use super::executor::Executor;
@@ -89,6 +90,22 @@ impl MigrationContext {
 
     pub fn save_state(&self) -> Result<()> {
         self.state.save(&self.state_path)
+    }
+
+    pub fn source_factory(&self) -> CredentialClientFactory {
+        CredentialClientFactory::new(&self.source_creds)
+    }
+
+    pub fn target_factory(&self) -> CredentialClientFactory {
+        CredentialClientFactory::new(&self.target_creds)
+    }
+
+    pub fn source_base_url(&self) -> &str {
+        &self.source_creds.base_url
+    }
+
+    pub fn target_base_url(&self) -> &str {
+        &self.target_creds.base_url
     }
 }
 

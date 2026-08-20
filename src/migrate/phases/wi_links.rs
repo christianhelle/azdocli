@@ -1,7 +1,8 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use azure_devops_rust_api::wit::{models, ClientBuilder as WitClientBuilder};
+use azure_devops_rust_api::wit::models;
 
+use crate::auth::factory::ClientFactory;
 use crate::migrate::context::MigrationContext;
 use crate::migrate::phase::{Phase, PhaseSummary};
 
@@ -33,8 +34,8 @@ impl Phase for WiLinksPhase {
             ..Default::default()
         };
 
-        let source_client = WitClientBuilder::new(ctx.source_credential.clone()).build();
-        let target_client = WitClientBuilder::new(ctx.target_credential.clone()).build();
+        let source_client = ctx.source_factory().build_wit();
+        let target_client = ctx.target_factory().build_wit();
 
         for source_id in source_ids {
             let _permit = ctx.executor.permit().await;
@@ -143,7 +144,7 @@ mod tests {
     #[test]
     fn work_item_id_from_url_reads_last_segment() {
         assert_eq!(
-            work_item_id_from_url("https://dev.azure.com/org/proj/_apis/wit/workItems/42"),
+            work_item_id_from_url("https://example.com/org/proj/_apis/wit/workItems/42"),
             Some(42)
         );
     }

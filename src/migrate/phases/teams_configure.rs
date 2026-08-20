@@ -1,18 +1,18 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use azure_devops_rust_api::wit::{
-    models::{work_item_classification_node, WorkItemClassificationNode},
-    ClientBuilder as WitClientBuilder,
+use azure_devops_rust_api::wit::models::{
+    work_item_classification_node, WorkItemClassificationNode,
 };
 use azure_devops_rust_api::work::{
     models::{
         team_setting, team_settings_patch, BoardColumn, BoardReference, BoardRow, TeamFieldValue,
         TeamFieldValuesPatch, TeamSetting, TeamSettingsIteration, TeamSettingsPatch,
     },
-    Client as WorkClient, ClientBuilder as WorkClientBuilder,
+    Client as WorkClient,
 };
 use std::collections::{HashMap, HashSet};
 
+use crate::auth::factory::ClientFactory;
 use crate::migrate::context::MigrationContext;
 use crate::migrate::phase::{Phase, PhaseSummary};
 
@@ -45,8 +45,8 @@ impl Phase for TeamsConfigurePhase {
             return Ok(summary);
         }
 
-        let source_client = WorkClientBuilder::new(ctx.source_credential.clone()).build();
-        let target_client = WorkClientBuilder::new(ctx.target_credential.clone()).build();
+        let source_client = ctx.source_factory().build_work();
+        let target_client = ctx.target_factory().build_work();
         let target_iteration_ids = match target_iteration_ids_by_path(ctx).await {
             Ok(ids) => ids,
             Err(e) => {
@@ -566,7 +566,7 @@ fn normalize_logical_path(path: &str) -> String {
 }
 
 async fn target_iteration_ids_by_path(ctx: &MigrationContext) -> Result<HashMap<String, String>> {
-    let client = WitClientBuilder::new(ctx.target_credential.clone()).build();
+    let client = ctx.target_factory().build_wit();
     let target_roots = client
         .classification_nodes_client()
         .get_root_nodes(&ctx.target_creds.organization, &ctx.opts.target_project)

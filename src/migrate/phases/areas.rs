@@ -1,13 +1,11 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use azure_devops_rust_api::wit::{
-    models::{
-        work_item_classification_node, WorkItemClassificationNode, WorkItemTrackingResource,
-        WorkItemTrackingResourceReference,
-    },
-    ClientBuilder as WitClientBuilder,
+use azure_devops_rust_api::wit::models::{
+    work_item_classification_node, WorkItemClassificationNode, WorkItemTrackingResource,
+    WorkItemTrackingResourceReference,
 };
 
+use crate::auth::factory::ClientFactory;
 use crate::migrate::context::MigrationContext;
 use crate::migrate::phase::{Phase, PhaseSummary};
 
@@ -62,8 +60,8 @@ pub(super) async fn execute_classification_phase(
     group: ClassificationGroup,
     route_segment: &'static str,
 ) -> Result<PhaseSummary> {
-    let source_client = WitClientBuilder::new(ctx.source_credential.clone()).build();
-    let target_client = WitClientBuilder::new(ctx.target_credential.clone()).build();
+    let source_client = ctx.source_factory().build_wit();
+    let target_client = ctx.target_factory().build_wit();
 
     let source_roots = source_client
         .classification_nodes_client()

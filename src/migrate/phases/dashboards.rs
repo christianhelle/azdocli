@@ -1,12 +1,13 @@
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use azure_devops_rust_api::core::{models::WebApiTeam, ClientBuilder as CoreClientBuilder};
+use azure_devops_rust_api::core::models::WebApiTeam;
 use reqwest::Client;
 use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
+use crate::auth::factory::ClientFactory;
 use crate::migrate::context::MigrationContext;
 use crate::migrate::phase::{Phase, PhaseSummary};
 
@@ -27,7 +28,7 @@ impl Phase for DashboardsPhase {
             println!("  ⓘ dry-run: exporting dashboards only; no target changes will be made");
         }
 
-        let core_client = CoreClientBuilder::new(ctx.source_credential.clone()).build();
+        let core_client = ctx.source_factory().build_core();
         let teams = match list_project_teams(
             &core_client.teams_client(),
             &ctx.source_creds.organization,
@@ -163,7 +164,8 @@ async fn list_dashboards_for_team(
     // The Azure DevOps dashboard SDK exposes team-scoped routes only; project-only
     // dashboards, if returned by the service separately, require a future API pass.
     let url = format!(
-        "https://dev.azure.com/{}/{}/{}/_apis/dashboard/dashboards",
+        "{}/{}/{}/{}/_apis/dashboard/dashboards",
+        ctx.source_base_url(),
         percent_encode_path_segment(&ctx.source_creds.organization),
         percent_encode_path_segment(&ctx.opts.source_project),
         percent_encode_path_segment(team)
@@ -256,7 +258,8 @@ async fn get_dashboard(
     dashboard_id: &str,
 ) -> Result<Value> {
     let url = format!(
-        "https://dev.azure.com/{}/{}/{}/_apis/dashboard/dashboards/{}",
+        "{}/{}/{}/{}/_apis/dashboard/dashboards/{}",
+        ctx.source_base_url(),
         percent_encode_path_segment(&ctx.source_creds.organization),
         percent_encode_path_segment(&ctx.opts.source_project),
         percent_encode_path_segment(team),
@@ -279,7 +282,8 @@ async fn get_widgets(
     dashboard_id: &str,
 ) -> Result<Value> {
     let url = format!(
-        "https://dev.azure.com/{}/{}/{}/_apis/dashboard/dashboards/{}/widgets",
+        "{}/{}/{}/{}/_apis/dashboard/dashboards/{}/widgets",
+        ctx.source_base_url(),
         percent_encode_path_segment(&ctx.source_creds.organization),
         percent_encode_path_segment(&ctx.opts.source_project),
         percent_encode_path_segment(team),

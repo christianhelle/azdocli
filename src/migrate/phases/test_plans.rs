@@ -74,7 +74,8 @@ impl Phase for TestPlansPhase {
 
 async fn list_test_plans(client: &Client, ctx: &MigrationContext) -> Result<Vec<Value>> {
     let url = format!(
-        "https://dev.azure.com/{}/{}/_apis/testplan/plans",
+        "{}/{}/{}/_apis/testplan/plans",
+        ctx.source_base_url(),
         percent_encode_path_segment(&ctx.source_creds.organization),
         percent_encode_path_segment(&ctx.opts.source_project)
     );
@@ -103,7 +104,8 @@ async fn export_test_plan(
         client,
         &ctx.source_creds.pat,
         &format!(
-            "https://dev.azure.com/{}/{}/_apis/testplan/plans/{}",
+            "{}/{}/{}/_apis/testplan/plans/{}",
+            ctx.source_base_url(),
             percent_encode_path_segment(&ctx.source_creds.organization),
             percent_encode_path_segment(&ctx.opts.source_project),
             plan_id
@@ -164,7 +166,8 @@ fn collect_suite_ids_from_value(suite: &Value, ids: &mut Vec<i32>) {
 
 async fn list_suites(client: &Client, ctx: &MigrationContext, plan_id: i32) -> Result<Vec<Value>> {
     let url = format!(
-        "https://dev.azure.com/{}/{}/_apis/testplan/Plans/{}/suites",
+        "{}/{}/{}/_apis/testplan/Plans/{}/suites",
+        ctx.source_base_url(),
         percent_encode_path_segment(&ctx.source_creds.organization),
         percent_encode_path_segment(&ctx.opts.source_project),
         plan_id
@@ -191,7 +194,8 @@ async fn list_test_cases(
     suite_id: i32,
 ) -> Result<Vec<Value>> {
     let url = format!(
-        "https://dev.azure.com/{}/{}/_apis/testplan/Plans/{}/Suites/{}/TestCase",
+        "{}/{}/{}/_apis/testplan/Plans/{}/Suites/{}/TestCase",
+        ctx.source_base_url(),
         percent_encode_path_segment(&ctx.source_creds.organization),
         percent_encode_path_segment(&ctx.opts.source_project),
         plan_id,

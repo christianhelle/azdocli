@@ -3,8 +3,8 @@
 
 #![allow(dead_code)]
 
+use crate::auth::factory::ClientFactory;
 use anyhow::{anyhow, Result};
-use azure_devops_rust_api::core::ClientBuilder as CoreClientBuilder;
 
 use super::context::MigrationContext;
 
@@ -18,7 +18,7 @@ pub async fn run(ctx: &MigrationContext) -> Result<PreflightReport> {
     let mut warnings = Vec::new();
 
     // Source project must exist.
-    let source_client = CoreClientBuilder::new(ctx.source_credential.clone()).build();
+    let source_client = ctx.source_factory().build_core();
     let source_projects = source_client
         .projects_client()
         .list(&ctx.source_creds.organization)
@@ -42,7 +42,7 @@ pub async fn run(ctx: &MigrationContext) -> Result<PreflightReport> {
     }
 
     // Target org must be reachable; record whether the project exists.
-    let target_client = CoreClientBuilder::new(ctx.target_credential.clone()).build();
+    let target_client = ctx.target_factory().build_core();
     let target_projects = target_client
         .projects_client()
         .list(&ctx.target_creds.organization)
