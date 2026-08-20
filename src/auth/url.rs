@@ -30,15 +30,6 @@ pub fn parse_organization_or_url(input: &str) -> (Option<String>, String) {
     }
 }
 
-/// Builds the root API path for an organization: `{base_url}/{organization}/_apis`.
-pub fn api_base_url(base_url: &str, organization: &str) -> String {
-    format!(
-        "{}/{}/_apis",
-        normalize_base_url(base_url),
-        percent_encode_path_segment(organization)
-    )
-}
-
 /// Builds the web URL for a project.
 pub fn web_project_url(base_url: &str, organization: &str, project: &str) -> String {
     format!(
@@ -124,7 +115,10 @@ mod tests {
 
     #[test]
     fn normalize_base_url_trims_trailing_slashes() {
-        assert_eq!(normalize_base_url("https://dev.azure.com/"), "https://dev.azure.com");
+        assert_eq!(
+            normalize_base_url("https://dev.azure.com/"),
+            "https://dev.azure.com"
+        );
         assert_eq!(
             normalize_base_url("https://dev.azure.com//"),
             "https://dev.azure.com"
@@ -137,8 +131,7 @@ mod tests {
 
     #[test]
     fn parse_organization_or_url_detects_url() {
-        let (base_url, organization) =
-            parse_organization_or_url("https://devops.mycompany.com/");
+        let (base_url, organization) = parse_organization_or_url("https://devops.mycompany.com/");
         assert_eq!(base_url, Some("https://devops.mycompany.com".to_string()));
         assert_eq!(organization, "");
     }
@@ -148,18 +141,6 @@ mod tests {
         let (base_url, organization) = parse_organization_or_url("mycompany");
         assert_eq!(base_url, None);
         assert_eq!(organization, "mycompany");
-    }
-
-    #[test]
-    fn api_base_url_uses_base_url_and_organization() {
-        assert_eq!(
-            api_base_url("https://dev.azure.com", "mycompany"),
-            "https://dev.azure.com/mycompany/_apis"
-        );
-        assert_eq!(
-            api_base_url("https://tfs.mycompany.com/tfs", "DefaultCollection"),
-            "https://tfs.mycompany.com/tfs/DefaultCollection/_apis"
-        );
     }
 
     #[test]

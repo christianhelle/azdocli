@@ -115,7 +115,11 @@ pub async fn handle_command(subcommand: &ProjectsSubCommands) -> Result<()> {
             if *open {
                 let project = wait_for_project_to_be_ready(name).await?;
                 let creds = get_credentials()?;
-                open_project_in_browser(&creds.base_url, &creds.organization, &project.team_project_reference.name)?;
+                open_project_in_browser(
+                    &creds.base_url,
+                    &creds.organization,
+                    &project.team_project_reference.name,
+                )?;
             }
         }
         ProjectsSubCommands::Delete { id, yes } => {
@@ -148,7 +152,11 @@ pub async fn handle_command(subcommand: &ProjectsSubCommands) -> Result<()> {
 
             if *open {
                 let creds = get_credentials()?;
-                open_project_in_browser(&creds.base_url, &creds.organization, &team_project.team_project_reference.name)?;
+                open_project_in_browser(
+                    &creds.base_url,
+                    &creds.organization,
+                    &team_project.team_project_reference.name,
+                )?;
             }
         }
     }

@@ -147,7 +147,14 @@ pub async fn handle_command(subcommand: &UserSubCommands) -> Result<()> {
         }
         UserSubCommands::Update { id, email, license } => {
             let resolved_id = resolve_user_id(&client, &creds.organization, id, email).await?;
-            update_user_license(&creds.base_url, &creds.organization, &creds.pat, &resolved_id, *license).await?;
+            update_user_license(
+                &creds.base_url,
+                &creds.organization,
+                &creds.pat,
+                &resolved_id,
+                *license,
+            )
+            .await?;
             let user = client
                 .user_entitlements_client()
                 .get(creds.organization.clone(), resolved_id)
