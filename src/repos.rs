@@ -570,6 +570,7 @@ mod tests {
             Credentials {
                 organization: self.organization.clone(),
                 pat: self.pat.clone(),
+                base_url: crate::auth::url::default_base_url(),
             }
         }
     }

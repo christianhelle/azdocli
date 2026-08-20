@@ -1,6 +1,7 @@
 pub mod factory;
 pub mod url;
 
+use crate::auth::url::{default_base_url, normalize_base_url, parse_organization_or_url};
 use crate::config::get_config_dir;
 use anyhow::{anyhow, Result};
 use colored::Colorize;
@@ -14,6 +15,8 @@ use std::path::PathBuf;
 pub struct Credentials {
     pub organization: String,
     pub pat: String,
+    #[serde(default = "default_base_url")]
+    pub base_url: String,
 }
 
 fn profiles_dir() -> Result<PathBuf> {
@@ -139,10 +142,11 @@ fn get_credentials_file_path() -> Result<PathBuf> {
     Ok(config_dir.join("credentials.json"))
 }
 
-fn save_pat(pat: &str) -> Result<()> {
+fn save_pat(pat: &str, base_url: &str) -> Result<()> {
     let credentials = Credentials {
         organization: get_organization()?,
         pat: pat.to_string(),
+        base_url: normalize_base_url(base_url),
     };
 
     let creds_path = get_credentials_file_path()?;
@@ -161,21 +165,6 @@ fn save_pat(pat: &str) -> Result<()> {
     }
 
     Ok(())
-}
-
-fn get_pat() -> Result<String> {
-    let creds_path = get_credentials_file_path()?;
-
-    if !creds_path.exists() {
-        return Err(anyhow!(
-            "Not logged in. Please login first with 'azdocli login'"
-        ));
-    }
-
-    let credentials_json = fs::read_to_string(creds_path)?;
-    let credentials: Credentials = serde_json::from_str(&credentials_json)?;
-
-    Ok(credentials.pat)
 }
 
 fn show_pat_instructions() {
@@ -200,14 +189,27 @@ fn show_pat_instructions() {
 
 /// Interactive login. If `profile` is provided, credentials are saved under
 /// that named profile; otherwise the legacy default location is used.
+///
+/// The organization prompt accepts either an organization name or a full base
+/// URL for enterprise Azure DevOps installations (e.g.
+/// `https://devops.mycompany.com`).
 pub async fn login(profile: Option<&str>) -> Result<()> {
     println!("{}", "Login to Azure DevOps".bold());
 
     show_pat_instructions();
 
-    let organization: String = Input::new()
-        .with_prompt("Azure DevOps organization name")
+    let input: String = Input::new()
+        .with_prompt("Azure DevOps organization name or base URL")
         .interact_text()?;
+
+    let (base_url, mut organization) = parse_organization_or_url(&input);
+    let base_url = base_url.unwrap_or_else(default_base_url);
+
+    if organization.is_empty() {
+        organization = Input::new()
+            .with_prompt("Azure DevOps organization name")
+            .interact_text()?;
+    }
 
     let pat: String = Password::new()
         .with_prompt("Personal Access Token (PAT)")
@@ -217,12 +219,19 @@ pub async fn login(profile: Option<&str>) -> Result<()> {
 
     match profile {
         Some(name) => {
-            save_profile(name, &Credentials { organization, pat })?;
+            save_profile(
+                name,
+                &Credentials {
+                    organization,
+                    pat,
+                    base_url,
+                },
+            )?;
             println!("{} (profile: {})", "Login successful!".green(), name);
         }
         None => {
             save_organization(&organization)?;
-            save_pat(&pat)?;
+            save_pat(&pat, &base_url)?;
             println!("{}", "Login successful!".green());
         }
     }
@@ -248,9 +257,28 @@ pub fn logout() -> Result<()> {
 /// Load credentials for the default profile (legacy single-org store).
 pub fn get_credentials() -> Result<Credentials> {
     let organization = get_organization()?;
-    let pat = get_pat()?;
+    let stored = get_stored_credentials()?;
 
-    Ok(Credentials { organization, pat })
+    Ok(Credentials {
+        organization,
+        pat: stored.pat,
+        base_url: stored.base_url,
+    })
+}
+
+fn get_stored_credentials() -> Result<Credentials> {
+    let creds_path = get_credentials_file_path()?;
+
+    if !creds_path.exists() {
+        return Err(anyhow!(
+            "Not logged in. Please login first with 'azdocli login'"
+        ));
+    }
+
+    let credentials_json = fs::read_to_string(creds_path)?;
+    let credentials: Credentials = serde_json::from_str(&credentials_json)?;
+
+    Ok(credentials)
 }
 
 /// Load credentials for a specific named profile, or the default if `None`.

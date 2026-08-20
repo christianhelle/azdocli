@@ -157,6 +157,7 @@ fn create_client(pat: String) -> member_entitlement_management::Client {
     let creds = Credentials {
         organization: String::new(),
         pat,
+        base_url: crate::auth::url::default_base_url(),
     };
     let factory = CredentialClientFactory::new(&creds);
     factory.build_entitlements()
