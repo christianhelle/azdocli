@@ -20,7 +20,7 @@ impl Phase for ServiceConnectionsPhase {
         fs::create_dir_all(&output_dir)
             .with_context(|| format!("Creating output dir '{}'", output_dir.display()))?;
 
-        let source_client = ctx.source_factory().build_service_endpoint();
+        let source_client = ctx.source_factory()?.build_service_endpoint();
         let endpoints = source_client
             .endpoints_client()
             .get_service_endpoints(&ctx.source_creds.organization, &ctx.opts.source_project)

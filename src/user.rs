@@ -109,7 +109,7 @@ pub async fn handle_command(subcommand: &UserSubCommands) -> Result<()> {
         ));
     }
 
-    let client = create_client(&creds);
+    let client = create_client(&creds)?;
 
     match subcommand {
         UserSubCommands::Add { email, license } => {
@@ -169,9 +169,9 @@ pub async fn handle_command(subcommand: &UserSubCommands) -> Result<()> {
     Ok(())
 }
 
-fn create_client(creds: &Credentials) -> member_entitlement_management::Client {
-    let factory = CredentialClientFactory::new(creds);
-    factory.build_entitlements()
+fn create_client(creds: &Credentials) -> Result<member_entitlement_management::Client> {
+    let factory = CredentialClientFactory::new(creds)?;
+    Ok(factory.build_entitlements())
 }
 
 async fn add_user(

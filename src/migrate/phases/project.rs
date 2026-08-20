@@ -29,7 +29,7 @@ impl Phase for ProjectPhase {
             ..Default::default()
         };
 
-        let target_client = ctx.target_factory().build_core();
+        let target_client = ctx.target_factory()?.build_core();
         let projects = target_client
             .projects_client()
             .list(&ctx.target_creds.organization)
@@ -55,7 +55,7 @@ impl Phase for ProjectPhase {
             return Ok(summary);
         }
 
-        let source_client = ctx.source_factory().build_core();
+        let source_client = ctx.source_factory()?.build_core();
         let source_projects = source_client
             .projects_client()
             .list(&ctx.source_creds.organization)

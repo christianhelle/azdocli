@@ -39,8 +39,8 @@ impl Phase for WiAttachmentsPhase {
             ..Default::default()
         };
 
-        let source_client = ctx.source_factory().build_wit();
-        let target_client = ctx.target_factory().build_wit();
+        let source_client = ctx.source_factory()?.build_wit();
+        let target_client = ctx.target_factory()?.build_wit();
         let http = http_client::client();
 
         for source_id in source_ids {

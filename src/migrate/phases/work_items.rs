@@ -46,8 +46,8 @@ impl Phase for WorkItemsPhase {
     }
 
     async fn execute(&self, ctx: &mut MigrationContext) -> Result<PhaseSummary> {
-        let source_client = ctx.source_factory().build_wit();
-        let target_client = ctx.target_factory().build_wit();
+        let source_client = ctx.source_factory()?.build_wit();
+        let target_client = ctx.target_factory()?.build_wit();
         let source_ids =
             super::work_item_common::query_source_work_item_ids(ctx, &source_client).await?;
         let mut summary = PhaseSummary {

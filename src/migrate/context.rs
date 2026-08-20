@@ -92,11 +92,11 @@ impl MigrationContext {
         self.state.save(&self.state_path)
     }
 
-    pub fn source_factory(&self) -> CredentialClientFactory {
+    pub fn source_factory(&self) -> Result<CredentialClientFactory> {
         CredentialClientFactory::new(&self.source_creds)
     }
 
-    pub fn target_factory(&self) -> CredentialClientFactory {
+    pub fn target_factory(&self) -> Result<CredentialClientFactory> {
         CredentialClientFactory::new(&self.target_creds)
     }
 

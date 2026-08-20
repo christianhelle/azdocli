@@ -165,7 +165,7 @@ pub async fn handle_command(subcommand: &ProjectsSubCommands) -> Result<()> {
 
 async fn create_core_client() -> Result<azure_core::Client> {
     let creds = get_credentials()?;
-    let factory = CredentialClientFactory::new(&creds);
+    let factory = CredentialClientFactory::new(&creds)?;
     Ok(factory.build_core())
 }
 

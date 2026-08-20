@@ -18,7 +18,7 @@ pub async fn run(ctx: &MigrationContext) -> Result<PreflightReport> {
     let mut warnings = Vec::new();
 
     // Source project must exist.
-    let source_client = ctx.source_factory().build_core();
+    let source_client = ctx.source_factory()?.build_core();
     let source_projects = source_client
         .projects_client()
         .list(&ctx.source_creds.organization)
@@ -42,7 +42,7 @@ pub async fn run(ctx: &MigrationContext) -> Result<PreflightReport> {
     }
 
     // Target org must be reachable; record whether the project exists.
-    let target_client = ctx.target_factory().build_core();
+    let target_client = ctx.target_factory()?.build_core();
     let target_projects = target_client
         .projects_client()
         .list(&ctx.target_creds.organization)

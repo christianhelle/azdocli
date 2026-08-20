@@ -16,9 +16,9 @@ impl Phase for PipelinesYamlPhase {
     }
 
     async fn execute(&self, ctx: &mut MigrationContext) -> Result<PhaseSummary> {
-        let source_client = ctx.source_factory().build_pipelines();
-        let source_build_client = ctx.source_factory().build_build();
-        let target_build_client = ctx.target_factory().build_build();
+        let source_client = ctx.source_factory()?.build_pipelines();
+        let source_build_client = ctx.source_factory()?.build_build();
+        let target_build_client = ctx.target_factory()?.build_build();
         let http = reqwest::Client::new();
 
         let listed = ctx

@@ -18,8 +18,8 @@ impl Phase for ReposPhase {
     }
 
     async fn execute(&self, ctx: &mut MigrationContext) -> Result<PhaseSummary> {
-        let source_client = ctx.source_factory().build_git();
-        let target_client = ctx.target_factory().build_git();
+        let source_client = ctx.source_factory()?.build_git();
+        let target_client = ctx.target_factory()?.build_git();
 
         let source_repos = ctx
             .executor
@@ -235,11 +235,16 @@ fn run_git(cmd: &mut Command, operation: &str, secrets: &[&str]) -> Result<Strin
 
 fn ado_git_url(base_url: &str, organization: &str, project: &str, repo: &str, pat: &str) -> String {
     let normalized = normalize_base_url(base_url);
+    let scheme = if normalized.starts_with("http://") {
+        "http"
+    } else {
+        "https"
+    };
     let host_and_path = normalized
         .trim_start_matches("https://")
         .trim_start_matches("http://");
     format!(
-        "https://azdocli:{}@{}/{}/{}/_git/{}",
+        "{scheme}://azdocli:{}@{}/{}/{}/_git/{}",
         percent_encode(pat),
         host_and_path,
         percent_encode(organization),
@@ -280,4 +285,39 @@ fn sanitize_path_segment(value: &str) -> String {
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ado_git_url;
+
+    #[test]
+    fn ado_git_url_preserves_https_scheme() {
+        let url = ado_git_url(
+            "https://dev.azure.com",
+            "myorg",
+            "myproject",
+            "myrepo",
+            "pat",
+        );
+        assert_eq!(
+            url,
+            "https://azdocli:pat@dev.azure.com/myorg/myproject/_git/myrepo"
+        );
+    }
+
+    #[test]
+    fn ado_git_url_preserves_http_scheme() {
+        let url = ado_git_url(
+            "http://azure-devops.company.local",
+            "myorg",
+            "myproject",
+            "myrepo",
+            "pat",
+        );
+        assert_eq!(
+            url,
+            "http://azdocli:pat@azure-devops.company.local/myorg/myproject/_git/myrepo"
+        );
+    }
 }

@@ -35,8 +35,8 @@ impl Phase for WiCommentsPhase {
             ..Default::default()
         };
 
-        let source_client = ctx.source_factory().build_wit();
-        let target_client = ctx.target_factory().build_wit();
+        let source_client = ctx.source_factory()?.build_wit();
+        let target_client = ctx.target_factory()?.build_wit();
 
         for source_id in source_ids {
             let _permit = ctx.executor.permit().await;

@@ -76,7 +76,7 @@ pub enum PullRequestsSubCommands {
 
 fn create_git_client() -> Result<git::Client> {
     let creds = get_credentials()?;
-    let factory = CredentialClientFactory::new(&creds);
+    let factory = CredentialClientFactory::new(&creds)?;
     Ok(factory.build_git())
 }
 

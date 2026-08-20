@@ -16,8 +16,8 @@ impl Phase for TeamsCreatePhase {
     }
 
     async fn execute(&self, ctx: &mut MigrationContext) -> Result<PhaseSummary> {
-        let source_client = ctx.source_factory().build_core();
-        let target_client = ctx.target_factory().build_core();
+        let source_client = ctx.source_factory()?.build_core();
+        let target_client = ctx.target_factory()?.build_core();
 
         let source_teams_client = source_client.teams_client();
         let target_teams_client = target_client.teams_client();

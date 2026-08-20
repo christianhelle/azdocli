@@ -60,8 +60,8 @@ pub(super) async fn execute_classification_phase(
     group: ClassificationGroup,
     route_segment: &'static str,
 ) -> Result<PhaseSummary> {
-    let source_client = ctx.source_factory().build_wit();
-    let target_client = ctx.target_factory().build_wit();
+    let source_client = ctx.source_factory()?.build_wit();
+    let target_client = ctx.target_factory()?.build_wit();
 
     let source_roots = source_client
         .classification_nodes_client()

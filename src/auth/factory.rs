@@ -8,6 +8,7 @@
 
 use crate::auth::url::{normalize_base_url, release_base_url, user_entitlements_base_url};
 use crate::auth::Credentials;
+use anyhow::{Context, Result};
 
 /// Trait for building Azure DevOps API clients.
 ///
@@ -61,25 +62,31 @@ pub struct CredentialClientFactory {
 
 impl CredentialClientFactory {
     /// Create a new factory from raw credentials.
-    pub fn new(creds: &Credentials) -> Self {
-        let endpoint = normalize_base_url(&creds.base_url)
-            .parse()
-            .expect("base_url should be a valid URL");
-        let entitlements_endpoint =
-            normalize_base_url(&user_entitlements_base_url(&creds.base_url))
-                .parse()
-                .expect("entitlements base_url should be a valid URL");
-        let release_endpoint = normalize_base_url(&release_base_url(&creds.base_url))
-            .parse()
-            .expect("release base_url should be a valid URL");
+    pub fn new(creds: &Credentials) -> Result<Self> {
+        let endpoint = parse_url(
+            &normalize_base_url(&creds.base_url),
+            "Invalid base_url in credentials",
+        )?;
+        let entitlements_endpoint = parse_url(
+            &normalize_base_url(&user_entitlements_base_url(&creds.base_url)),
+            "Invalid user entitlements base URL derived from credentials",
+        )?;
+        let release_endpoint = parse_url(
+            &normalize_base_url(&release_base_url(&creds.base_url)),
+            "Invalid release base URL derived from credentials",
+        )?;
 
-        Self {
+        Ok(Self {
             credential: azure_devops_rust_api::Credential::Pat(creds.pat.clone()),
             endpoint,
             entitlements_endpoint,
             release_endpoint,
-        }
+        })
     }
+}
+
+fn parse_url(url: &str, description: &str) -> Result<azure_core::http::Url> {
+    url.parse().with_context(|| format!("{description}: {url}"))
 }
 
 impl ClientFactory for CredentialClientFactory {

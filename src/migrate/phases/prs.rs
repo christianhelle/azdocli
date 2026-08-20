@@ -21,8 +21,8 @@ impl Phase for PrsPhase {
     }
 
     async fn execute(&self, ctx: &mut MigrationContext) -> Result<PhaseSummary> {
-        let source_client = ctx.source_factory().build_git();
-        let target_client = ctx.target_factory().build_git();
+        let source_client = ctx.source_factory()?.build_git();
+        let target_client = ctx.target_factory()?.build_git();
         let repo_map = ctx
             .state
             .id_map("repos")

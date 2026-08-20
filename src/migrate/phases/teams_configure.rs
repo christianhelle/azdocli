@@ -45,8 +45,8 @@ impl Phase for TeamsConfigurePhase {
             return Ok(summary);
         }
 
-        let source_client = ctx.source_factory().build_work();
-        let target_client = ctx.target_factory().build_work();
+        let source_client = ctx.source_factory()?.build_work();
+        let target_client = ctx.target_factory()?.build_work();
         let target_iteration_ids = match target_iteration_ids_by_path(ctx).await {
             Ok(ids) => ids,
             Err(e) => {
@@ -566,7 +566,7 @@ fn normalize_logical_path(path: &str) -> String {
 }
 
 async fn target_iteration_ids_by_path(ctx: &MigrationContext) -> Result<HashMap<String, String>> {
-    let client = ctx.target_factory().build_wit();
+    let client = ctx.target_factory()?.build_wit();
     let target_roots = client
         .classification_nodes_client()
         .get_root_nodes(&ctx.target_creds.organization, &ctx.opts.target_project)

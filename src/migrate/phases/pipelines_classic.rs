@@ -21,8 +21,8 @@ impl Phase for PipelinesClassicPhase {
         fs::create_dir_all(&output_dir)
             .with_context(|| format!("Creating output dir '{}'", output_dir.display()))?;
 
-        let source_build_client = ctx.source_factory().build_build();
-        let source_release_client = ctx.source_factory().build_release();
+        let source_build_client = ctx.source_factory()?.build_build();
+        let source_release_client = ctx.source_factory()?.build_release();
         let http = reqwest::Client::new();
 
         let build_refs = source_build_client

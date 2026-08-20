@@ -23,7 +23,7 @@ impl Phase for VariableGroupsPhase {
         fs::create_dir_all(&output_dir)
             .with_context(|| format!("Creating output dir '{}'", output_dir.display()))?;
 
-        let source_client = ctx.source_factory().build_distributed_task();
+        let source_client = ctx.source_factory()?.build_distributed_task();
         let groups = source_client
             .variablegroups_client()
             .get_variable_groups(&ctx.source_creds.organization, &ctx.opts.source_project)
@@ -42,7 +42,7 @@ impl Phase for VariableGroupsPhase {
             Some(target_project_reference(ctx).await?)
         };
 
-        let target_client = ctx.target_factory().build_distributed_task();
+        let target_client = ctx.target_factory()?.build_distributed_task();
 
         for group in groups {
             let source_id = group
@@ -92,7 +92,7 @@ impl Phase for VariableGroupsPhase {
 }
 
 async fn target_project_reference(ctx: &MigrationContext) -> Result<ProjectReference> {
-    let target_core = ctx.target_factory().build_core();
+    let target_core = ctx.target_factory()?.build_core();
     let projects = target_core
         .projects_client()
         .list(&ctx.target_creds.organization)

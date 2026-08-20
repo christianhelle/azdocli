@@ -28,7 +28,7 @@ impl Phase for DashboardsPhase {
             println!("  ⓘ dry-run: exporting dashboards only; no target changes will be made");
         }
 
-        let core_client = ctx.source_factory().build_core();
+        let core_client = ctx.source_factory()?.build_core();
         let teams = match list_project_teams(
             &core_client.teams_client(),
             &ctx.source_creds.organization,

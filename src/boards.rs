@@ -113,7 +113,7 @@ pub enum WorkItemSubCommands {
 
 fn create_wit_client() -> Result<wit::Client> {
     let creds = get_credentials()?;
-    let factory = CredentialClientFactory::new(&creds);
+    let factory = CredentialClientFactory::new(&creds)?;
     Ok(factory.build_wit())
 }
 

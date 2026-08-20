@@ -132,13 +132,13 @@ fn normalize_name(name: &str) -> String {
 
 fn create_wiki_client() -> Result<wiki::Client> {
     let creds = get_credentials()?;
-    let factory = CredentialClientFactory::new(&creds);
+    let factory = CredentialClientFactory::new(&creds)?;
     Ok(factory.build_wiki())
 }
 
 fn create_search_client() -> Result<search::Client> {
     let creds = get_credentials()?;
-    let factory = CredentialClientFactory::new(&creds);
+    let factory = CredentialClientFactory::new(&creds)?;
     Ok(factory.build_search())
 }
 

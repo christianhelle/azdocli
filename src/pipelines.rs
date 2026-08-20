@@ -48,7 +48,7 @@ pub enum PipelinesSubCommands {
 
 fn create_pipelines_client() -> Result<pipelines::Client> {
     let creds = get_credentials()?;
-    let factory = CredentialClientFactory::new(&creds);
+    let factory = CredentialClientFactory::new(&creds)?;
     Ok(factory.build_pipelines())
 }
 
