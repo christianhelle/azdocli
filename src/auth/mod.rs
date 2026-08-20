@@ -1,4 +1,5 @@
 pub mod factory;
+pub mod url;
 
 use crate::config::get_config_dir;
 use anyhow::{anyhow, Result};
