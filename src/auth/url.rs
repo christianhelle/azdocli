@@ -80,6 +80,16 @@ pub fn user_entitlements_base_url(base_url: &str) -> String {
     }
 }
 
+/// Full URL for a single user entitlement.
+pub fn user_entitlements_url(base_url: &str, organization: &str, user_id: &str) -> String {
+    format!(
+        "{}/{}/_apis/userentitlements/{}?api-version=7.1-preview",
+        user_entitlements_base_url(base_url),
+        percent_encode_path_segment(organization),
+        percent_encode_path_segment(user_id)
+    )
+}
+
 /// Base URL for release (classic pipeline) APIs. On the cloud host this lives
 /// on `https://vsrm.dev.azure.com`; otherwise it is assumed to share the same
 /// custom base URL.
@@ -188,6 +198,22 @@ mod tests {
         assert_eq!(
             user_entitlements_base_url("https://devops.mycompany.com"),
             "https://devops.mycompany.com"
+        );
+    }
+
+    #[test]
+    fn user_entitlements_url_uses_vsaex_for_cloud() {
+        assert_eq!(
+            user_entitlements_url("https://dev.azure.com", "mycompany", "user-1"),
+            "https://vsaex.dev.azure.com/mycompany/_apis/userentitlements/user-1?api-version=7.1-preview"
+        );
+    }
+
+    #[test]
+    fn user_entitlements_url_uses_custom_host_for_enterprise() {
+        assert_eq!(
+            user_entitlements_url("https://devops.mycompany.com", "mycompany", "user-1"),
+            "https://devops.mycompany.com/mycompany/_apis/userentitlements/user-1?api-version=7.1-preview"
         );
     }
 

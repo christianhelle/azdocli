@@ -1,4 +1,5 @@
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
+use crate::auth::url::{is_default_cloud_host, user_entitlements_url};
 use crate::auth::{get_credentials, Credentials};
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::member_entitlement_management::{self, models};
@@ -100,7 +101,15 @@ impl std::fmt::Display for UserLicenseType {
 
 pub async fn handle_command(subcommand: &UserSubCommands) -> Result<()> {
     let creds = get_credentials()?;
-    let client = create_client(creds.pat.clone());
+
+    if !is_default_cloud_host(&creds.base_url) {
+        return Err(anyhow!(
+            "User management is only supported on the default Azure DevOps cloud host ({}).",
+            crate::auth::url::default_base_url()
+        ));
+    }
+
+    let client = create_client(&creds);
 
     match subcommand {
         UserSubCommands::Add { email, license } => {
@@ -138,7 +147,7 @@ pub async fn handle_command(subcommand: &UserSubCommands) -> Result<()> {
         }
         UserSubCommands::Update { id, email, license } => {
             let resolved_id = resolve_user_id(&client, &creds.organization, id, email).await?;
-            update_user_license(&creds.organization, &creds.pat, &resolved_id, *license).await?;
+            update_user_license(&creds.base_url, &creds.organization, &creds.pat, &resolved_id, *license).await?;
             let user = client
                 .user_entitlements_client()
                 .get(creds.organization.clone(), resolved_id)
@@ -153,13 +162,8 @@ pub async fn handle_command(subcommand: &UserSubCommands) -> Result<()> {
     Ok(())
 }
 
-fn create_client(pat: String) -> member_entitlement_management::Client {
-    let creds = Credentials {
-        organization: String::new(),
-        pat,
-        base_url: crate::auth::url::default_base_url(),
-    };
-    let factory = CredentialClientFactory::new(&creds);
+fn create_client(creds: &Credentials) -> member_entitlement_management::Client {
+    let factory = CredentialClientFactory::new(creds);
     factory.build_entitlements()
 }
 
@@ -424,6 +428,7 @@ fn display_user_details(user: &models::UserEntitlement) {
 }
 
 async fn update_user_license(
+    base_url: &str,
     organization: &str,
     pat: &str,
     user_id: &str,
@@ -442,9 +447,7 @@ async fn update_user_license(
         }
     ]);
 
-    let url = format!(
-        "https://vsaex.dev.azure.com/{organization}/_apis/userentitlements/{user_id}?api-version=7.1-preview"
-    );
+    let url = user_entitlements_url(base_url, organization, user_id);
 
     let response = reqwest::Client::new()
         .patch(url)
