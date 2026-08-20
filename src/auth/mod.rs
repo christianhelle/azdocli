@@ -192,7 +192,9 @@ fn show_pat_instructions() {
 ///
 /// The organization prompt accepts either an organization name or a full base
 /// URL for enterprise Azure DevOps installations (e.g.
-/// `https://devops.mycompany.com`).
+/// `https://devops.mycompany.com`). When a URL with a path is supplied, the
+/// last path segment is treated as the organization/collection and the
+/// preceding path is stored as the base URL.
 pub async fn login(profile: Option<&str>) -> Result<()> {
     println!("{}", "Login to Azure DevOps".bold());
 
@@ -202,7 +204,7 @@ pub async fn login(profile: Option<&str>) -> Result<()> {
         .with_prompt("Azure DevOps organization name or base URL")
         .interact_text()?;
 
-    let (base_url, mut organization) = parse_organization_or_url(&input);
+    let (base_url, mut organization) = parse_organization_or_url(&input)?;
     let base_url = base_url.unwrap_or_else(default_base_url);
 
     if organization.is_empty() {

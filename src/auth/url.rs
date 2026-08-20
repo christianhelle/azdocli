@@ -3,6 +3,9 @@
 //! Centralizes construction of all organization-scoped URLs so that enterprise
 //! installations with a custom base URL work consistently across the CLI.
 
+use ::url::Url;
+use anyhow::{anyhow, Result};
+
 const DEFAULT_BASE_URL: &str = "https://dev.azure.com";
 const DEFAULT_VSAEX_BASE_URL: &str = "https://vsaex.dev.azure.com";
 const DEFAULT_VSRM_BASE_URL: &str = "https://vsrm.dev.azure.com";
@@ -17,16 +20,58 @@ pub fn normalize_base_url(base_url: &str) -> String {
     base_url.trim_end_matches('/').to_string()
 }
 
-/// Detects whether the supplied value is a full URL. If it is, the value is
-/// treated as the base URL and `None` is returned for the organization name.
-/// Otherwise the value is the organization name and `None` is returned for the
-/// base URL.
-pub fn parse_organization_or_url(input: &str) -> (Option<String>, String) {
+/// Detects whether the supplied value is a full URL.
+///
+/// If the input starts with `http://` or `https://`, it is parsed as a URL and
+/// validated. The organization or collection name is extracted from the last
+/// path segment, if any, and the preceding URL (scheme + host + optional port +
+/// any remaining path) is returned as the base URL. When the URL has no path
+/// segments, an empty string is returned for the organization so the caller can
+/// prompt for it. Non-URL input is returned as the organization name with `None`
+/// for the base URL.
+///
+/// Malformed URLs, URLs without a host, and URLs with query or fragment
+/// components are rejected.
+pub fn parse_organization_or_url(input: &str) -> Result<(Option<String>, String)> {
     let trimmed = input.trim();
     if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
-        (Some(normalize_base_url(trimmed)), String::new())
+        let parsed = Url::parse(trimmed)
+            .map_err(|e| anyhow!("Invalid Azure DevOps base URL '{}': {}", trimmed, e))?;
+        if parsed.scheme() != "http" && parsed.scheme() != "https" {
+            return Err(anyhow!(
+                "Unsupported URL scheme '{}'. Only http and https are allowed.",
+                parsed.scheme()
+            ));
+        }
+        let host = parsed
+            .host_str()
+            .filter(|h| !h.is_empty())
+            .ok_or_else(|| anyhow!("Azure DevOps base URL '{}' is missing a host", trimmed))?;
+        if parsed.query().is_some() || parsed.fragment().is_some() {
+            return Err(anyhow!(
+                "Azure DevOps base URL '{}' must not contain query or fragment components",
+                trimmed
+            ));
+        }
+
+        let path = parsed.path().trim_end_matches('/');
+        let mut segments = path.split('/').skip(1).collect::<Vec<_>>();
+        let organization = segments.pop().unwrap_or("").to_string();
+        let base_path = segments.join("/");
+
+        let mut base_url = format!("{}://{}", parsed.scheme(), host);
+        if let Some(port) = parsed.port() {
+            base_url.push(':');
+            base_url.push_str(&port.to_string());
+        }
+        if !base_path.is_empty() {
+            base_url.push('/');
+            base_url.push_str(&base_path);
+        }
+
+        Ok((Some(base_url), organization))
     } else {
-        (None, trimmed.to_string())
+        Ok((None, trimmed.to_string()))
     }
 }
 
@@ -131,16 +176,70 @@ mod tests {
 
     #[test]
     fn parse_organization_or_url_detects_url() {
-        let (base_url, organization) = parse_organization_or_url("https://devops.mycompany.com/");
+        let (base_url, organization) = parse_organization_or_url("https://devops.mycompany.com/")
+            .expect("valid URL should parse");
         assert_eq!(base_url, Some("https://devops.mycompany.com".to_string()));
         assert_eq!(organization, "");
     }
 
     #[test]
     fn parse_organization_or_url_treats_plain_input_as_organization() {
-        let (base_url, organization) = parse_organization_or_url("mycompany");
+        let (base_url, organization) =
+            parse_organization_or_url("mycompany").expect("plain input should parse");
         assert_eq!(base_url, None);
         assert_eq!(organization, "mycompany");
+    }
+
+    #[test]
+    fn parse_organization_or_url_extracts_organization_from_path() {
+        let (base_url, organization) =
+            parse_organization_or_url("https://tfs.mycompany.com/tfs/DefaultCollection")
+                .expect("valid enterprise URL should parse");
+        assert_eq!(base_url, Some("https://tfs.mycompany.com/tfs".to_string()));
+        assert_eq!(organization, "DefaultCollection");
+    }
+
+    #[test]
+    fn parse_organization_or_url_extracts_cloud_organization_from_path() {
+        let (base_url, organization) =
+            parse_organization_or_url("https://dev.azure.com/mycompany/")
+                .expect("valid cloud URL should parse");
+        assert_eq!(base_url, Some("https://dev.azure.com".to_string()));
+        assert_eq!(organization, "mycompany");
+    }
+
+    #[test]
+    fn parse_organization_or_url_preserves_port() {
+        let (base_url, organization) =
+            parse_organization_or_url("https://devops.mycompany.com:8443/")
+                .expect("valid URL with port should parse");
+        assert_eq!(
+            base_url,
+            Some("https://devops.mycompany.com:8443".to_string())
+        );
+        assert_eq!(organization, "");
+    }
+
+    #[test]
+    fn parse_organization_or_url_rejects_malformed_url() {
+        let result = parse_organization_or_url("https://");
+        assert!(
+            result.is_err(),
+            "malformed URL without host should be rejected"
+        );
+    }
+
+    #[test]
+    fn parse_organization_or_url_rejects_url_with_query() {
+        let result =
+            parse_organization_or_url("https://devops.mycompany.com/?collection=DefaultCollection");
+        assert!(result.is_err(), "URL with query string should be rejected");
+    }
+
+    #[test]
+    fn parse_organization_or_url_rejects_url_with_fragment() {
+        let result = parse_organization_or_url("https://devops.mycompany.com/#section");
+        assert!(result.is_err(), "URL with fragment should be rejected");
     }
 
     #[test]
