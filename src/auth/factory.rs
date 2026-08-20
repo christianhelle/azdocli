@@ -6,7 +6,7 @@
 //! logic behind a single **seam** so callers know nothing about
 //! credential resolution.
 
-use crate::auth::url::{normalize_base_url, user_entitlements_base_url};
+use crate::auth::url::{normalize_base_url, release_base_url, user_entitlements_base_url};
 use crate::auth::Credentials;
 
 /// Trait for building Azure DevOps API clients.
@@ -34,6 +34,21 @@ pub trait ClientFactory {
 
     /// Build a Member Entitlement Management client.
     fn build_entitlements(&self) -> azure_devops_rust_api::member_entitlement_management::Client;
+
+    /// Build a Build client.
+    fn build_build(&self) -> azure_devops_rust_api::build::Client;
+
+    /// Build a Release client.
+    fn build_release(&self) -> azure_devops_rust_api::release::Client;
+
+    /// Build a Distributed Task client.
+    fn build_distributed_task(&self) -> azure_devops_rust_api::distributed_task::Client;
+
+    /// Build a Work client.
+    fn build_work(&self) -> azure_devops_rust_api::work::Client;
+
+    /// Build a Service Endpoint client.
+    fn build_service_endpoint(&self) -> azure_devops_rust_api::service_endpoint::Client;
 }
 
 /// A concrete factory backed by a `Credentials` object.
@@ -41,6 +56,7 @@ pub struct CredentialClientFactory {
     credential: azure_devops_rust_api::Credential,
     endpoint: azure_core::http::Url,
     entitlements_endpoint: azure_core::http::Url,
+    release_endpoint: azure_core::http::Url,
 }
 
 impl CredentialClientFactory {
@@ -49,14 +65,19 @@ impl CredentialClientFactory {
         let endpoint = normalize_base_url(&creds.base_url)
             .parse()
             .expect("base_url should be a valid URL");
-        let entitlements_endpoint = normalize_base_url(&user_entitlements_base_url(&creds.base_url))
+        let entitlements_endpoint =
+            normalize_base_url(&user_entitlements_base_url(&creds.base_url))
+                .parse()
+                .expect("entitlements base_url should be a valid URL");
+        let release_endpoint = normalize_base_url(&release_base_url(&creds.base_url))
             .parse()
-            .expect("entitlements base_url should be a valid URL");
+            .expect("release base_url should be a valid URL");
 
         Self {
             credential: azure_devops_rust_api::Credential::Pat(creds.pat.clone()),
             endpoint,
             entitlements_endpoint,
+            release_endpoint,
         }
     }
 }
@@ -104,5 +125,35 @@ impl ClientFactory for CredentialClientFactory {
         )
         .endpoint(self.entitlements_endpoint.clone())
         .build()
+    }
+
+    fn build_build(&self) -> azure_devops_rust_api::build::Client {
+        azure_devops_rust_api::build::ClientBuilder::new(self.credential.clone())
+            .endpoint(self.endpoint.clone())
+            .build()
+    }
+
+    fn build_release(&self) -> azure_devops_rust_api::release::Client {
+        azure_devops_rust_api::release::ClientBuilder::new(self.credential.clone())
+            .endpoint(self.release_endpoint.clone())
+            .build()
+    }
+
+    fn build_distributed_task(&self) -> azure_devops_rust_api::distributed_task::Client {
+        azure_devops_rust_api::distributed_task::ClientBuilder::new(self.credential.clone())
+            .endpoint(self.endpoint.clone())
+            .build()
+    }
+
+    fn build_work(&self) -> azure_devops_rust_api::work::Client {
+        azure_devops_rust_api::work::ClientBuilder::new(self.credential.clone())
+            .endpoint(self.endpoint.clone())
+            .build()
+    }
+
+    fn build_service_endpoint(&self) -> azure_devops_rust_api::service_endpoint::Client {
+        azure_devops_rust_api::service_endpoint::ClientBuilder::new(self.credential.clone())
+            .endpoint(self.endpoint.clone())
+            .build()
     }
 }
