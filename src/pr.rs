@@ -2,9 +2,10 @@ use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::project::get_project_or_default;
 use crate::repos;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use azure_devops_rust_api::git;
 use clap::Subcommand;
+use std::path::Path;
 
 #[derive(Subcommand, Clone)]
 pub enum PullRequestsSubCommands {
@@ -164,6 +165,20 @@ async fn list_pull_request_commits(repo: &String, id: &String, project_name: Str
     }
 }
 
+fn resolve_description(
+    description: Option<&str>,
+    description_file: Option<&Path>,
+) -> Result<Option<String>> {
+    match description_file {
+        Some(path) => {
+            let content = std::fs::read_to_string(path)
+                .with_context(|| format!("Failed to read description file '{}'", path.display()))?;
+            Ok(Some(content))
+        }
+        None => Ok(description.map(|d| d.to_string())),
+    }
+}
+
 async fn create_pull_request(
     project: &str,
     repo: &str,
@@ -305,5 +320,66 @@ async fn show_pull_request(project: &str, _repo: &str, id: &str) -> Result<()> {
             eprintln!("Unable to retrieve pull request");
             Err(e)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn resolve_description_returns_inline_when_no_file() {
+        assert_eq!(
+            resolve_description(Some("inline description"), None).unwrap(),
+            Some("inline description".to_string())
+        );
+    }
+
+    #[test]
+    fn resolve_description_returns_none_when_nothing_provided() {
+        assert_eq!(resolve_description(None, None).unwrap(), None);
+    }
+
+    #[test]
+    fn resolve_description_reads_file_contents() {
+        let mut temp = tempfile::NamedTempFile::new().unwrap();
+        write!(temp, "# Markdown description\n\nWith **bold** text.").unwrap();
+
+        let result = resolve_description(None, Some(temp.path())).unwrap();
+
+        assert_eq!(
+            result,
+            Some("# Markdown description\n\nWith **bold** text.".to_string())
+        );
+    }
+
+    #[test]
+    fn resolve_description_file_wins_over_inline() {
+        let mut temp = tempfile::NamedTempFile::new().unwrap();
+        write!(temp, "file contents").unwrap();
+
+        let result = resolve_description(Some("inline"), Some(temp.path())).unwrap();
+
+        assert_eq!(result, Some("file contents".to_string()));
+    }
+
+    #[test]
+    fn resolve_description_returns_error_for_missing_file() {
+        let result = resolve_description(None, Some(Path::new("/does/not/exist.md")));
+
+        assert!(result.is_err());
+        let message = format!("{}", result.unwrap_err());
+        assert!(message.contains("Failed to read description file"));
+        assert!(message.contains("/does/not/exist.md"));
+    }
+
+    #[test]
+    fn resolve_description_reads_empty_file() {
+        let temp = tempfile::NamedTempFile::new().unwrap();
+
+        let result = resolve_description(None, Some(temp.path())).unwrap();
+
+        assert_eq!(result, Some("".to_string()));
     }
 }
