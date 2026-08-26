@@ -159,7 +159,7 @@ azdocli pipelines list
 
 ### All Subcommands
 
-```
+```text
 azdocli [SUBCOMMAND]
 
 SUBCOMMANDS:
@@ -168,7 +168,9 @@ SUBCOMMANDS:
     logout       Logout from Azure DevOps
     migrate      Migrate one or more team projects between organizations
     pipelines    Manage Azure DevOps pipelines
+    project      Set or view the default project
     repos        Manage Azure DevOps repos
+    user         Manage user entitlements
 ```
 
 ## Features
