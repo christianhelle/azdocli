@@ -2,9 +2,10 @@ use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::project::get_project_or_default;
 use crate::repos;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use azure_devops_rust_api::git;
 use clap::Subcommand;
+use std::path::{Path, PathBuf};
 
 #[derive(Subcommand, Clone)]
 pub enum PullRequestsSubCommands {
@@ -25,6 +26,10 @@ pub enum PullRequestsSubCommands {
         /// Description of the pull request
         #[clap(short, long)]
         description: Option<String>,
+
+        /// Path to a markdown file containing the pull request description
+        #[clap(long, value_name = "PATH")]
+        description_file: Option<PathBuf>,
 
         /// Source branch for the pull request (e.g., 'feature/my-feature')
         #[clap(short, long)]
@@ -87,10 +92,13 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
             repo,
             title,
             description,
+            description_file,
             source,
             target,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
+            let description =
+                resolve_description(description.as_deref(), description_file.as_deref()).await?;
             create_pull_request(
                 &project_name,
                 repo,
@@ -161,6 +169,24 @@ async fn list_pull_request_commits(repo: &String, id: &String, project_name: Str
             eprintln!("Unable to retrieve commits: {e}");
             Err(e)
         }
+    }
+}
+
+async fn resolve_description(
+    description: Option<&str>,
+    description_file: Option<&Path>,
+) -> Result<Option<String>> {
+    match description_file {
+        Some(path) => {
+            let path = path.to_path_buf();
+            let path_display = path.display().to_string();
+            let content = tokio::task::spawn_blocking(move || std::fs::read_to_string(&path))
+                .await
+                .context("Failed to read description file in blocking task")?
+                .with_context(|| format!("Failed to read description file '{}'", path_display))?;
+            Ok(Some(content))
+        }
+        None => Ok(description.map(|d| d.to_string())),
     }
 }
 
@@ -304,6 +330,98 @@ async fn show_pull_request(project: &str, _repo: &str, id: &str) -> Result<()> {
         Err(e) => {
             eprintln!("Unable to retrieve pull request");
             Err(e)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[tokio::test]
+    async fn resolve_description_returns_inline_when_no_file() {
+        assert_eq!(
+            resolve_description(Some("inline description"), None)
+                .await
+                .unwrap(),
+            Some("inline description".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn resolve_description_returns_none_when_nothing_provided() {
+        assert_eq!(resolve_description(None, None).await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn resolve_description_reads_file_contents() {
+        let mut temp = tempfile::NamedTempFile::new().unwrap();
+        write!(temp, "# Markdown description\n\nWith **bold** text.").unwrap();
+
+        let result = resolve_description(None, Some(temp.path())).await.unwrap();
+
+        assert_eq!(
+            result,
+            Some("# Markdown description\n\nWith **bold** text.".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn resolve_description_file_wins_over_inline() {
+        let mut temp = tempfile::NamedTempFile::new().unwrap();
+        write!(temp, "file contents").unwrap();
+
+        let result = resolve_description(Some("inline"), Some(temp.path()))
+            .await
+            .unwrap();
+
+        assert_eq!(result, Some("file contents".to_string()));
+    }
+
+    #[tokio::test]
+    async fn resolve_description_returns_error_for_missing_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let missing = temp.path().join("does/not/exist.md");
+
+        let result = resolve_description(None, Some(&missing)).await;
+
+        assert!(result.is_err());
+        let message = format!("{}", result.unwrap_err());
+        assert!(message.contains("Failed to read description file"));
+        assert!(message.contains(missing.display().to_string().as_str()));
+    }
+
+    #[tokio::test]
+    async fn resolve_description_reads_empty_file() {
+        let temp = tempfile::NamedTempFile::new().unwrap();
+
+        let result = resolve_description(None, Some(temp.path())).await.unwrap();
+
+        assert_eq!(result, Some("".to_string()));
+    }
+
+    #[test]
+    fn description_file_accepts_pathbuf() {
+        let path = PathBuf::from("description.md");
+        let command = PullRequestsSubCommands::Create {
+            project: None,
+            repo: "repo".to_string(),
+            title: None,
+            description: None,
+            description_file: Some(path.clone()),
+            source: "feature".to_string(),
+            target: "main".to_string(),
+        };
+
+        if let PullRequestsSubCommands::Create {
+            description_file: Some(actual),
+            ..
+        } = command
+        {
+            assert_eq!(actual, path);
+        } else {
+            panic!("expected Create with description_file");
         }
     }
 }
