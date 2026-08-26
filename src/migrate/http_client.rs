@@ -5,6 +5,7 @@ use futures::TryStream;
 use reqwest::{Body, Client, Response};
 use serde::Deserialize;
 
+use crate::auth::url::normalize_base_url;
 use crate::auth::Credentials;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -24,7 +25,8 @@ pub async fn download_attachment(
     attachment_id: &str,
 ) -> Result<Response> {
     let url = format!(
-        "https://dev.azure.com/{}/{}/_apis/wit/attachments/{}",
+        "{}/{}/{}/_apis/wit/attachments/{}",
+        normalize_base_url(&creds.base_url),
         percent_encode_path_segment(&creds.organization),
         percent_encode_path_segment(project),
         percent_encode_path_segment(attachment_id)
@@ -53,7 +55,8 @@ where
     E: Into<Box<dyn std::error::Error + Send + Sync>> + 'static,
 {
     let url = format!(
-        "https://dev.azure.com/{}/{}/_apis/wit/attachments",
+        "{}/{}/{}/_apis/wit/attachments",
+        normalize_base_url(&creds.base_url),
         percent_encode_path_segment(&creds.organization),
         percent_encode_path_segment(project)
     );

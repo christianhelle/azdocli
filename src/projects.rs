@@ -1,5 +1,6 @@
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
+use crate::auth::url::web_project_url;
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::core as azure_core;
 use azure_devops_rust_api::core::models;
@@ -113,8 +114,12 @@ pub async fn handle_command(subcommand: &ProjectsSubCommands) -> Result<()> {
 
             if *open {
                 let project = wait_for_project_to_be_ready(name).await?;
-                let organization = get_credentials()?.organization;
-                open_project_in_browser(&organization, &project.team_project_reference.name)?;
+                let creds = get_credentials()?;
+                open_project_in_browser(
+                    &creds.base_url,
+                    &creds.organization,
+                    &project.team_project_reference.name,
+                )?;
             }
         }
         ProjectsSubCommands::Delete { id, yes } => {
@@ -146,8 +151,12 @@ pub async fn handle_command(subcommand: &ProjectsSubCommands) -> Result<()> {
             display_project_details(&team_project);
 
             if *open {
-                let organization = get_credentials()?.organization;
-                open_project_in_browser(&organization, &team_project.team_project_reference.name)?;
+                let creds = get_credentials()?;
+                open_project_in_browser(
+                    &creds.base_url,
+                    &creds.organization,
+                    &team_project.team_project_reference.name,
+                )?;
             }
         }
     }
@@ -156,7 +165,7 @@ pub async fn handle_command(subcommand: &ProjectsSubCommands) -> Result<()> {
 
 async fn create_core_client() -> Result<azure_core::Client> {
     let creds = get_credentials()?;
-    let factory = CredentialClientFactory::new(&creds);
+    let factory = CredentialClientFactory::new(&creds)?;
     Ok(factory.build_core())
 }
 
@@ -351,8 +360,8 @@ fn display_operation_reference(label: &str, operation: &models::OperationReferen
     }
 }
 
-fn open_project_in_browser(organization: &str, project_name: &str) -> Result<()> {
-    let project_url = format!("https://dev.azure.com/{organization}/{project_name}");
+fn open_project_in_browser(base_url: &str, organization: &str, project_name: &str) -> Result<()> {
+    let project_url = web_project_url(base_url, organization, project_name);
 
     #[cfg(target_os = "windows")]
     {

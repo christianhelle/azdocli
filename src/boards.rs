@@ -1,5 +1,6 @@
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
+use crate::auth::url::web_work_item_url;
 use crate::project::get_project_or_default;
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::wit::models::json_patch_operation::Op;
@@ -112,7 +113,7 @@ pub enum WorkItemSubCommands {
 
 fn create_wit_client() -> Result<wit::Client> {
     let creds = get_credentials()?;
-    let factory = CredentialClientFactory::new(&creds);
+    let factory = CredentialClientFactory::new(&creds)?;
     Ok(factory.build_wit())
 }
 
@@ -288,8 +289,13 @@ async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<
     }
 }
 
-fn open_work_item_in_browser(organization: &str, id: &str) -> Result<()> {
-    let url = format!("https://dev.azure.com/{organization}//_workitems/edit/{id}");
+fn open_work_item_in_browser(
+    base_url: &str,
+    organization: &str,
+    project: &str,
+    id: &str,
+) -> Result<()> {
+    let url = web_work_item_url(base_url, organization, project, id);
 
     #[cfg(target_os = "windows")]
     {
@@ -647,7 +653,12 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
             if *web {
                 match get_credentials() {
                     Ok(creds) => {
-                        if let Err(e) = open_work_item_in_browser(&creds.organization, id) {
+                        if let Err(e) = open_work_item_in_browser(
+                            &creds.base_url,
+                            &creds.organization,
+                            &project_name,
+                            id,
+                        ) {
                             eprintln!("❌ Failed to open work item in browser: {e}");
                         }
                         return Ok(());

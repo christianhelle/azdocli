@@ -1,10 +1,10 @@
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use azure_devops_rust_api::build::ClientBuilder as BuildClientBuilder;
-use azure_devops_rust_api::release::ClientBuilder as ReleaseClientBuilder;
 use serde_json::Value;
 use std::fs;
 
+use crate::auth::factory::ClientFactory;
+use crate::auth::url::release_base_url;
 use crate::migrate::context::MigrationContext;
 use crate::migrate::phase::{Phase, PhaseSummary};
 
@@ -21,9 +21,8 @@ impl Phase for PipelinesClassicPhase {
         fs::create_dir_all(&output_dir)
             .with_context(|| format!("Creating output dir '{}'", output_dir.display()))?;
 
-        let source_build_client = BuildClientBuilder::new(ctx.source_credential.clone()).build();
-        let source_release_client =
-            ReleaseClientBuilder::new(ctx.source_credential.clone()).build();
+        let source_build_client = ctx.source_factory()?.build_build();
+        let source_release_client = ctx.source_factory()?.build_release();
         let http = reqwest::Client::new();
 
         let build_refs = source_build_client
@@ -98,7 +97,7 @@ impl Phase for PipelinesClassicPhase {
                 &ctx.opts.target_project,
                 "_apis/build/definitions?api-version=7.1",
                 &payload,
-                false,
+                ctx.target_base_url(),
             )
             .await
             {
@@ -167,6 +166,7 @@ impl Phase for PipelinesClassicPhase {
 
             let mut payload = value.clone();
             sanitize_release_definition_for_create(&mut payload);
+            let release_host = release_base_url(ctx.target_base_url());
             match post_ado_json(
                 &http,
                 &ctx.target_creds.organization,
@@ -174,7 +174,7 @@ impl Phase for PipelinesClassicPhase {
                 &ctx.opts.target_project,
                 "_apis/release/definitions?api-version=7.1",
                 &payload,
-                true,
+                &release_host,
             )
             .await
             {
@@ -393,13 +393,8 @@ async fn post_ado_json(
     project: &str,
     path_and_query: &str,
     body: &Value,
-    release_host: bool,
+    host: &str,
 ) -> Result<Value> {
-    let host = if release_host {
-        "https://vsrm.dev.azure.com"
-    } else {
-        "https://dev.azure.com"
-    };
     let url = format!(
         "{}/{}/{}/{}",
         host,

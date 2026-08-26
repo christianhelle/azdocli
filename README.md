@@ -440,6 +440,30 @@ azdocli login
 azdocli project MyProject
 ```
 
+### Enterprise Azure DevOps Installations
+
+By default `azdocli` targets the Azure DevOps cloud (`https://dev.azure.com`). You can log in to an enterprise or on-premises Azure DevOps installation by providing the server URL instead of a cloud organization name.
+
+The stored base URL must not include the organization or collection segment. Provide the base URL including any application path (for example, `https://devops.mycompany.com` or `https://tfs.mycompany.com/tfs`) and then enter the organization/collection when prompted. You can also paste the full URL including the collection (for example, `https://tfs.mycompany.com/tfs/DefaultCollection`); the last path segment is treated as the organization/collection and is not stored as part of the base URL.
+
+```sh
+# Login to an enterprise Azure DevOps Server
+azdocli login
+# When prompted for organization, enter the server URL, for example:
+# - https://devops.mycompany.com
+# - https://tfs.mycompany.com/tfs/DefaultCollection
+# Then enter the organization/collection name when prompted (not needed if it was part of the URL).
+```
+
+The base URL is stored alongside your PAT, so all subsequent commands use that server. You can also create named profiles for cloud and enterprise servers side-by-side:
+
+```sh
+azdocli login --profile cloud
+azdocli login --profile onprem
+```
+
+**Note:** User entitlement management (`azdocli user`) is only supported against the default Azure DevOps cloud host. Commands that manage user licenses will fail with a clear message when a custom base URL is configured.
+
 ### Basic Examples
 
 ```sh

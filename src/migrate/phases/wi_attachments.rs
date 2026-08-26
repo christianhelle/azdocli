@@ -1,9 +1,10 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use azure_devops_rust_api::wit::{models, ClientBuilder as WitClientBuilder};
+use azure_devops_rust_api::wit::models;
 use futures::TryStreamExt;
 use serde_json::Value;
 
+use crate::auth::factory::ClientFactory;
 use crate::migrate::context::MigrationContext;
 use crate::migrate::http_client;
 use crate::migrate::phase::{Phase, PhaseSummary};
@@ -38,8 +39,8 @@ impl Phase for WiAttachmentsPhase {
             ..Default::default()
         };
 
-        let source_client = WitClientBuilder::new(ctx.source_credential.clone()).build();
-        let target_client = WitClientBuilder::new(ctx.target_credential.clone()).build();
+        let source_client = ctx.source_factory()?.build_wit();
+        let target_client = ctx.target_factory()?.build_wit();
         let http = http_client::client();
 
         for source_id in source_ids {

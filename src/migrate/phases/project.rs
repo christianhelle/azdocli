@@ -1,10 +1,10 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use azure_devops_rust_api::core::{
-    models::{team_project_reference, TeamProject, TeamProjectReference},
-    ClientBuilder as CoreClientBuilder,
+use azure_devops_rust_api::core::models::{
+    team_project_reference, TeamProject, TeamProjectReference,
 };
 
+use crate::auth::factory::ClientFactory;
 use crate::migrate::context::MigrationContext;
 use crate::migrate::phase::{Phase, PhaseSummary};
 
@@ -29,7 +29,7 @@ impl Phase for ProjectPhase {
             ..Default::default()
         };
 
-        let target_client = CoreClientBuilder::new(ctx.target_credential.clone()).build();
+        let target_client = ctx.target_factory()?.build_core();
         let projects = target_client
             .projects_client()
             .list(&ctx.target_creds.organization)
@@ -55,7 +55,7 @@ impl Phase for ProjectPhase {
             return Ok(summary);
         }
 
-        let source_client = CoreClientBuilder::new(ctx.source_credential.clone()).build();
+        let source_client = ctx.source_factory()?.build_core();
         let source_projects = source_client
             .projects_client()
             .list(&ctx.source_creds.organization)

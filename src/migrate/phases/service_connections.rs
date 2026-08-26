@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use azure_devops_rust_api::service_endpoint::ClientBuilder as ServiceEndpointClientBuilder;
 use serde_json::json;
 use std::fs;
 
+use crate::auth::factory::ClientFactory;
 use crate::migrate::context::MigrationContext;
 use crate::migrate::phase::{Phase, PhaseSummary};
 
@@ -20,8 +20,7 @@ impl Phase for ServiceConnectionsPhase {
         fs::create_dir_all(&output_dir)
             .with_context(|| format!("Creating output dir '{}'", output_dir.display()))?;
 
-        let source_client =
-            ServiceEndpointClientBuilder::new(ctx.source_credential.clone()).build();
+        let source_client = ctx.source_factory()?.build_service_endpoint();
         let endpoints = source_client
             .endpoints_client()
             .get_service_endpoints(&ctx.source_creds.organization, &ctx.opts.source_project)

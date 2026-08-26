@@ -1,12 +1,13 @@
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use azure_devops_rust_api::wiki::{
-    models::{wiki_create_base_parameters, WikiCreateParametersV2, WikiV2},
-    ClientBuilder as WikiClientBuilder,
+use azure_devops_rust_api::wiki::models::{
+    wiki_create_base_parameters, WikiCreateParametersV2, WikiV2,
 };
 use std::path::Path;
 use std::process::Command;
 
+use crate::auth::factory::ClientFactory;
+use crate::auth::url::normalize_base_url;
 use crate::migrate::context::MigrationContext;
 use crate::migrate::phase::{Phase, PhaseSummary};
 
@@ -19,8 +20,8 @@ impl Phase for WikisPhase {
     }
 
     async fn execute(&self, ctx: &mut MigrationContext) -> Result<PhaseSummary> {
-        let source_client = WikiClientBuilder::new(ctx.source_credential.clone()).build();
-        let target_client = WikiClientBuilder::new(ctx.target_credential.clone()).build();
+        let source_client = ctx.source_factory()?.build_wiki();
+        let target_client = ctx.target_factory()?.build_wiki();
 
         let source_wikis = ctx
             .executor
@@ -89,6 +90,7 @@ async fn migrate_project_wiki(
     let target_repo = wiki_repo_name(&target_wiki, &ctx.opts.target_project);
 
     let target_url = ado_git_url(
+        ctx.target_base_url(),
         &ctx.target_creds.organization,
         &ctx.opts.target_project,
         &target_repo,
@@ -103,6 +105,7 @@ async fn migrate_project_wiki(
     }
 
     let source_url = ado_git_url(
+        ctx.source_base_url(),
         &ctx.source_creds.organization,
         &ctx.opts.source_project,
         &source_repo,
@@ -252,10 +255,20 @@ fn run_git(cmd: &mut Command, operation: &str, secrets: &[&str]) -> Result<Strin
     Err(anyhow!("git {operation} failed: {details}"))
 }
 
-fn ado_git_url(organization: &str, project: &str, repo: &str, pat: &str) -> String {
+fn ado_git_url(base_url: &str, organization: &str, project: &str, repo: &str, pat: &str) -> String {
+    let normalized = normalize_base_url(base_url);
+    let scheme = if normalized.starts_with("http://") {
+        "http"
+    } else {
+        "https"
+    };
+    let host_and_path = normalized
+        .trim_start_matches("https://")
+        .trim_start_matches("http://");
     format!(
-        "https://azdocli:{}@dev.azure.com/{}/{}/_git/{}",
+        "{scheme}://azdocli:{}@{}/{}/{}/_git/{}",
         percent_encode(pat),
+        host_and_path,
         percent_encode(organization),
         percent_encode(project),
         percent_encode(repo)
@@ -294,4 +307,39 @@ fn sanitize_path_segment(value: &str) -> String {
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ado_git_url;
+
+    #[test]
+    fn ado_git_url_preserves_https_scheme() {
+        let url = ado_git_url(
+            "https://dev.azure.com",
+            "myorg",
+            "myproject",
+            "myrepo.wiki",
+            "pat",
+        );
+        assert_eq!(
+            url,
+            "https://azdocli:pat@dev.azure.com/myorg/myproject/_git/myrepo.wiki"
+        );
+    }
+
+    #[test]
+    fn ado_git_url_preserves_http_scheme() {
+        let url = ado_git_url(
+            "http://azure-devops.company.local",
+            "myorg",
+            "myproject",
+            "myrepo.wiki",
+            "pat",
+        );
+        assert_eq!(
+            url,
+            "http://azdocli:pat@azure-devops.company.local/myorg/myproject/_git/myrepo.wiki"
+        );
+    }
 }

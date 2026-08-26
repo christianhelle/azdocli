@@ -72,7 +72,8 @@ pub(super) async fn get_target_work_item(
 
 pub(super) fn target_work_item_url(ctx: &MigrationContext, id: &str) -> String {
     format!(
-        "https://dev.azure.com/{}/{}/_apis/wit/workItems/{}",
+        "{}/{}/{}/_apis/wit/workItems/{}",
+        ctx.target_base_url(),
         percent_encode_path_segment(&ctx.target_creds.organization),
         percent_encode_path_segment(&ctx.opts.target_project),
         id
@@ -231,7 +232,7 @@ mod tests {
 
     #[test]
     fn attachment_id_from_url_extracts_id_before_query() {
-        let url = "https://dev.azure.com/org/project/_apis/wit/attachments/abc-123?fileName=a.png";
+        let url = "https://example.com/org/project/_apis/wit/attachments/abc-123?fileName=a.png";
 
         assert_eq!(attachment_id_from_url(url), Some("abc-123".to_string()));
     }

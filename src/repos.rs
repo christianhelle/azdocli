@@ -187,7 +187,7 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
 
 fn create_git_client() -> Result<git::Client> {
     let creds = get_credentials()?;
-    let factory = CredentialClientFactory::new(&creds);
+    let factory = CredentialClientFactory::new(&creds)?;
     Ok(factory.build_git())
 }
 
@@ -570,6 +570,7 @@ mod tests {
             Credentials {
                 organization: self.organization.clone(),
                 pat: self.pat.clone(),
+                base_url: crate::auth::url::default_base_url(),
             }
         }
     }
@@ -585,7 +586,7 @@ mod tests {
 
     async fn create_test_repo(project: &str, name: &str) -> Result<git::models::GitRepository> {
         let creds = get_test_credentials()?;
-        let factory = CredentialClientFactory::new(&creds);
+        let factory = CredentialClientFactory::new(&creds)?;
         let client = factory.build_git();
 
         client
@@ -605,7 +606,7 @@ mod tests {
 
     async fn delete_test_repo(project: &str, repo_id: &str) -> Result<()> {
         let creds = get_test_credentials()?;
-        let factory = CredentialClientFactory::new(&creds);
+        let factory = CredentialClientFactory::new(&creds)?;
         let client = factory.build_git();
 
         client
@@ -617,7 +618,7 @@ mod tests {
 
     async fn list_test_repos(project: &str) -> Result<Vec<git::models::GitRepository>> {
         let creds = get_test_credentials()?;
-        let factory = CredentialClientFactory::new(&creds);
+        let factory = CredentialClientFactory::new(&creds)?;
         let client = factory.build_git();
 
         client
