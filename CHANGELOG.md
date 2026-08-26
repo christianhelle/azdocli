@@ -3,6 +3,7 @@
 ## [Unreleased Changes]
 
 ### Merged Pull Requests
+- Improve README and static website documentation ([#117](https://github.com/christianhelle/azdocli/pull/117)) ([@christianhelle](https://github.com/christianhelle/))
 - Reorganize docs layout for installers and website ([#109](https://github.com/christianhelle/azdocli/pull/109)) ([@christianhelle](https://github.com/christianhelle/))
 - Update Rust crate azure_devops_rust_api to 0.36.0 ([#99](https://github.com/christianhelle/azdocli/pull/99)) (@renovate[bot])
 - Update actions/upload-pages-artifact action to v5 ([#105](https://github.com/christianhelle/azdocli/pull/105)) (@renovate[bot])
