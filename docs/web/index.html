@@ -1,249 +1,293 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Azure DevOps CLI (azdocli)</title>
-    <link rel="stylesheet" href="styles.css" />
+    <meta name="description" content="CLI tool for interacting with Azure DevOps. Manage repositories, pipelines, boards, and more from the command line.">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚀</text></svg>">
   </head>
   <body>
-    <header>
-      <div class="container">
-        <h1>🚀 Azure DevOps CLI</h1>
-        <p class="subtitle">
-          A powerful command-line interface for Azure DevOps
-        </p>
-        <div class="badges">
-          <img
-            src="https://github.com/christianhelle/azdocli/actions/workflows/build.yml/badge.svg"
-            alt="Build Status"
-          />
-          <img
-            src="https://github.com/christianhelle/azdocli/actions/workflows/security-audit.yml/badge.svg"
-            alt="Security Audit"
-          />
-        </div>
-      </div>
-    </header>
-
-    <nav>
-      <div class="container">
-        <ul>
-          <li><a href="#features">Features</a></li>
-          <li><a href="#installation">Installation</a></li>
-          <li><a href="#usage">Usage</a></li>
-          <li><a href="user-guide.html">User Guide</a></li>
-          <li><a href="contributing.html">Contributing</a></li>
-          <li>
-            <a href="https://github.com/christianhelle/azdocli">GitHub</a>
-          </li>
+    <nav class="navbar">
+      <div class="nav-container">
+        <a href="index.html" class="nav-brand">
+          <span class="emoji">🚀</span>
+          azdocli
+        </a>
+        <ul class="nav-menu" id="nav-menu">
+          <li><a href="#installation" class="nav-link">Installation</a></li>
+          <li><a href="#features" class="nav-link">Features</a></li>
+          <li><a href="#usage" class="nav-link">Usage</a></li>
+          <li><a href="user-guide.html" class="nav-link">User Guide</a></li>
+          <li><a href="contributing.html" class="nav-link">Contributing</a></li>
+          <li><a href="https://github.com/christianhelle/azdocli" class="nav-link external">GitHub</a></li>
         </ul>
-        <button
-          class="theme-toggle"
-          onclick="toggleTheme()"
-          aria-label="Toggle dark mode"
-        >
-          🌙
+        <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">🌙</button>
+        <button class="hamburger" id="hamburger" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-menu" onclick="toggleMobileMenu()">
+          <span></span>
+          <span></span>
+          <span></span>
         </button>
       </div>
     </nav>
 
-    <main class="container">
-      <section id="overview">
-        <h2>Overview</h2>
-        <p>
-          Azure DevOps CLI is a command-line tool that provides seamless
-          interaction with Azure DevOps services. Built with Rust for
-          performance and reliability, it offers comprehensive features for
-          managing repositories, pipelines, boards, and more.
-        </p>
-      </section>
+    <section class="hero">
+      <div class="container">
+        <div class="hero-content">
+          <div class="hero-title">
+            <span class="emoji">🚀</span>
+            Azure DevOps CLI
+          </div>
+          <p class="hero-subtitle">
+            A command-line tool for interacting with Azure DevOps. Manage repositories, pipelines, boards, and more — built with Rust for performance and reliability.
+          </p>
+          <div class="hero-buttons">
+            <a href="#installation" class="btn btn-primary">Install Now</a>
+            <a href="https://github.com/christianhelle/azdocli" class="btn btn-secondary">View on GitHub ↗</a>
+          </div>
+          <div class="badges">
+            <img src="https://github.com/christianhelle/azdocli/actions/workflows/build.yml/badge.svg" alt="Build Status">
+            <img src="https://github.com/christianhelle/azdocli/actions/workflows/security-audit.yml/badge.svg" alt="Security Audit">
+          </div>
+        </div>
 
-      <section id="features">
-        <h2>🌟 Key Features</h2>
-        <div class="feature-grid">
-          <div class="feature-card">
-            <h3>📁 Repository Management</h3>
-            <p>
-              List, create, delete, clone, view, and manage pull requests in
-              repositories with powerful batch operations and parallel
-              processing.
-            </p>
-          </div>
-          <div class="feature-card">
-            <h3>🔧 Pipeline Management</h3>
-            <p>
-              Manage Azure DevOps pipelines, view runs, show build details, and
-              trigger new executions directly from the command line.
-            </p>
-          </div>
-          <div class="feature-card">
-            <h3>📋 Board Management</h3>
-            <p>
-              Comprehensive work item management with full CRUD operations,
-              advanced filtering, list my work items, support for multiple work
-              item types, and web integration.
-            </p>
-          </div>
-          <div class="feature-card">
-            <h3>🔐 Secure Authentication</h3>
-            <p>
-              Secure login using Personal Access Tokens (PAT) with proper
-              credential management and session handling.
-            </p>
-          </div>
-          <div class="feature-card">
-            <h3>⚡ Default Project</h3>
-            <p>
-              Set a default project to streamline your workflow and avoid
-              specifying --project for every command.
-            </p>
-          </div>
-          <div class="feature-card">
-              <h3>📂 Projects</h3>
-              <p>
-              Create, delete, list, and show Azure DevOps team projects within
-              an organization using <code>azdocli projects</code> subcommands.
-              These commands are organization-scoped and use your stored login.
-              </p>
+        <div class="hero-demo">
+          <div class="terminal">
+            <div class="terminal-header">
+              <div class="terminal-buttons">
+                <span class="btn-close"></span>
+                <span class="btn-minimize"></span>
+                <span class="btn-maximize"></span>
+              </div>
+              <div class="terminal-title">azdocli</div>
             </div>
-          <div class="feature-card">
-            <h3>🚀 Performance</h3>
-            <p>
-              Built with Rust for exceptional performance, with parallel
-              operations and efficient resource utilization.
-            </p>
+            <div class="terminal-body">
+              <div class="terminal-line">
+                <span class="prompt">$</span> azdocli login
+              </div>
+              <div class="terminal-line output">
+                Enter organization name: <span class="output dim">mycompany</span>
+              </div>
+              <div class="terminal-line output">
+                Enter PAT: <span class="output dim">••••••••</span>
+              </div>
+              <div class="terminal-line output success">
+                ✅ Successfully logged in to Azure DevOps
+              </div>
+              <div class="terminal-line">&nbsp;</div>
+              <div class="terminal-line">
+                <span class="prompt">$</span> azdocli project MyProject
+              </div>
+              <div class="terminal-line output success">
+                ✅ Default project set to: MyProject
+              </div>
+              <div class="terminal-line">&nbsp;</div>
+              <div class="terminal-line">
+                <span class="prompt">$</span> azdocli repos list
+              </div>
+              <div class="terminal-line output">
+                📋 Repositories in MyProject:
+              </div>
+              <div class="terminal-line output success">
+                ✅ backend-api
+              </div>
+              <div class="terminal-line output success">
+                ✅ frontend-app
+              </div>
+              <div class="terminal-line output success">
+                ✅ shared-library
+              </div>
+              <div class="terminal-line output">
+                Found 3 repositories
+              </div>
+            </div>
           </div>
         </div>
-      </section>
-      <section id="installation">
-        <h2>📦 Installation</h2>
-        <div class="install-methods">
-          <div class="install-card featured">
-            <h3>🚀 Quick Install (Recommended)</h3>
-            <h4>Linux/macOS:</h4>
-            <pre><code>curl -sSL https://christianhelle.com/azdocli/install | bash</code></pre>
-            <h4>Windows (PowerShell):</h4>
-            <pre><code>iwr -useb https://christianhelle.com/azdocli/install.ps1 | iex</code></pre>
-            <p>
-              One-liner commands that automatically download and install the
-              latest release for your platform.
-            </p>
-          </div>
-          <div class="install-card">
-            <h3>From crates.io</h3>
-            <pre><code>cargo install azdocli</code></pre>
-            <p>
-              Install using Cargo. This will install the
-              <code>azdocli</code> binary.
-            </p>
-          </div>
-          <div class="install-card">
-            <h3>Using Snap (Linux)</h3>
-            <pre><code>snap install azdocli</code></pre>
-            <p>
-              Install directly from the Snap Store on Linux systems with
-              automatic updates.
-            </p>
-          </div>
-          <div class="install-card">
-            <h3>From GitHub Releases</h3>
-            <p>Download pre-built binaries:</p>
-            <ul>
-              <li>
-                Windows: <code>windows-x64.zip</code> or
-                <code>windows-arm64.zip</code>
-              </li>
-              <li>
-                macOS: <code>macos-x64.zip</code> or
-                <code>macos-arm64.zip</code>
-              </li>
-              <li>
-                Linux: <code>linux-x64.zip</code> or
-                <code>linux-arm64.zip</code>
-              </li>
-            </ul>
-            <p>
-              <a
-                href="https://github.com/christianhelle/azdocli/releases"
-                class="button"
-                >Download Latest Release</a
-              >
-            </p>
-          </div>
-        </div>
-      </section>
+      </div>
+    </section>
 
-      <section id="usage">
-        <h2>💻 Quick Start</h2>
-        <div class="usage-steps">
-          <div class="step">
-            <h3>1. Create a Personal Access Token</h3>
-            <p>
-              Before using the CLI, you need to create a Personal Access Token
-              (PAT) in Azure DevOps:
-            </p>
-            <ol>
-              <li>
-                Navigate to <strong>Azure DevOps</strong> →
-                <strong>User Settings</strong> →
-                <strong>Personal Access Tokens</strong>
-              </li>
-              <li>Click <strong>"New Token"</strong></li>
-              <li>Set a descriptive name (e.g., "azdocli")</li>
-              <li>
-                Configure the required scopes:
-                <strong>Code (read & write)</strong>,
-                <strong>Build (read & execute)</strong>,
-                <strong>Work Items (read & write)</strong>
-              </li>
-              <li>
-                Click <strong>"Create"</strong> and copy the token securely
-              </li>
-            </ol>
-            <p>
-              <strong>⚠️ Important:</strong> Store your PAT securely and never
-              commit it to version control.
-            </p>
+    <section id="installation" class="installation">
+      <div class="container">
+        <h2 class="section-title">Installation</h2>
+        <div class="install-options">
+          <div class="install-card featured">
+            <div class="install-header">
+              <h3>Quick Install (Recommended)</h3>
+              <span class="badge recommended">Recommended</span>
+            </div>
+            <div class="install-platforms">
+              <div class="platform-section">
+                <h4>Linux / macOS</h4>
+                <div class="install-code">
+                  <code>curl -sSL https://christianhelle.com/azdocli/install | bash</code>
+                </div>
+              </div>
+              <div class="platform-section">
+                <h4>Windows (PowerShell)</h4>
+                <div class="install-code">
+                  <code>iwr -useb https://christianhelle.com/azdocli/install.ps1 | iex</code>
+                </div>
+              </div>
+            </div>
+            <p>One-command installation that automatically detects your platform, downloads the latest release, and adds it to your PATH.</p>
           </div>
-          <div class="step">
-            <h3>2. Login to Azure DevOps</h3>
-            <pre><code>azdocli login</code></pre>
-            <p>
-              Enter your organization name and the PAT you created in step 1
-              when prompted.
-            </p>
+
+          <div class="install-card">
+            <div class="install-header">
+              <h3>From crates.io</h3>
+              <span class="badge rust">Rust</span>
+            </div>
+            <div class="install-code">
+              <code>cargo install azdocli</code>
+            </div>
+            <p>For users with Rust tooling installed. Compiles and installs from crates.io.</p>
           </div>
-          <div class="step">
-            <h3>3. Set a default project (optional)</h3>
-            <pre><code>azdocli project MyProject</code></pre>
+
+          <div class="install-card">
+            <div class="install-header">
+              <h3>Snap Store (Linux)</h3>
+            </div>
+            <div class="install-code">
+              <code>snap install azdocli</code>
+            </div>
+            <p>Install directly from the Snap Store on Linux systems with automatic updates.</p>
           </div>
-          <div class="step">
-            <h3>4. Start using the CLI</h3>
-            <pre><code># Repository management
+
+          <div class="install-card">
+            <div class="install-header">
+              <h3>GitHub Releases</h3>
+            </div>
+            <p>Download pre-built binaries for your platform:</p>
+            <ul>
+              <li>Windows: <code>windows-x64.zip</code> or <code>windows-arm64.zip</code></li>
+              <li>macOS: <code>macos-x64.zip</code> or <code>macos-arm64.zip</code></li>
+              <li>Linux: <code>linux-x64.zip</code> or <code>linux-arm64.zip</code></li>
+            </ul>
+            <p><a href="https://github.com/christianhelle/azdocli/releases" target="_blank" rel="noopener noreferrer">📥 Download Latest Release</a></p>
+          </div>
+
+          <div class="install-card">
+            <div class="install-header">
+              <h3>Build from Source</h3>
+              <span class="badge development">Dev</span>
+            </div>
+            <p>Requires Rust 1.70 or later.</p>
+            <div class="install-code">
+              <code>git clone https://github.com/christianhelle/azdocli.git
+cd azdocli
+cargo build --release</code>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="features">
+      <div class="container">
+        <h2 class="section-title">Features</h2>
+        <div class="features-grid">
+          <div class="feature-card">
+            <span class="feature-icon">📁</span>
+            <h3>Repository Management</h3>
+            <p>List, create, delete, clone, view, and manage pull requests with powerful batch operations and parallel processing.</p>
+          </div>
+          <div class="feature-card">
+            <span class="feature-icon">🔧</span>
+            <h3>Pipeline Management</h3>
+            <p>Manage Azure DevOps pipelines, view runs, show build details, and trigger new executions from the command line.</p>
+          </div>
+          <div class="feature-card">
+            <span class="feature-icon">📋</span>
+            <h3>Board Management</h3>
+            <p>Full CRUD operations for work items with advanced filtering, multiple work item types, and web integration.</p>
+          </div>
+          <div class="feature-card">
+            <span class="feature-icon">🔐</span>
+            <h3>Secure Authentication</h3>
+            <p>Secure login using Personal Access Tokens (PAT) with proper credential management and session handling.</p>
+          </div>
+          <div class="feature-card">
+            <span class="feature-icon">⚡</span>
+            <h3>Default Project</h3>
+            <p>Set a default project to streamline your workflow and avoid specifying <code>--project</code> for every command.</p>
+          </div>
+          <div class="feature-card">
+            <span class="feature-icon">📂</span>
+            <h3>Project Management</h3>
+            <p>Create, delete, list, and show Azure DevOps team projects within an organization.</p>
+          </div>
+          <div class="feature-card">
+            <span class="feature-icon">🔄</span>
+            <h3>Migration</h3>
+            <p>Cross-tenant team-project migration with <code>azdocli migrate</code> for moving projects between organizations.</p>
+          </div>
+          <div class="feature-card">
+            <span class="feature-icon">🖥️</span>
+            <h3>Enterprise Support</h3>
+            <p>Log in to enterprise or on-premises Azure DevOps Server installations with custom base URLs.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="usage" class="usage">
+      <div class="container">
+        <h2 class="section-title">Quick Start</h2>
+        <div class="usage-content">
+          <div class="usage-example">
+            <h3>Authentication</h3>
+            <p>Before using the CLI, create a Personal Access Token (PAT) in Azure DevOps with the required scopes: Code (read/write), Build (read/execute), Work Items (read/write), and Project and Team (read).</p>
+            <div class="code-block">
+              <code># Login with your Personal Access Token
+azdocli login
+# You'll be prompted for:
+# - Organization name (e.g., "mycompany" from https://dev.azure.com/mycompany)
+# - Personal Access Token
+
+# Set a default project (optional but recommended)
+azdocli project MyProject</code>
+            </div>
+          </div>
+          <div class="usage-example">
+            <h3>Common Commands</h3>
+            <div class="code-block">
+              <code># Repository management
 azdocli repos list
 azdocli repos show --id MyRepo
-azdocli repos clone
+azdocli repos clone --target-dir ./repos --parallel
 
-# Pull request management  
+# Pull request management
 azdocli repos pr list --repo MyRepo
-azdocli repos pr create --repo MyRepo --source "feature/my-feature" --title "My Feature"
+azdocli repos pr show --repo MyRepo --id 123
+azdocli repos pr create --repo MyRepo --source "feature/x" --title "My Feature"
 
 # Pipeline management
 azdocli pipelines list
 azdocli pipelines runs --id 42
+azdocli pipelines run --id 42
 
-# Board management - Work Items
+# Board management
 azdocli boards work-item list
-azdocli boards work-item list --state "Active" --work-item-type "Bug"
 azdocli boards work-item show --id 123
-azdocli boards work-item create bug --title "Fix login issue"</code></pre>
+azdocli boards work-item create bug --title "Fix login issue"
+
+# Project management
+azdocli projects list
+azdocli projects create --name MyProject</code>
+            </div>
           </div>
         </div>
-      </section>
+        <div class="cta">
+          <p>Ready to dive deeper?</p>
+          <a href="user-guide.html" class="btn btn-primary">Read the User Guide</a>
+        </div>
+      </div>
+    </section>
 
-      <section id="links">
-        <h2>📚 Documentation</h2>
+    <section id="links" class="installation">
+      <div class="container">
+        <h2 class="section-title">Documentation</h2>
         <div class="doc-links">
           <a href="user-guide.html" class="doc-link">
             <h3>📖 User Guide</h3>
@@ -258,71 +302,42 @@ azdocli boards work-item create bug --title "Fix login issue"</code></pre>
             <p>View the source code on GitHub</p>
           </a>
         </div>
-      </section>
-    </main>
+      </div>
+    </section>
 
-    <footer>
+    <footer class="footer">
       <div class="container">
-        <p>&copy; 2024 Azure DevOps CLI. Built with ❤️ using Rust.</p>
-        <p>
-          <a href="https://github.com/christianhelle/azdocli">GitHub</a> |
-          <a href="https://crates.io/crates/azdocli">crates.io</a>
-        </p>
+        <div class="footer-content">
+          <div class="footer-section">
+            <h4>azdocli</h4>
+            <p>A command-line tool for interacting with Azure DevOps, built with Rust.</p>
+          </div>
+          <div class="footer-section">
+            <h4>Links</h4>
+            <ul>
+              <li><a href="https://github.com/christianhelle/azdocli">GitHub</a></li>
+              <li><a href="https://github.com/christianhelle/azdocli/releases">Releases</a></li>
+              <li><a href="https://crates.io/crates/azdocli">crates.io</a></li>
+            </ul>
+          </div>
+          <div class="footer-section">
+            <h4>Documentation</h4>
+            <ul>
+              <li><a href="user-guide.html">User Guide</a></li>
+              <li><a href="contributing.html">Contributing</a></li>
+            </ul>
+          </div>
+          <div class="footer-section">
+            <h4>License</h4>
+            <p>MIT License</p>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <p>&copy; 2025 Azure DevOps CLI. Built with ❤️ using Rust.</p>
+        </div>
       </div>
     </footer>
 
-    <script>
-      // Dark mode toggle functionality
-      function toggleTheme() {
-        const currentTheme =
-          document.documentElement.getAttribute("data-theme");
-        const newTheme = currentTheme === "dark" ? "light" : "dark";
-
-        document.documentElement.setAttribute("data-theme", newTheme);
-        localStorage.setItem("theme", newTheme);
-
-        // Update toggle button icon
-        const toggleButton = document.querySelector(".theme-toggle");
-        toggleButton.textContent = newTheme === "dark" ? "☀️" : "🌙";
-      }
-
-      // Initialize theme on page load
-      function initTheme() {
-        const savedTheme = localStorage.getItem("theme");
-        const systemPrefersDark = window.matchMedia(
-          "(prefers-color-scheme: dark)",
-        ).matches;
-        const theme = savedTheme || (systemPrefersDark ? "dark" : "light");
-
-        document.documentElement.setAttribute("data-theme", theme);
-
-        // Update toggle button icon
-        const toggleButton = document.querySelector(".theme-toggle");
-        if (toggleButton) {
-          toggleButton.textContent = theme === "dark" ? "☀️" : "🌙";
-        }
-      }
-
-      // Listen for system theme changes
-      window
-        .matchMedia("(prefers-color-scheme: dark)")
-        .addEventListener("change", (e) => {
-          if (!localStorage.getItem("theme")) {
-            const theme = e.matches ? "dark" : "light";
-            document.documentElement.setAttribute("data-theme", theme);
-            const toggleButton = document.querySelector(".theme-toggle");
-            if (toggleButton) {
-              toggleButton.textContent = theme === "dark" ? "☀️" : "🌙";
-            }
-          }
-        });
-
-      // Initialize theme when DOM is ready
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", initTheme);
-      } else {
-        initTheme();
-      }
-    </script>
+    <script src="script.js"></script>
   </body>
 </html>
