@@ -5,6 +5,15 @@
 
 CLI tool for interacting with Azure DevOps.
 
+## Table of Contents
+
+- [Installation](#installation)
+- [Authentication Setup](#authentication-setup)
+- [Quick Start](#quick-start)
+- [Features](#features)
+- [Testing](#testing)
+- [Contributing](#contributing)
+
 ## Installation
 
 ### Quick Install (Recommended)
