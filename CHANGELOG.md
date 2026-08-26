@@ -3,6 +3,12 @@
 ## [Unreleased Changes]
 
 ### Merged Pull Requests
+- Add --description-file support for PR creation ([#118](https://github.com/christianhelle/azdocli/pull/118)) ([@christianhelle](https://github.com/christianhelle/))
+
+
+## [0.6.0](https://github.com/christianhelle/azdocli/releases/tag/0.6.0) (2026-08-26)
+
+### Merged Pull Requests
 - Improve README and static website documentation ([#117](https://github.com/christianhelle/azdocli/pull/117)) ([@christianhelle](https://github.com/christianhelle/))
 - Reorganize docs layout for installers and website ([#109](https://github.com/christianhelle/azdocli/pull/109)) ([@christianhelle](https://github.com/christianhelle/))
 - Update Rust crate azure_devops_rust_api to 0.36.0 ([#99](https://github.com/christianhelle/azdocli/pull/99)) (@renovate[bot])
@@ -44,6 +50,12 @@
 - devops wiki support ([#102](https://github.com/christianhelle/azdocli/pull/102)) ([@mdnmdn](https://github.com/mdnmdn/))
 - Add projects command feature to docs ([#96](https://github.com/christianhelle/azdocli/pull/96)) ([@christianhelle](https://github.com/christianhelle/))
 - Add git build dependency to snapcraft.yaml ([#85](https://github.com/christianhelle/azdocli/pull/85)) ([@christianhelle](https://github.com/christianhelle/))
+
+### Closed Issues
+- ✨Set up Copilot instructions ([#73](https://github.com/christianhelle/azdocli/issues/73)) ([@christianhelle](https://github.com/christianhelle/))
+- Resolve issues reported by `cargo clippy -- -D warnings` ([#71](https://github.com/christianhelle/azdocli/issues/71)) ([@christianhelle](https://github.com/christianhelle/))
+- Distribute Windows binaries via Chocolatey ([#44](https://github.com/christianhelle/azdocli/issues/44)) ([@christianhelle](https://github.com/christianhelle/))
+- Snapcraft Description ([#64](https://github.com/christianhelle/azdocli/issues/64)) ([@christianhelle](https://github.com/christianhelle/))
 
 
 ## [0.3.2](https://github.com/christianhelle/azdocli/releases/tag/0.3.2) (2025-06-30)
