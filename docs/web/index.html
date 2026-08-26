@@ -15,7 +15,7 @@
           <span class="emoji">🚀</span>
           azdocli
         </a>
-        <ul class="nav-menu">
+        <ul class="nav-menu" id="nav-menu">
           <li><a href="#installation" class="nav-link">Installation</a></li>
           <li><a href="#features" class="nav-link">Features</a></li>
           <li><a href="#usage" class="nav-link">Usage</a></li>
@@ -24,11 +24,11 @@
           <li><a href="https://github.com/christianhelle/azdocli" class="nav-link external">GitHub</a></li>
         </ul>
         <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">🌙</button>
-        <div class="hamburger" onclick="toggleMobileMenu()">
+        <button class="hamburger" id="hamburger" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-menu" onclick="toggleMobileMenu()">
           <span></span>
           <span></span>
           <span></span>
-        </div>
+        </button>
       </div>
     </nav>
 
@@ -164,7 +164,7 @@
               <li>macOS: <code>macos-x64.zip</code> or <code>macos-arm64.zip</code></li>
               <li>Linux: <code>linux-x64.zip</code> or <code>linux-arm64.zip</code></li>
             </ul>
-            <p><a href="https://github.com/christianhelle/azdocli/releases" target="_blank">📥 Download Latest Release</a></p>
+            <p><a href="https://github.com/christianhelle/azdocli/releases" target="_blank" rel="noopener noreferrer">📥 Download Latest Release</a></p>
           </div>
 
           <div class="install-card">
