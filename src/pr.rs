@@ -100,7 +100,8 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
             let description = resolve_description(
                 description.as_deref(),
                 description_file.as_deref().map(Path::new),
-            )?;
+            )
+            .await?;
             create_pull_request(
                 &project_name,
                 repo,
@@ -174,14 +175,18 @@ async fn list_pull_request_commits(repo: &String, id: &String, project_name: Str
     }
 }
 
-fn resolve_description(
+async fn resolve_description(
     description: Option<&str>,
     description_file: Option<&Path>,
 ) -> Result<Option<String>> {
     match description_file {
         Some(path) => {
-            let content = std::fs::read_to_string(path)
-                .with_context(|| format!("Failed to read description file '{}'", path.display()))?;
+            let path = path.to_path_buf();
+            let path_display = path.display().to_string();
+            let content = tokio::task::spawn_blocking(move || std::fs::read_to_string(&path))
+                .await
+                .context("Failed to read description file in blocking task")?
+                .with_context(|| format!("Failed to read description file '{}'", path_display))?;
             Ok(Some(content))
         }
         None => Ok(description.map(|d| d.to_string())),
@@ -337,25 +342,27 @@ mod tests {
     use super::*;
     use std::io::Write;
 
-    #[test]
-    fn resolve_description_returns_inline_when_no_file() {
+    #[tokio::test]
+    async fn resolve_description_returns_inline_when_no_file() {
         assert_eq!(
-            resolve_description(Some("inline description"), None).unwrap(),
+            resolve_description(Some("inline description"), None)
+                .await
+                .unwrap(),
             Some("inline description".to_string())
         );
     }
 
-    #[test]
-    fn resolve_description_returns_none_when_nothing_provided() {
-        assert_eq!(resolve_description(None, None).unwrap(), None);
+    #[tokio::test]
+    async fn resolve_description_returns_none_when_nothing_provided() {
+        assert_eq!(resolve_description(None, None).await.unwrap(), None);
     }
 
-    #[test]
-    fn resolve_description_reads_file_contents() {
+    #[tokio::test]
+    async fn resolve_description_reads_file_contents() {
         let mut temp = tempfile::NamedTempFile::new().unwrap();
         write!(temp, "# Markdown description\n\nWith **bold** text.").unwrap();
 
-        let result = resolve_description(None, Some(temp.path())).unwrap();
+        let result = resolve_description(None, Some(temp.path())).await.unwrap();
 
         assert_eq!(
             result,
@@ -363,19 +370,21 @@ mod tests {
         );
     }
 
-    #[test]
-    fn resolve_description_file_wins_over_inline() {
+    #[tokio::test]
+    async fn resolve_description_file_wins_over_inline() {
         let mut temp = tempfile::NamedTempFile::new().unwrap();
         write!(temp, "file contents").unwrap();
 
-        let result = resolve_description(Some("inline"), Some(temp.path())).unwrap();
+        let result = resolve_description(Some("inline"), Some(temp.path()))
+            .await
+            .unwrap();
 
         assert_eq!(result, Some("file contents".to_string()));
     }
 
-    #[test]
-    fn resolve_description_returns_error_for_missing_file() {
-        let result = resolve_description(None, Some(Path::new("/does/not/exist.md")));
+    #[tokio::test]
+    async fn resolve_description_returns_error_for_missing_file() {
+        let result = resolve_description(None, Some(Path::new("/does/not/exist.md"))).await;
 
         assert!(result.is_err());
         let message = format!("{}", result.unwrap_err());
@@ -383,11 +392,11 @@ mod tests {
         assert!(message.contains("/does/not/exist.md"));
     }
 
-    #[test]
-    fn resolve_description_reads_empty_file() {
+    #[tokio::test]
+    async fn resolve_description_reads_empty_file() {
         let temp = tempfile::NamedTempFile::new().unwrap();
 
-        let result = resolve_description(None, Some(temp.path())).unwrap();
+        let result = resolve_description(None, Some(temp.path())).await.unwrap();
 
         assert_eq!(result, Some("".to_string()));
     }
