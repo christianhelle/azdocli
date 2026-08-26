@@ -384,12 +384,15 @@ mod tests {
 
     #[tokio::test]
     async fn resolve_description_returns_error_for_missing_file() {
-        let result = resolve_description(None, Some(Path::new("/does/not/exist.md"))).await;
+        let temp = tempfile::tempdir().unwrap();
+        let missing = temp.path().join("does/not/exist.md");
+
+        let result = resolve_description(None, Some(&missing)).await;
 
         assert!(result.is_err());
         let message = format!("{}", result.unwrap_err());
         assert!(message.contains("Failed to read description file"));
-        assert!(message.contains("/does/not/exist.md"));
+        assert!(message.contains(missing.display().to_string().as_str()));
     }
 
     #[tokio::test]
