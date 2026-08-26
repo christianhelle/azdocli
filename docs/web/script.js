@@ -40,10 +40,10 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e)
 
 // Mobile menu toggle
 function toggleMobileMenu() {
-    const navMenu = document.querySelector('.nav-menu');
-    const hamburger = document.querySelector('.hamburger');
-    navMenu.classList.toggle('active');
-    hamburger.classList.toggle('active');
+    const navMenu = document.getElementById('nav-menu');
+    const hamburger = document.getElementById('hamburger');
+    const isOpen = navMenu.classList.toggle('active');
+    hamburger.setAttribute('aria-expanded', String(isOpen));
 }
 
 // Initialize theme when DOM is ready
