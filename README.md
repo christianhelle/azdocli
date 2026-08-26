@@ -148,6 +148,20 @@ azdocli repos list
 azdocli pipelines list
 ```
 
+### All Subcommands
+
+```
+azdocli [SUBCOMMAND]
+
+SUBCOMMANDS:
+    boards       Manage Azure DevOps boards
+    login        Login to Azure DevOps with a Personal Access Token (PAT)
+    logout       Logout from Azure DevOps
+    migrate      Migrate one or more team projects between organizations
+    pipelines    Manage Azure DevOps pipelines
+    repos        Manage Azure DevOps repos
+```
+
 ## Features
 
 - **Repository Management**: List, create, delete, clone, view, and manage pull requests in repositories
@@ -465,26 +479,6 @@ azdocli boards work-item delete --id 123 --soft-delete
 - **Default project support**: Use with default project or specify --project explicitly
 - **Error handling**: Clear feedback when work item not found or access denied
 
-```sh
-CLI tool for interacting with Azure DevOps
-
-USAGE:
-    azdocli [SUBCOMMAND]
-
-OPTIONS:
-    -h, --help       Print help information
-    -V, --version    Print version information
-
-SUBCOMMANDS:
-    boards       Manage Azure DevOps boards
-    help         Print this message or the help of the given subcommand(s)
-    login        Login to Azure DevOps with a Personal Access Token (PAT)
-    logout       Logout from Azure DevOps
-    migrate      Migrate one or more team projects between organizations
-    pipelines    Manage Azure DevOps pipelines
-    repos        Manage Azure DevOps repos
-```
-
 ## Testing
 
 The project includes integration tests that verify the core repository management functionality against a real Azure DevOps instance.
@@ -509,7 +503,7 @@ To run the integration tests, you need to create a test configuration file with 
 }
 ```
 
-1. Make sure you have:
+3. Make sure you have:
    - A valid Azure DevOps Personal Access Token (PAT) with repository permissions
    - Access to an Azure DevOps project where you can create/delete test repositories
    - Git installed and available in your PATH (for clone testing)
