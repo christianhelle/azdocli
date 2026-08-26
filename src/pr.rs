@@ -5,7 +5,7 @@ use crate::repos;
 use anyhow::{Context, Result};
 use azure_devops_rust_api::git;
 use clap::Subcommand;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Subcommand, Clone)]
 pub enum PullRequestsSubCommands {
@@ -29,7 +29,7 @@ pub enum PullRequestsSubCommands {
 
         /// Path to a markdown file containing the pull request description
         #[clap(long, value_name = "PATH")]
-        description_file: Option<String>,
+        description_file: Option<PathBuf>,
 
         /// Source branch for the pull request (e.g., 'feature/my-feature')
         #[clap(short, long)]
@@ -97,11 +97,8 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
             target,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
-            let description = resolve_description(
-                description.as_deref(),
-                description_file.as_deref().map(Path::new),
-            )
-            .await?;
+            let description =
+                resolve_description(description.as_deref(), description_file.as_deref()).await?;
             create_pull_request(
                 &project_name,
                 repo,
@@ -402,5 +399,29 @@ mod tests {
         let result = resolve_description(None, Some(temp.path())).await.unwrap();
 
         assert_eq!(result, Some("".to_string()));
+    }
+
+    #[test]
+    fn description_file_accepts_pathbuf() {
+        let path = PathBuf::from("description.md");
+        let command = PullRequestsSubCommands::Create {
+            project: None,
+            repo: "repo".to_string(),
+            title: None,
+            description: None,
+            description_file: Some(path.clone()),
+            source: "feature".to_string(),
+            target: "main".to_string(),
+        };
+
+        if let PullRequestsSubCommands::Create {
+            description_file: Some(actual),
+            ..
+        } = command
+        {
+            assert_eq!(actual, path);
+        } else {
+            panic!("expected Create with description_file");
+        }
     }
 }
