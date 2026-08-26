@@ -27,6 +27,10 @@ pub enum PullRequestsSubCommands {
         #[clap(short, long)]
         description: Option<String>,
 
+        /// Path to a markdown file containing the pull request description
+        #[clap(long, value_name = "PATH")]
+        description_file: Option<String>,
+
         /// Source branch for the pull request (e.g., 'feature/my-feature')
         #[clap(short, long)]
         source: String,
@@ -88,10 +92,15 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
             repo,
             title,
             description,
+            description_file,
             source,
             target,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
+            let description = resolve_description(
+                description.as_deref(),
+                description_file.as_deref().map(Path::new),
+            )?;
             create_pull_request(
                 &project_name,
                 repo,
