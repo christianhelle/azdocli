@@ -5,6 +5,125 @@
 
 CLI tool for interacting with Azure DevOps.
 
+## Installation
+
+### Quick Install (Recommended)
+
+**Linux and macOS:**
+
+```bash
+curl -sSL https://christianhelle.com/azdocli/install | bash
+```
+
+**Windows (PowerShell):**
+
+```powershell
+iwr -useb https://christianhelle.com/azdocli/install.ps1 | iex
+```
+
+These one-liner commands will automatically download and install the latest release for your platform.
+
+### Install from crates.io
+
+You can also install azdocli using Cargo:
+
+```bash
+cargo install azdocli
+```
+
+This will install the `azdocli` binary, which you can use immediately.
+
+### Install using Snap (Linux)
+
+On Linux systems with Snap support, you can install azdocli directly from the Snap Store:
+
+```bash
+snap install azdocli
+```
+
+This will install the latest stable version and automatically handle updates.
+
+### Install from GitHub Releases
+
+You can also download pre-built binaries from the [GitHub Releases page](https://github.com/christianhelle/azdocli/releases):
+
+- Windows: `windows-x64.zip` or `windows-arm64.zip`
+- macOS: `macos-x64.zip` or `macos-arm64.zip`
+- Linux: `linux-x64.zip` or `linux-arm64.zip`
+
+Extract the binary and add it to your PATH.
+
+### Building from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/christianhelle/azdocli.git
+cd azdocli
+
+# Build the project
+cargo build
+
+# Run tests
+cargo test
+
+# Run the CLI
+cargo run -- <command>
+```
+
+## Authentication Setup
+
+Before using the CLI, you need to create a Personal Access Token (PAT) in Azure DevOps:
+
+### Creating a Personal Access Token
+
+1. **Navigate to Azure DevOps**:
+   - Sign in to your Azure DevOps organization (`https://dev.azure.com/{yourorganization}`)
+   - Click on your profile picture in the top right corner
+   - Select **Personal Access Tokens**
+
+2. **Create New Token**:
+   - Click **+ New Token**
+   - Enter a descriptive name (e.g., "azdocli-token")
+   - Select your organization
+   - Set expiration date (recommended: 90 days or less)
+
+3. **Configure Required Scopes**:
+   - **Code**: Read & write (for repository operations)
+   - **Build**: Read & execute (for pipeline operations)
+   - **Work Items**: Read & write (for board operations)
+   - **Project and Team**: Read (for project operations)
+
+4. **Save Your Token**:
+   - Click **Create**
+   - **⚠️ Important**: Copy the token immediately and store it securely
+   - The token will not be shown again
+
+**Security Best Practices**:
+
+- Never commit your PAT to version control
+- Use environment variables or secure storage for automation
+- Regularly rotate your tokens
+- Use the minimum required permissions
+
+## Quick Start
+
+```sh
+# Login with your Personal Access Token
+azdocli login
+# You'll be prompted for:
+# - Organization name (e.g., "mycompany" from https://dev.azure.com/mycompany)
+# - Personal Access Token (the PAT you created above)
+
+# Set a default project (optional but recommended)
+azdocli project MyProject
+
+# List repositories
+azdocli repos list
+
+# List pipelines
+azdocli pipelines list
+```
+
 ## Features
 
 - **Repository Management**: List, create, delete, clone, view, and manage pull requests in repositories
@@ -322,124 +441,6 @@ azdocli boards work-item delete --id 123 --soft-delete
 - **Default project support**: Use with default project or specify --project explicitly
 - **Error handling**: Clear feedback when work item not found or access denied
 
-```sh
-CLI tool for interacting with Azure DevOps
-
-USAGE:
-    azdocli [SUBCOMMAND]
-
-OPTIONS:
-    -h, --help       Print help information
-    -V, --version    Print version information
-
-SUBCOMMANDS:
-    boards       Manage Azure DevOps boards
-    help         Print this message or the help of the given subcommand(s)
-    login        Login to Azure DevOps with a Personal Access Token (PAT)
-    logout       Logout from Azure DevOps
-    migrate      Migrate one or more team projects between organizations
-    pipelines    Manage Azure DevOps pipelines
-    repos        Manage Azure DevOps repos
-```
-
-## Installation
-
-### Quick Install (Recommended)
-
-**Linux and macOS:**
-
-```bash
-curl -sSL https://christianhelle.com/azdocli/install | bash
-```
-
-**Windows (PowerShell):**
-
-```powershell
-iwr -useb https://christianhelle.com/azdocli/install.ps1 | iex
-```
-
-These one-liner commands will automatically download and install the latest release for your platform.
-
-### Install from crates.io
-
-You can also install azdocli using Cargo:
-
-```bash
-cargo install azdocli
-```
-
-This will install the `azdocli` binary, which you can use immediately.
-
-### Install using Snap (Linux)
-
-On Linux systems with Snap support, you can install azdocli directly from the Snap Store:
-
-```bash
-snap install azdocli
-```
-
-This will install the latest stable version and automatically handle updates.
-
-### Install from GitHub Releases
-
-You can also download pre-built binaries from the [GitHub Releases page](https://github.com/christianhelle/azdocli/releases):
-
-- Windows: `windows-x64.zip` or `windows-arm64.zip`
-- macOS: `macos-x64.zip` or `macos-arm64.zip`
-- Linux: `linux-x64.zip` or `linux-arm64.zip`
-
-Extract the binary and add it to your PATH.
-
-## Authentication Setup
-
-Before using the CLI, you need to create a Personal Access Token (PAT) in Azure DevOps:
-
-### Creating a Personal Access Token
-
-1. **Navigate to Azure DevOps**:
-   - Sign in to your Azure DevOps organization (`https://dev.azure.com/{yourorganization}`)
-   - Click on your profile picture in the top right corner
-   - Select **Personal Access Tokens**
-
-2. **Create New Token**:
-   - Click **+ New Token**
-   - Enter a descriptive name (e.g., "azdocli-token")
-   - Select your organization
-   - Set expiration date (recommended: 90 days or less)
-
-3. **Configure Required Scopes**:
-   - **Code**: Read & write (for repository operations)
-   - **Build**: Read & execute (for pipeline operations)
-   - **Work Items**: Read & write (for board operations)
-   - **Project and Team**: Read (for project operations)
-
-4. **Save Your Token**:
-   - Click **Create**
-   - **⚠️ Important**: Copy the token immediately and store it securely
-   - The token will not be shown again
-
-**Security Best Practices**:
-
-- Never commit your PAT to version control
-- Use environment variables or secure storage for automation
-- Regularly rotate your tokens
-- Use the minimum required permissions
-
-## Usage
-
-First, login to Azure DevOps using the PAT you created:
-
-```sh
-# Login with your Personal Access Token
-azdocli login
-# You'll be prompted for:
-# - Organization name (e.g., "mycompany" from https://dev.azure.com/mycompany)
-# - Personal Access Token (the PAT you created above)
-
-# Set a default project (optional but recommended)
-azdocli project MyProject
-```
-
 ### Enterprise Azure DevOps Installations
 
 By default `azdocli` targets the Azure DevOps cloud (`https://dev.azure.com`). You can log in to an enterprise or on-premises Azure DevOps installation by providing the server URL instead of a cloud organization name.
@@ -464,48 +465,24 @@ azdocli login --profile onprem
 
 **Note:** User entitlement management (`azdocli user`) is only supported against the default Azure DevOps cloud host. Commands that manage user licenses will fail with a clear message when a custom base URL is configured.
 
-### Basic Examples
-
 ```sh
-# Repository management
-azdocli repos list                           # List all repositories
-azdocli repos show --id MyRepo               # Show repository details
-azdocli repos clone                          # Clone all repositories
+CLI tool for interacting with Azure DevOps
 
-# Pull request management
-azdocli repos pr list --repo MyRepo          # List pull requests for a repository
-azdocli repos pr show --repo MyRepo --id 123 # Show pull request details
-azdocli repos pr create --repo MyRepo --source "feature/my-feature" --title "My Feature" # Create a new pull request
+USAGE:
+    azdocli [SUBCOMMAND]
 
-# Pipeline management
-azdocli pipelines list                       # List all pipelines
-azdocli pipelines runs --id 42               # Show pipeline runs
-azdocli pipelines show --id 42 --build-id 123 # Show build details
+OPTIONS:
+    -h, --help       Print help information
+    -V, --version    Print version information
 
-# Projects management
-azdocli projects list                        # List all projects in the organization
-azdocli projects show --project MyProject    # Show a project by name or ID
-azdocli projects create --name MyProject     # Create a new team project
-azdocli projects delete --id <project-id>    # Delete a team project
-```
-
-For detailed examples and features, see the respective sections below.
-
-## Building from Source
-
-```bash
-# Clone the repository
-git clone https://github.com/christianhelle/azdocli.git
-cd azdocli
-
-# Build the project
-cargo build
-
-# Run tests
-cargo test
-
-# Run the CLI
-cargo run -- <command>
+SUBCOMMANDS:
+    boards       Manage Azure DevOps boards
+    help         Print this message or the help of the given subcommand(s)
+    login        Login to Azure DevOps with a Personal Access Token (PAT)
+    logout       Logout from Azure DevOps
+    migrate      Migrate one or more team projects between organizations
+    pipelines    Manage Azure DevOps pipelines
+    repos        Manage Azure DevOps repos
 ```
 
 ## Testing
