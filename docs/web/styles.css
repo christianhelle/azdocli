@@ -15,6 +15,10 @@
     --border-radius: 0.5rem;
     --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --font-mono: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace;
+    --footer-bg: #1e293b;
+    --footer-text: #94a3b8;
+    --footer-heading: #ffffff;
+    --footer-border: #334155;
 }
 
 [data-theme="dark"] {
@@ -23,6 +27,9 @@
     --text-color: #f1f5f9;
     --text-muted: #94a3b8;
     --border-color: #334155;
+    --footer-bg: #010409;
+    --footer-heading: #f1f5f9;
+    --footer-border: #1e293b;
 }
 
 * {
@@ -124,6 +131,15 @@ body {
     flex-direction: column;
     cursor: pointer;
     gap: 3px;
+    background: none;
+    border: none;
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    transition: background-color 0.2s;
+}
+
+.hamburger:hover {
+    background-color: var(--bg-secondary);
 }
 
 .hamburger span {
@@ -131,6 +147,7 @@ body {
     height: 2px;
     background: var(--text-color);
     transition: 0.3s;
+    display: block;
 }
 
 /* Hero Section */
@@ -613,8 +630,8 @@ body {
 
 /* Footer */
 .footer {
-    background: var(--text-color);
-    color: var(--bg-color);
+    background: var(--footer-bg);
+    color: var(--footer-text);
     padding: 3rem 0 1rem;
 }
 
@@ -628,11 +645,11 @@ body {
 .footer-section h4 {
     font-weight: 600;
     margin-bottom: 1rem;
-    color: white;
+    color: var(--footer-heading);
 }
 
 .footer-section p {
-    color: #94a3b8;
+    color: var(--footer-text);
     font-size: 0.875rem;
 }
 
@@ -645,24 +662,24 @@ body {
 }
 
 .footer-section ul li a {
-    color: #94a3b8;
+    color: var(--footer-text);
     text-decoration: none;
     font-size: 0.875rem;
     transition: color 0.2s;
 }
 
 .footer-section ul li a:hover {
-    color: white;
+    color: var(--footer-heading);
 }
 
 .footer-bottom {
-    border-top: 1px solid #334155;
+    border-top: 1px solid var(--footer-border);
     padding-top: 1rem;
     text-align: center;
 }
 
 .footer-bottom p {
-    color: #94a3b8;
+    color: var(--footer-text);
     font-size: 0.875rem;
 }
 
@@ -693,6 +710,20 @@ body {
 
     .nav-menu {
         display: none;
+    }
+
+    .nav-menu.active {
+        display: flex;
+        flex-direction: column;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: var(--bg-color);
+        border-bottom: 1px solid var(--border-color);
+        padding: 1rem 2rem;
+        gap: 1rem;
+        box-shadow: var(--shadow-lg);
     }
 
     .hamburger {
