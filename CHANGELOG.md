@@ -3,6 +3,7 @@
 ## [Unreleased Changes]
 
 ### Merged Pull Requests
+- Fix GitHub Pages deployment for docs/web site ([#119](https://github.com/christianhelle/azdocli/pull/119)) (@Copilot)
 - Add --description-file support for PR creation ([#118](https://github.com/christianhelle/azdocli/pull/118)) ([@christianhelle](https://github.com/christianhelle/))
 
 
