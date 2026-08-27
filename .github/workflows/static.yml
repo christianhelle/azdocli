@@ -39,7 +39,7 @@ jobs:
       - name: Prepare Pages content
         run: |
           mkdir -p site
-          cp -R docs/web/. site/
+          cp docs/web/* site/
           cp docs/install.sh site/install
           cp docs/install.sh site/install.sh
           cp docs/install.ps1 site/install.ps1
