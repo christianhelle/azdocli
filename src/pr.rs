@@ -77,6 +77,32 @@ pub enum PullRequestsSubCommands {
         #[clap(short, long)]
         id: String,
     },
+    /// Update an existing pull request
+    Update {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+
+        /// Name of the repository containing the pull request
+        #[clap(short, long)]
+        repo: String,
+
+        /// ID of the pull request to update
+        #[clap(short, long)]
+        id: String,
+
+        /// New title for the pull request
+        #[clap(short, long)]
+        title: Option<String>,
+
+        /// New description for the pull request
+        #[clap(short, long)]
+        description: Option<String>,
+
+        /// Path to a markdown file containing the pull request description
+        #[clap(long, value_name = "PATH")]
+        description_file: Option<PathBuf>,
+    },
 }
 
 fn create_git_client() -> Result<git::Client> {
@@ -124,6 +150,26 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
             list_pull_request_commits(repo, id, project_name).await?;
+        }
+        PullRequestsSubCommands::Update {
+            project,
+            repo,
+            id,
+            title,
+            description,
+            description_file,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            let description =
+                resolve_description(description.as_deref(), description_file.as_deref()).await?;
+            update_pull_request(
+                &project_name,
+                repo,
+                id,
+                title.as_deref(),
+                description.as_deref(),
+            )
+            .await?;
         }
     }
     Ok(())
@@ -188,6 +234,43 @@ async fn resolve_description(
         }
         None => Ok(description.map(|d| d.to_string())),
     }
+}
+
+fn build_update_options(
+    title: Option<&str>,
+    description: Option<&str>,
+) -> git::models::GitPullRequestUpdateOptions {
+    git::models::GitPullRequestUpdateOptions {
+        title: title.map(|t| t.to_string()),
+        description: description.map(|d| d.to_string()),
+        ..Default::default()
+    }
+}
+
+fn validate_update_has_changes(
+    title: Option<&str>,
+    description: Option<&str>,
+) -> Result<()> {
+    if title.is_none() && description.is_none() {
+        return Err(anyhow::anyhow!(
+            "At least one of --title or --description/--description-file must be provided"
+        ));
+    }
+    Ok(())
+}
+
+async fn update_pull_request(
+    project: &str,
+    repo: &str,
+    id: &str,
+    title: Option<&str>,
+    description: Option<&str>,
+) -> Result<()> {
+    validate_update_has_changes(title, description)?;
+    let _options = build_update_options(title, description);
+    // TODO: implement API call
+    let _ = (project, repo, id);
+    Ok(())
 }
 
 async fn create_pull_request(
