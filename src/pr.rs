@@ -247,10 +247,7 @@ fn build_update_options(
     }
 }
 
-fn validate_update_has_changes(
-    title: Option<&str>,
-    description: Option<&str>,
-) -> Result<()> {
+fn validate_update_has_changes(title: Option<&str>, description: Option<&str>) -> Result<()> {
     if title.is_none() && description.is_none() {
         return Err(anyhow::anyhow!(
             "At least one of --title or --description/--description-file must be provided"
@@ -267,10 +264,55 @@ async fn update_pull_request(
     description: Option<&str>,
 ) -> Result<()> {
     validate_update_has_changes(title, description)?;
-    let _options = build_update_options(title, description);
-    // TODO: implement API call
-    let _ = (project, repo, id);
-    Ok(())
+
+    match get_credentials() {
+        Ok(creds) => {
+            let client = create_git_client()?;
+            let repository = repos::get_repo(project, repo).await?;
+            let pr_client = client.pull_requests_client();
+
+            let pr_id = id
+                .parse::<i32>()
+                .map_err(|_| anyhow::anyhow!("Invalid pull request ID, must be a number"))?;
+
+            let options = build_update_options(title, description);
+
+            println!("Updating pull request:");
+            println!("  Repository: {repo}");
+            println!("  ID: {id}");
+            if let Some(t) = title {
+                println!("  New Title: {t}");
+            }
+            if let Some(d) = description {
+                if !d.is_empty() {
+                    println!("  New Description: {d}");
+                } else {
+                    println!("  New Description: <empty> (clearing description)");
+                }
+            }
+
+            match pr_client
+                .update(&creds.organization, &repository.id, project, pr_id, options)
+                .await
+            {
+                Ok(updated_pr) => {
+                    println!("✅ Pull request updated successfully!");
+                    println!("  ID: {}", updated_pr.pull_request_id);
+                    println!("  Title: {}", updated_pr.title.unwrap_or_default());
+                    println!("  URL: {}", updated_pr.url);
+                    Ok(())
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to update pull request: {e}");
+                    Err(anyhow::anyhow!("Failed to update pull request: {}", e))
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Unable to update pull request");
+            Err(e)
+        }
+    }
 }
 
 async fn create_pull_request(
