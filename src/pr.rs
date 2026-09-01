@@ -5,6 +5,7 @@ use crate::repos;
 use anyhow::{Context, Result};
 use azure_devops_rust_api::git;
 use clap::Subcommand;
+use colored::Colorize;
 use std::path::{Path, PathBuf};
 
 #[derive(Subcommand, Clone)]
@@ -105,12 +106,14 @@ pub enum PullRequestsSubCommands {
     },
 }
 
+/// Creates an authenticated Azure DevOps Git client.
 fn create_git_client() -> Result<git::Client> {
     let creds = get_credentials()?;
     let factory = CredentialClientFactory::new(&creds)?;
     Ok(factory.build_git())
 }
 
+/// Routes pull-request subcommands to their handlers.
 pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Result<()> {
     match subcommand {
         PullRequestsSubCommands::Create {
@@ -175,6 +178,7 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
     Ok(())
 }
 
+/// Lists commits in a pull request.
 async fn list_pull_request_commits(repo: &String, id: &String, project_name: String) -> Result<()> {
     match get_credentials() {
         Ok(creds) => {
@@ -218,6 +222,10 @@ async fn list_pull_request_commits(repo: &String, id: &String, project_name: Str
     }
 }
 
+/// Resolves a pull request description from inline text or a markdown file.
+///
+/// When `description_file` is provided, its contents take precedence over
+/// `description`, matching the behavior of `repos pr create`.
 async fn resolve_description(
     description: Option<&str>,
     description_file: Option<&Path>,
@@ -236,6 +244,7 @@ async fn resolve_description(
     }
 }
 
+/// Builds the Azure DevOps update payload for a pull request.
 fn build_update_options(
     title: Option<&str>,
     description: Option<&str>,
@@ -247,6 +256,7 @@ fn build_update_options(
     }
 }
 
+/// Validates that at least one mutable field is provided.
 fn validate_update_has_changes(title: Option<&str>, description: Option<&str>) -> Result<()> {
     if title.is_none() && description.is_none() {
         return Err(anyhow::anyhow!(
@@ -256,6 +266,7 @@ fn validate_update_has_changes(title: Option<&str>, description: Option<&str>) -
     Ok(())
 }
 
+/// Updates a pull request's title and/or description via the Azure DevOps Git API.
 async fn update_pull_request(
     project: &str,
     repo: &str,
@@ -267,7 +278,8 @@ async fn update_pull_request(
 
     match get_credentials() {
         Ok(creds) => {
-            let client = create_git_client()?;
+            let factory = CredentialClientFactory::new(&creds)?;
+            let client = factory.build_git();
             let repository = repos::get_repo(project, repo).await?;
             let pr_client = client.pull_requests_client();
 
@@ -296,25 +308,26 @@ async fn update_pull_request(
                 .await
             {
                 Ok(updated_pr) => {
-                    println!("✅ Pull request updated successfully!");
+                    println!("{}", "✓ Pull request updated successfully!".green());
                     println!("  ID: {}", updated_pr.pull_request_id);
                     println!("  Title: {}", updated_pr.title.unwrap_or_default());
                     println!("  URL: {}", updated_pr.url);
                     Ok(())
                 }
                 Err(e) => {
-                    eprintln!("❌ Failed to update pull request: {e}");
+                    eprintln!("{}", format!("❌ Failed to update pull request: {e}").red());
                     Err(anyhow::anyhow!("Failed to update pull request: {}", e))
                 }
             }
         }
         Err(e) => {
-            eprintln!("Unable to update pull request");
+            eprintln!("Unable to update pull request: {e}");
             Err(e)
         }
     }
 }
 
+/// Creates a new pull request in the specified repository.
 async fn create_pull_request(
     project: &str,
     repo: &str,
@@ -385,6 +398,7 @@ async fn create_pull_request(
     }
 }
 
+/// Lists pull requests for a repository.
 async fn list_pull_requests(project: &str, repo: &str) -> Result<()> {
     match get_credentials() {
         Ok(creds) => {
@@ -423,6 +437,7 @@ async fn list_pull_requests(project: &str, repo: &str) -> Result<()> {
     }
 }
 
+/// Shows details of a specific pull request.
 async fn show_pull_request(project: &str, _repo: &str, id: &str) -> Result<()> {
     match get_credentials() {
         Ok(creds) => {
