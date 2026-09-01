@@ -6,6 +6,9 @@
 - Fix GitHub Pages deployment for docs/web site ([#119](https://github.com/christianhelle/azdocli/pull/119)) (@Copilot)
 - Add --description-file support for PR creation ([#118](https://github.com/christianhelle/azdocli/pull/118)) ([@christianhelle](https://github.com/christianhelle/))
 
+### Features
+- Add `repos pr update` command ([#120](https://github.com/christianhelle/azdocli/pull/120)) ([@christianhelle](https://github.com/christianhelle/))
+
 
 ## [0.6.0](https://github.com/christianhelle/azdocli/releases/tag/0.6.0) (2026-08-26)
 
