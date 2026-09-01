@@ -519,6 +519,24 @@ azdocli repos pr create --repo MyRepository --source "bugfix/fix-login"</code></
           </div>
 
           <div class="command-example">
+            <h4>Update Pull Request</h4>
+            <pre><code># Update title and description
+azdocli repos pr update --repo MyRepository --id 123 --title "New title" --description "New description"
+
+# Update title only
+azdocli repos pr update --repo MyRepository --id 123 --title "New title"
+
+# Update description from markdown file
+azdocli repos pr update --repo MyRepository --id 123 --description-file ./description.md
+
+# Update both with file description
+azdocli repos pr update --repo MyRepository --id 123 --title "New title" --description-file ./description.md
+
+# With specific project
+azdocli repos pr update --repo MyRepository --id 123 --title "New title" --project MyProject</code></pre>
+          </div>
+
+          <div class="command-example">
             <h4>Show Pull Request Commits</h4>
             <pre><code># Show commits in a specific pull request
 azdocli repos pr commits --repo MyRepository --id 123
@@ -545,12 +563,16 @@ azdocli repos pr commits --repo MyRepository --id 123 --project MyProject</code>
               without title/description
             </li>
             <li>
+              <strong>Flexible updates</strong>: Update pull request title and/or
+              description (including from markdown file)
+            </li>
+            <li>
               <strong>Branch validation</strong>: Automatic formatting of branch
               names with refs/heads/ prefix
             </li>
             <li>
               <strong>Repository validation</strong>: Verify repository exists
-              before creating pull request
+              before creating or updating pull request
             </li>
             <li>
               <strong>Authentication handling</strong>: Proper error messages

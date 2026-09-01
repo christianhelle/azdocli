@@ -273,6 +273,25 @@ azdocli repos pr create --repo MyRepository --source "feature/my-feature" --targ
 azdocli repos pr create --repo MyRepository --source "bugfix/fix-login"
 ```
 
+##### Update Pull Request
+
+```sh
+# Update title and description (using default project)
+azdocli repos pr update --repo MyRepository --id 123 --title "New title" --description "New description"
+
+# Update title only
+azdocli repos pr update --repo MyRepository --id 123 --title "New title"
+
+# Update description from markdown file
+azdocli repos pr update --repo MyRepository --id 123 --description-file ./description.md
+
+# Update both with file description
+azdocli repos pr update --repo MyRepository --id 123 --title "New title" --description-file ./description.md
+
+# Or specify a project explicitly
+azdocli repos pr update --repo MyRepository --id 123 --title "New title" --project MyProject
+```
+
 ##### Show Pull Request Commits
 
 ```sh
@@ -289,8 +308,9 @@ azdocli repos pr commits --repo MyRepository --id 123 --project MyProject
 - **Comprehensive details**: Show command displays ID, title, description, status, branches, and creation date
 - **Branch specification**: Specify source branch (required) and target branch (defaults to 'main')
 - **Flexible creation**: Create pull requests with or without title/description
+- **Flexible updates**: Update pull request title and/or description (including from markdown file)
 - **Branch validation**: Automatic formatting of branch names with refs/heads/ prefix
-- **Repository validation**: Verify repository exists before creating pull request
+- **Repository validation**: Verify repository exists before creating or updating pull request
 - **Authentication handling**: Proper error messages when not logged in
 - **Default project support**: Use with default project or specify --project explicitly
 - **Error handling**: Clear feedback for invalid pull request IDs or missing repositories

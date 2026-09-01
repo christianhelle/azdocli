@@ -5,6 +5,7 @@ use crate::repos;
 use anyhow::{Context, Result};
 use azure_devops_rust_api::git;
 use clap::Subcommand;
+use colored::Colorize;
 use std::path::{Path, PathBuf};
 
 #[derive(Subcommand, Clone)]
@@ -77,14 +78,42 @@ pub enum PullRequestsSubCommands {
         #[clap(short, long)]
         id: String,
     },
+    /// Update an existing pull request
+    Update {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+
+        /// Name of the repository containing the pull request
+        #[clap(short, long)]
+        repo: String,
+
+        /// ID of the pull request to update
+        #[clap(short, long)]
+        id: String,
+
+        /// New title for the pull request
+        #[clap(short, long)]
+        title: Option<String>,
+
+        /// New description for the pull request
+        #[clap(short, long)]
+        description: Option<String>,
+
+        /// Path to a markdown file containing the pull request description
+        #[clap(long, value_name = "PATH")]
+        description_file: Option<PathBuf>,
+    },
 }
 
+/// Creates an authenticated Azure DevOps Git client.
 fn create_git_client() -> Result<git::Client> {
     let creds = get_credentials()?;
     let factory = CredentialClientFactory::new(&creds)?;
     Ok(factory.build_git())
 }
 
+/// Routes pull-request subcommands to their handlers.
 pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Result<()> {
     match subcommand {
         PullRequestsSubCommands::Create {
@@ -125,10 +154,31 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
             let project_name = get_project_or_default(project.as_deref())?;
             list_pull_request_commits(repo, id, project_name).await?;
         }
+        PullRequestsSubCommands::Update {
+            project,
+            repo,
+            id,
+            title,
+            description,
+            description_file,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            let description =
+                resolve_description(description.as_deref(), description_file.as_deref()).await?;
+            update_pull_request(
+                &project_name,
+                repo,
+                id,
+                title.as_deref(),
+                description.as_deref(),
+            )
+            .await?;
+        }
     }
     Ok(())
 }
 
+/// Lists commits in a pull request.
 async fn list_pull_request_commits(repo: &String, id: &String, project_name: String) -> Result<()> {
     match get_credentials() {
         Ok(creds) => {
@@ -172,6 +222,10 @@ async fn list_pull_request_commits(repo: &String, id: &String, project_name: Str
     }
 }
 
+/// Resolves a pull request description from inline text or a markdown file.
+///
+/// When `description_file` is provided, its contents take precedence over
+/// `description`, matching the behavior of `repos pr create`.
 async fn resolve_description(
     description: Option<&str>,
     description_file: Option<&Path>,
@@ -190,6 +244,90 @@ async fn resolve_description(
     }
 }
 
+/// Builds the Azure DevOps update payload for a pull request.
+fn build_update_options(
+    title: Option<&str>,
+    description: Option<&str>,
+) -> git::models::GitPullRequestUpdateOptions {
+    git::models::GitPullRequestUpdateOptions {
+        title: title.map(|t| t.to_string()),
+        description: description.map(|d| d.to_string()),
+        ..Default::default()
+    }
+}
+
+/// Validates that at least one mutable field is provided.
+fn validate_update_has_changes(title: Option<&str>, description: Option<&str>) -> Result<()> {
+    if title.is_none() && description.is_none() {
+        return Err(anyhow::anyhow!(
+            "At least one of --title or --description/--description-file must be provided"
+        ));
+    }
+    Ok(())
+}
+
+/// Updates a pull request's title and/or description via the Azure DevOps Git API.
+async fn update_pull_request(
+    project: &str,
+    repo: &str,
+    id: &str,
+    title: Option<&str>,
+    description: Option<&str>,
+) -> Result<()> {
+    validate_update_has_changes(title, description)?;
+
+    match get_credentials() {
+        Ok(creds) => {
+            let factory = CredentialClientFactory::new(&creds)?;
+            let client = factory.build_git();
+            let repository = repos::get_repo(project, repo).await?;
+            let pr_client = client.pull_requests_client();
+
+            let pr_id = id
+                .parse::<i32>()
+                .map_err(|_| anyhow::anyhow!("Invalid pull request ID, must be a number"))?;
+
+            let options = build_update_options(title, description);
+
+            println!("Updating pull request:");
+            println!("  Repository: {repo}");
+            println!("  ID: {id}");
+            if let Some(t) = title {
+                println!("  New Title: {t}");
+            }
+            if let Some(d) = description {
+                if !d.is_empty() {
+                    println!("  New Description: {d}");
+                } else {
+                    println!("  New Description: <empty> (clearing description)");
+                }
+            }
+
+            match pr_client
+                .update(&creds.organization, &repository.id, project, pr_id, options)
+                .await
+            {
+                Ok(updated_pr) => {
+                    println!("{}", "✓ Pull request updated successfully!".green());
+                    println!("  ID: {}", updated_pr.pull_request_id);
+                    println!("  Title: {}", updated_pr.title.unwrap_or_default());
+                    println!("  URL: {}", updated_pr.url);
+                    Ok(())
+                }
+                Err(e) => {
+                    eprintln!("{}", format!("❌ Failed to update pull request: {e}").red());
+                    Err(anyhow::anyhow!("Failed to update pull request: {}", e))
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Unable to update pull request: {e}");
+            Err(e)
+        }
+    }
+}
+
+/// Creates a new pull request in the specified repository.
 async fn create_pull_request(
     project: &str,
     repo: &str,
@@ -260,6 +398,7 @@ async fn create_pull_request(
     }
 }
 
+/// Lists pull requests for a repository.
 async fn list_pull_requests(project: &str, repo: &str) -> Result<()> {
     match get_credentials() {
         Ok(creds) => {
@@ -298,6 +437,7 @@ async fn list_pull_requests(project: &str, repo: &str) -> Result<()> {
     }
 }
 
+/// Shows details of a specific pull request.
 async fn show_pull_request(project: &str, _repo: &str, id: &str) -> Result<()> {
     match get_credentials() {
         Ok(creds) => {
@@ -423,5 +563,78 @@ mod tests {
         } else {
             panic!("expected Create with description_file");
         }
+    }
+
+    #[test]
+    fn update_variant_accepts_title_and_description() {
+        let command = PullRequestsSubCommands::Update {
+            project: None,
+            repo: "my-repo".to_string(),
+            id: "123".to_string(),
+            title: Some("New title".to_string()),
+            description: Some("New description".to_string()),
+            description_file: None,
+        };
+
+        if let PullRequestsSubCommands::Update {
+            repo,
+            id,
+            title,
+            description,
+            ..
+        } = command
+        {
+            assert_eq!(repo, "my-repo");
+            assert_eq!(id, "123");
+            assert_eq!(title, Some("New title".to_string()));
+            assert_eq!(description, Some("New description".to_string()));
+        } else {
+            panic!("expected Update variant");
+        }
+    }
+
+    #[test]
+    fn update_variant_supports_description_file() {
+        let path = PathBuf::from("desc.md");
+        let command = PullRequestsSubCommands::Update {
+            project: Some("proj".to_string()),
+            repo: "repo".to_string(),
+            id: "42".to_string(),
+            title: None,
+            description: None,
+            description_file: Some(path.clone()),
+        };
+
+        if let PullRequestsSubCommands::Update {
+            description_file: Some(actual),
+            ..
+        } = command
+        {
+            assert_eq!(actual, path);
+        } else {
+            panic!("expected Update with description_file");
+        }
+    }
+
+    #[test]
+    fn build_update_options_maps_title_and_description() {
+        let opts = build_update_options(Some("My Title"), Some("My Desc"));
+        assert_eq!(opts.title, Some("My Title".to_string()));
+        assert_eq!(opts.description, Some("My Desc".to_string()));
+    }
+
+    #[test]
+    fn build_update_options_maps_none_fields() {
+        let opts = build_update_options(None, None);
+        assert_eq!(opts.title, None);
+        assert_eq!(opts.description, None);
+    }
+
+    #[test]
+    fn validate_update_requires_at_least_one_field() {
+        assert!(validate_update_has_changes(None, None).is_err());
+        assert!(validate_update_has_changes(Some("title"), None).is_ok());
+        assert!(validate_update_has_changes(None, Some("desc")).is_ok());
+        assert!(validate_update_has_changes(Some("t"), Some("d")).is_ok());
     }
 }
