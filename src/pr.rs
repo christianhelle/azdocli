@@ -424,4 +424,77 @@ mod tests {
             panic!("expected Create with description_file");
         }
     }
+
+    #[test]
+    fn update_variant_accepts_title_and_description() {
+        let command = PullRequestsSubCommands::Update {
+            project: None,
+            repo: "my-repo".to_string(),
+            id: "123".to_string(),
+            title: Some("New title".to_string()),
+            description: Some("New description".to_string()),
+            description_file: None,
+        };
+
+        if let PullRequestsSubCommands::Update {
+            repo,
+            id,
+            title,
+            description,
+            ..
+        } = command
+        {
+            assert_eq!(repo, "my-repo");
+            assert_eq!(id, "123");
+            assert_eq!(title, Some("New title".to_string()));
+            assert_eq!(description, Some("New description".to_string()));
+        } else {
+            panic!("expected Update variant");
+        }
+    }
+
+    #[test]
+    fn update_variant_supports_description_file() {
+        let path = PathBuf::from("desc.md");
+        let command = PullRequestsSubCommands::Update {
+            project: Some("proj".to_string()),
+            repo: "repo".to_string(),
+            id: "42".to_string(),
+            title: None,
+            description: None,
+            description_file: Some(path.clone()),
+        };
+
+        if let PullRequestsSubCommands::Update {
+            description_file: Some(actual),
+            ..
+        } = command
+        {
+            assert_eq!(actual, path);
+        } else {
+            panic!("expected Update with description_file");
+        }
+    }
+
+    #[test]
+    fn build_update_options_maps_title_and_description() {
+        let opts = build_update_options(Some("My Title"), Some("My Desc"));
+        assert_eq!(opts.title, Some("My Title".to_string()));
+        assert_eq!(opts.description, Some("My Desc".to_string()));
+    }
+
+    #[test]
+    fn build_update_options_maps_none_fields() {
+        let opts = build_update_options(None, None);
+        assert_eq!(opts.title, None);
+        assert_eq!(opts.description, None);
+    }
+
+    #[test]
+    fn validate_update_requires_at_least_one_field() {
+        assert!(validate_update_has_changes(None, None).is_err());
+        assert!(validate_update_has_changes(Some("title"), None).is_ok());
+        assert!(validate_update_has_changes(None, Some("desc")).is_ok());
+        assert!(validate_update_has_changes(Some("t"), Some("d")).is_ok());
+    }
 }
