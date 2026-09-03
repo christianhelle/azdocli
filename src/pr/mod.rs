@@ -5,6 +5,7 @@
 
 mod complete;
 mod create;
+mod http;
 mod list;
 mod show;
 mod update;
@@ -113,6 +114,49 @@ pub enum PullRequestsSubCommands {
         #[clap(long, value_name = "PATH")]
         description_file: Option<PathBuf>,
     },
+    /// Complete (merge) a pull request
+    Complete {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+
+        /// Name of the repository containing the pull request
+        #[clap(short, long)]
+        repo: String,
+
+        /// ID of the pull request to complete
+        #[clap(short, long)]
+        id: String,
+
+        /// Strategy used to merge the source branch
+        #[clap(long, value_enum)]
+        merge_strategy: Option<complete::MergeStrategyArg>,
+
+        /// Delete the source branch after merging
+        #[clap(long)]
+        delete_source_branch: bool,
+
+        /// Message for the merge commit
+        #[clap(long)]
+        merge_commit_message: Option<String>,
+
+        /// Complete even when branch policies are not satisfied
+        #[clap(long)]
+        bypass_policy: bool,
+
+        /// Reason recorded when bypassing branch policies
+        #[clap(long, requires = "bypass_policy")]
+        bypass_reason: Option<String>,
+
+        /// Set the pull request to complete automatically once policies pass,
+        /// instead of completing it now
+        #[clap(long)]
+        auto_complete: bool,
+
+        /// Skip the confirmation prompt
+        #[clap(short = 'y', long = "yes")]
+        skip_confirmation: bool,
+    },
     /// Abandon a pull request
     Abandon {
         /// Team project name (optional if default project is set)
@@ -218,6 +262,35 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
                 id,
                 title.as_deref(),
                 description.as_deref(),
+            )
+            .await?;
+        }
+        PullRequestsSubCommands::Complete {
+            project,
+            repo,
+            id,
+            merge_strategy,
+            delete_source_branch,
+            merge_commit_message,
+            bypass_policy,
+            bypass_reason,
+            auto_complete,
+            skip_confirmation,
+        } => {
+            let settings = complete::CompletionSettings {
+                merge_strategy: *merge_strategy,
+                delete_source_branch: *delete_source_branch,
+                merge_commit_message: merge_commit_message.as_deref(),
+                bypass_policy: *bypass_policy,
+                bypass_reason: bypass_reason.as_deref(),
+            };
+            complete::complete_pull_request(
+                project.as_deref(),
+                repo,
+                id,
+                &settings,
+                *auto_complete,
+                *skip_confirmation,
             )
             .await?;
         }
