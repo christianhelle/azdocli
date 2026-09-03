@@ -52,6 +52,31 @@ pub enum PullRequestsSubCommands {
         /// Target branch for the pull request (defaults to 'main')
         #[clap(long, default_value = "main")]
         target: String,
+
+        /// Create the pull request as a draft
+        #[clap(long)]
+        draft: bool,
+
+        /// Reviewer to assign, as an email address, identity ID, or '@me'
+        /// (repeat for multiple reviewers)
+        #[clap(long)]
+        reviewer: Vec<String>,
+
+        /// Work item to link to the pull request (repeat for multiple items)
+        #[clap(long)]
+        work_item: Vec<i32>,
+
+        /// Label to apply to the pull request (repeat for multiple labels)
+        #[clap(long)]
+        label: Vec<String>,
+
+        /// Complete the pull request automatically once policies pass
+        #[clap(long)]
+        auto_complete: bool,
+
+        /// Delete the source branch when the pull request completes
+        #[clap(long)]
+        delete_source_branch: bool,
     },
     /// List pull requests
     List {
@@ -246,6 +271,12 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
             description_file,
             source,
             target,
+            draft,
+            reviewer,
+            work_item,
+            label,
+            auto_complete,
+            delete_source_branch,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
             let description =
@@ -257,6 +288,12 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
                 description.as_deref(),
                 source,
                 target,
+                *draft,
+                reviewer,
+                work_item,
+                label,
+                *auto_complete,
+                *delete_source_branch,
             )
             .await?;
         }
@@ -524,6 +561,12 @@ mod tests {
             description_file: Some(path.clone()),
             source: "feature".to_string(),
             target: "main".to_string(),
+            draft: false,
+            reviewer: Vec::new(),
+            work_item: Vec::new(),
+            label: Vec::new(),
+            auto_complete: false,
+            delete_source_branch: false,
         };
 
         if let PullRequestsSubCommands::Create {
