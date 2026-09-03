@@ -268,6 +268,10 @@ pub(super) fn build_new_thread(
 
     match (file, line) {
         (Some(file), Some(line)) => {
+            if line < 1 {
+                return Err(anyhow!("--line must be 1 or greater, got {line}"));
+            }
+
             let mut position = CommentPosition::new();
             position.line = Some(line);
             position.offset = Some(1);
@@ -539,6 +543,18 @@ mod tests {
         assert_eq!(context.file_path, Some("/src/main.rs".to_string()));
         assert_eq!(context.right_file_start.unwrap().line, Some(12));
         assert_eq!(context.right_file_end.unwrap().line, Some(12));
+    }
+
+    #[test]
+    fn build_new_thread_rejects_non_positive_lines() {
+        // Azure DevOps numbers comment positions from 1.
+        for line in [0, -1] {
+            let result = build_new_thread("here", Some("/src/main.rs"), Some(line));
+            let message = result.unwrap_err().to_string();
+            assert!(message.contains("--line must be 1 or greater"), "{message}");
+        }
+
+        assert!(build_new_thread("here", Some("/src/main.rs"), Some(1)).is_ok());
     }
 
     #[test]
