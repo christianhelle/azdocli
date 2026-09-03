@@ -6,7 +6,9 @@
 mod complete;
 mod create;
 mod http;
+mod identity;
 mod list;
+mod reviewers;
 mod show;
 mod update;
 
@@ -157,6 +159,11 @@ pub enum PullRequestsSubCommands {
         #[clap(short = 'y', long = "yes")]
         skip_confirmation: bool,
     },
+    /// Manage the reviewers of a pull request
+    Reviewers {
+        #[clap(subcommand)]
+        subcommand: reviewers::ReviewersSubCommands,
+    },
     /// Abandon a pull request
     Abandon {
         /// Team project name (optional if default project is set)
@@ -293,6 +300,9 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
                 *skip_confirmation,
             )
             .await?;
+        }
+        PullRequestsSubCommands::Reviewers { subcommand } => {
+            reviewers::handle_command(subcommand).await?;
         }
         PullRequestsSubCommands::Abandon {
             project,

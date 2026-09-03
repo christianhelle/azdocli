@@ -169,6 +169,19 @@ pub async fn handle_command(subcommand: &UserSubCommands) -> Result<()> {
     Ok(())
 }
 
+/// Looks up the Azure DevOps identity ID for a user's email address.
+///
+/// Used by commands that accept an email where the API needs an identity, such
+/// as adding a pull request reviewer.
+pub async fn find_identity_id_by_email(creds: &Credentials, email: &str) -> Result<String> {
+    let client = create_client(creds)?;
+    let user = find_user_by_email(&client, &creds.organization, email).await?;
+
+    user_id(&user)
+        .map(str::to_string)
+        .ok_or_else(|| anyhow!("User '{email}' has no identity ID"))
+}
+
 fn create_client(creds: &Credentials) -> Result<member_entitlement_management::Client> {
     let factory = CredentialClientFactory::new(creds)?;
     Ok(factory.build_entitlements())
