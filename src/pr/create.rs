@@ -5,6 +5,7 @@ use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::{get_credentials, Credentials};
 use crate::repos;
 use anyhow::Result;
+use colored::Colorize;
 use azure_devops_rust_api::git::models::{
     GitPullRequestCompletionOptions, GitPullRequestCreateOptions, IdentityId, ResourceRef,
     WebApiCreateTagRequestData,
@@ -155,12 +156,15 @@ pub(super) async fn create_pull_request(
     {
         Ok(created_pr) => created_pr,
         Err(e) => {
-            eprintln!("❌ Failed to create pull request: {e}");
+            eprintln!(
+                "{}",
+                format!("❌ Failed to create pull request: {e}").red()
+            );
             return Err(anyhow::anyhow!("Failed to create pull request: {}", e));
         }
     };
 
-    println!("✅ Pull request created successfully!");
+    println!("{}", "✅ Pull request created successfully!".green());
     println!("  ID: {}", created_pr.pull_request_id);
     println!("  Title: {}", created_pr.title.clone().unwrap_or_default());
     println!("  URL: {}", created_pr.url);
@@ -202,7 +206,7 @@ async fn arm_auto_complete(
     });
 
     http::patch_pull_request(creds, project, repository_id, pull_request_id, &body).await?;
-    println!("✅ Auto-complete enabled.");
+    println!("{}", "✅ Auto-complete enabled.".green());
     Ok(())
 }
 
