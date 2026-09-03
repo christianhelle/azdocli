@@ -240,11 +240,20 @@ The `repos pr` commands allow you to manage pull requests within repositories:
 ##### List Pull Requests
 
 ```sh
-# List all pull requests for a repository (using default project)
+# List active pull requests for a repository (using default project)
 azdocli repos pr list --repo MyRepository
 
 # Or specify a project explicitly
 azdocli repos pr list --repo MyRepository --project MyProject
+
+# Filter by state - active (the default), completed, abandoned, or all
+azdocli repos pr list --repo MyRepository --status completed
+
+# Filter by author, reviewer or branch, and cap the number of results
+azdocli repos pr list --repo MyRepository --creator @me
+azdocli repos pr list --repo MyRepository --reviewer alice@example.com
+azdocli repos pr list --repo MyRepository --source "feature/my-feature" --target main
+azdocli repos pr list --repo MyRepository --top 10
 ```
 
 ##### Show Pull Request Details
@@ -255,6 +264,9 @@ azdocli repos pr show --repo MyRepository --id 123
 
 # Or specify a project explicitly
 azdocli repos pr show --repo MyRepository --id 123 --project MyProject
+
+# Open the pull request in a browser instead
+azdocli repos pr show --repo MyRepository --id 123 --web
 ```
 
 ##### Create Pull Request
@@ -271,6 +283,15 @@ azdocli repos pr create --repo MyRepository --source "feature/my-feature" --targ
 
 # Source branch is required, target defaults to 'main' if not specified
 azdocli repos pr create --repo MyRepository --source "bugfix/fix-login"
+
+# Open as a draft, with reviewers, linked work items and labels
+azdocli repos pr create --repo MyRepository --source "feature/my-feature" --title "My Feature" \
+  --draft --reviewer alice@example.com --reviewer bob@example.com \
+  --work-item 1234 --work-item 1235 --label "needs-review"
+
+# Merge automatically once policies pass, then delete the source branch
+azdocli repos pr create --repo MyRepository --source "feature/my-feature" --title "My Feature" \
+  --auto-complete --delete-source-branch
 ```
 
 ##### Update Pull Request
@@ -302,18 +323,85 @@ azdocli repos pr commits --repo MyRepository --id 123
 azdocli repos pr commits --repo MyRepository --id 123 --project MyProject
 ```
 
+##### Complete, Abandon or Reactivate a Pull Request
+
+```sh
+# Merge the pull request, squashing the source commits and deleting the branch
+azdocli repos pr complete --repo MyRepository --id 123 --merge-strategy squash --delete-source-branch
+
+# Merge without the confirmation prompt (for CI/CD)
+azdocli repos pr complete --repo MyRepository --id 123 --yes
+
+# Set the pull request to complete automatically once policies pass
+azdocli repos pr complete --repo MyRepository --id 123 --auto-complete --yes
+
+# Complete despite failing branch policies, recording a reason
+azdocli repos pr complete --repo MyRepository --id 123 --bypass-policy --bypass-reason "hotfix"
+
+# Close a pull request without merging, and reopen it later
+azdocli repos pr abandon --repo MyRepository --id 123 --yes
+azdocli repos pr reactivate --repo MyRepository --id 123
+```
+
+##### Manage Reviewers
+
+Reviewers can be given as an email address, an identity ID, or `@me` for the
+signed-in user.
+
+```sh
+# List reviewers with their votes
+azdocli repos pr reviewers list --repo MyRepository --id 123
+
+# Add one or more reviewers, optionally as required reviewers
+azdocli repos pr reviewers add --repo MyRepository --id 123 --reviewer alice@example.com --reviewer bob@example.com
+azdocli repos pr reviewers add --repo MyRepository --id 123 --reviewer alice@example.com --required
+
+# Remove a reviewer
+azdocli repos pr reviewers remove --repo MyRepository --id 123 --reviewer alice@example.com
+
+# Cast your own vote
+azdocli repos pr reviewers vote --repo MyRepository --id 123 --vote approve
+azdocli repos pr reviewers vote --repo MyRepository --id 123 --vote wait-for-author
+```
+
+Valid votes are `approve`, `approve-with-suggestions`, `reset`, `wait-for-author` and `reject`.
+
+##### Read and Write Comments
+
+```sh
+# Read the discussion (system-generated threads are hidden unless --all is given)
+azdocli repos pr threads --repo MyRepository --id 123
+azdocli repos pr threads --repo MyRepository --id 123 --all
+
+# Start a new thread
+azdocli repos pr comment add --repo MyRepository --id 123 --message "Looks good to me"
+
+# Start a thread anchored to a file and line
+azdocli repos pr comment add --repo MyRepository --id 123 --message "Needs a null check" --file "/src/main.rs" --line 42
+
+# Reply to an existing thread, then resolve it
+azdocli repos pr comment reply --repo MyRepository --id 123 --thread 7 --message "Fixed in the latest push"
+azdocli repos pr comment resolve --repo MyRepository --id 123 --thread 7
+azdocli repos pr comment resolve --repo MyRepository --id 123 --thread 7 --status wont-fix
+```
+
+Valid thread statuses are `fixed`, `wont-fix`, `closed`, `by-design`, `active` and `pending`.
+
 **Pull Request Features:**
 
-- **Repository filtering**: List shows only pull requests for the specified repository
-- **Comprehensive details**: Show command displays ID, title, description, status, branches, and creation date
+- **Server-side filtering**: List by state, author, reviewer, source branch or target branch
+- **Comprehensive details**: Show displays status, draft flag, merge status, reviewers and their votes, labels, linked work items and open comment threads
 - **Branch specification**: Specify source branch (required) and target branch (defaults to 'main')
-- **Flexible creation**: Create pull requests with or without title/description
+- **Flexible creation**: Create pull requests with drafts, reviewers, linked work items, labels and auto-complete
 - **Flexible updates**: Update pull request title and/or description (including from markdown file)
+- **Merge control**: Complete with a chosen merge strategy, delete the source branch, or bypass policy with a recorded reason
+- **Review workflow**: Add and remove reviewers, and cast votes, using email addresses, identity IDs or `@me`
+- **Discussion**: Read threads, start file- and line-anchored comments, reply, and resolve
 - **Branch validation**: Automatic formatting of branch names with refs/heads/ prefix
 - **Repository validation**: Verify repository exists before creating or updating pull request
 - **Authentication handling**: Proper error messages when not logged in
 - **Default project support**: Use with default project or specify --project explicitly
-- **Error handling**: Clear feedback for invalid pull request IDs or missing repositories
+- **Error handling**: Clear feedback for invalid pull request IDs, unmergeable pull requests, or missing repositories
 - **Commit tracking**: View all commits included in a pull request with detailed information
 
 ### Pipeline Management Features
@@ -599,9 +687,15 @@ azdocli repos show --id MyRepo               # Show repository details
 azdocli repos clone                          # Clone all repositories
 
 # Pull request management
-azdocli repos pr list --repo MyRepo          # List pull requests for a repository
+azdocli repos pr list --repo MyRepo          # List active pull requests for a repository
 azdocli repos pr show --repo MyRepo --id 123 # Show pull request details
 azdocli repos pr create --repo MyRepo --source "feature/my-feature" --title "My Feature" # Create a new pull request
+azdocli repos pr complete --repo MyRepo --id 123 --merge-strategy squash # Merge a pull request
+azdocli repos pr abandon --repo MyRepo --id 123 # Close a pull request without merging
+azdocli repos pr reviewers add --repo MyRepo --id 123 --reviewer alice@example.com # Assign a reviewer
+azdocli repos pr reviewers vote --repo MyRepo --id 123 --vote approve # Approve a pull request
+azdocli repos pr threads --repo MyRepo --id 123 # Read the discussion
+azdocli repos pr comment add --repo MyRepo --id 123 --message "Looks good" # Start a comment thread
 
 # Pipeline management
 azdocli pipelines list                       # List all pipelines
