@@ -11,7 +11,13 @@ use crate::auth::Credentials;
 use anyhow::{anyhow, Context, Result};
 use serde_json::Value;
 
+/// API version for the pull request endpoints, which are generally available.
 const API_VERSION: &str = "7.1";
+
+/// API version for `connectionData`, which Azure DevOps only exposes as a
+/// preview resource. Requesting plain `7.1` fails with "The requested version
+/// "7.1" of the resource is under preview."
+const CONNECTION_DATA_API_VERSION: &str = "7.1-preview";
 
 /// Builds the REST URL for a single pull request.
 pub(super) fn pull_request_url(
@@ -66,17 +72,20 @@ pub(super) async fn patch_pull_request(
     serde_json::from_str(&text).context("Parsing pull request update response")
 }
 
+/// Builds the REST URL that reports who the PAT belongs to.
+pub(super) fn connection_data_url(creds: &Credentials) -> String {
+    format!(
+        "{}/{}/_apis/connectionData?api-version={}",
+        normalize_base_url(&creds.base_url),
+        percent_encode_path_segment(&creds.organization),
+        CONNECTION_DATA_API_VERSION
+    )
+}
+
 /// Returns the identity ID of the user the PAT belongs to.
 pub(super) async fn authenticated_user_id(creds: &Credentials) -> Result<String> {
-    let url = format!(
-        "{}/{}/_apis/connectionData",
-        normalize_base_url(&creds.base_url),
-        percent_encode_path_segment(&creds.organization)
-    );
-
     let response = reqwest::Client::new()
-        .get(url)
-        .query(&[("api-version", API_VERSION)])
+        .get(connection_data_url(creds))
         .basic_auth("", Some(&creds.pat))
         .send()
         .await
@@ -140,6 +149,16 @@ mod tests {
         assert_eq!(
             pull_request_url(&creds(), "My Project", "repo-id", 42),
             "https://dev.azure.com/my%20org/My%20Project/_apis/git/repositories/repo-id/pullrequests/42"
+        );
+    }
+
+    #[test]
+    fn connection_data_url_requests_the_preview_api_version() {
+        // Azure DevOps only exposes connectionData as a preview resource, and
+        // rejects a plain "7.1" with a 400.
+        assert_eq!(
+            connection_data_url(&creds()),
+            "https://dev.azure.com/my%20org/_apis/connectionData?api-version=7.1-preview"
         );
     }
 
