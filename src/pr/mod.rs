@@ -3,13 +3,14 @@
 //! The subcommand enum and routing live here; each group of operations lives in
 //! its own submodule so no single file has to hold the whole surface.
 
+mod complete;
 mod create;
 mod list;
 mod show;
 mod update;
 
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
-use crate::auth::get_credentials;
+use crate::auth::{get_credentials, Credentials};
 use crate::project::get_project_or_default;
 use anyhow::{Context, Result};
 use azure_devops_rust_api::git;
@@ -112,6 +113,38 @@ pub enum PullRequestsSubCommands {
         #[clap(long, value_name = "PATH")]
         description_file: Option<PathBuf>,
     },
+    /// Abandon a pull request
+    Abandon {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+
+        /// Name of the repository containing the pull request
+        #[clap(short, long)]
+        repo: String,
+
+        /// ID of the pull request to abandon
+        #[clap(short, long)]
+        id: String,
+
+        /// Skip the confirmation prompt
+        #[clap(short = 'y', long = "yes")]
+        skip_confirmation: bool,
+    },
+    /// Reactivate an abandoned pull request
+    Reactivate {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+
+        /// Name of the repository containing the pull request
+        #[clap(short, long)]
+        repo: String,
+
+        /// ID of the pull request to reactivate
+        #[clap(short, long)]
+        id: String,
+    },
 }
 
 /// Creates an authenticated Azure DevOps Git client.
@@ -188,8 +221,79 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
             )
             .await?;
         }
+        PullRequestsSubCommands::Abandon {
+            project,
+            repo,
+            id,
+            skip_confirmation,
+        } => {
+            complete::abandon_pull_request(project.as_deref(), repo, id, *skip_confirmation)
+                .await?;
+        }
+        PullRequestsSubCommands::Reactivate { project, repo, id } => {
+            complete::reactivate_pull_request(project.as_deref(), repo, id).await?;
+        }
     }
     Ok(())
+}
+
+/// Everything a pull-request subcommand needs: resolved credentials, a Git
+/// client, and the resolved repository and pull request identifiers.
+struct PrContext {
+    creds: Credentials,
+    client: git::Client,
+    project: String,
+    repository_id: String,
+    pull_request_id: i32,
+}
+
+impl PrContext {
+    /// Resolves the project, repository and pull request ID for a subcommand.
+    async fn new(project: Option<&str>, repo: &str, id: &str) -> Result<Self> {
+        let project = get_project_or_default(project)?;
+        let creds = get_credentials()?;
+        let factory = CredentialClientFactory::new(&creds)?;
+        let client = factory.build_git();
+        let repository = crate::repos::get_repo(&project, repo).await?;
+        let pull_request_id = parse_pr_id(id)?;
+
+        Ok(Self {
+            creds,
+            client,
+            project,
+            repository_id: repository.id,
+            pull_request_id,
+        })
+    }
+
+    /// Fetches the pull request this context points at.
+    async fn get_pull_request(&self) -> Result<git::models::GitPullRequest> {
+        Ok(self
+            .client
+            .pull_requests_client()
+            .get_pull_request(
+                &self.creds.organization,
+                &self.repository_id,
+                self.pull_request_id,
+                &self.project,
+            )
+            .await?)
+    }
+
+    /// Changes the status of the pull request.
+    async fn set_status(&self, status: git::models::PullRequestStatus) -> Result<()> {
+        self.client
+            .pull_requests_client()
+            .update(
+                &self.creds.organization,
+                &self.repository_id,
+                &self.project,
+                self.pull_request_id,
+                complete::build_status_options(status),
+            )
+            .await?;
+        Ok(())
+    }
 }
 
 /// Resolves a pull request description from inline text or a markdown file.
