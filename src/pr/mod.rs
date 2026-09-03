@@ -87,6 +87,32 @@ pub enum PullRequestsSubCommands {
         /// Name of the repository to list pull requests from
         #[clap(short, long)]
         repo: String,
+
+        /// Only list pull requests in this state
+        #[clap(long, value_enum, default_value = "active")]
+        status: list::StatusFilter,
+
+        /// Only list pull requests opened by this user
+        /// (email address, identity ID, or '@me')
+        #[clap(long)]
+        creator: Option<String>,
+
+        /// Only list pull requests this user is reviewing
+        /// (email address, identity ID, or '@me')
+        #[clap(long)]
+        reviewer: Option<String>,
+
+        /// Only list pull requests from this source branch
+        #[clap(short, long)]
+        source: Option<String>,
+
+        /// Only list pull requests targeting this branch
+        #[clap(long)]
+        target: Option<String>,
+
+        /// Maximum number of pull requests to return
+        #[clap(long)]
+        top: Option<i32>,
     },
     /// Show details of a specific pull request
     Show {
@@ -297,9 +323,25 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
             )
             .await?;
         }
-        PullRequestsSubCommands::List { project, repo } => {
-            let project_name = get_project_or_default(project.as_deref())?;
-            list::list_pull_requests(&project_name, repo).await?;
+        PullRequestsSubCommands::List {
+            project,
+            repo,
+            status,
+            creator,
+            reviewer,
+            source,
+            target,
+            top,
+        } => {
+            let filters = list::ListFilters {
+                status: *status,
+                creator: creator.as_deref(),
+                reviewer: reviewer.as_deref(),
+                source: source.as_deref(),
+                target: target.as_deref(),
+                top: *top,
+            };
+            list::list_pull_requests(project.as_deref(), repo, &filters).await?;
         }
         PullRequestsSubCommands::Show { project, repo, id } => {
             let project_name = get_project_or_default(project.as_deref())?;
@@ -403,22 +445,29 @@ struct PrContext {
 }
 
 impl PrContext {
-    /// Resolves the project, repository and pull request ID for a subcommand.
-    async fn new(project: Option<&str>, repo: &str, id: &str) -> Result<Self> {
+    /// Resolves the project and repository for a subcommand that works on a
+    /// repository rather than a single pull request.
+    async fn for_repo(project: Option<&str>, repo: &str) -> Result<Self> {
         let project = get_project_or_default(project)?;
         let creds = get_credentials()?;
         let factory = CredentialClientFactory::new(&creds)?;
         let client = factory.build_git();
         let repository = crate::repos::get_repo(&project, repo).await?;
-        let pull_request_id = parse_pr_id(id)?;
 
         Ok(Self {
             creds,
             client,
             project,
             repository_id: repository.id,
-            pull_request_id,
+            pull_request_id: 0,
         })
+    }
+
+    /// Resolves the project, repository and pull request ID for a subcommand.
+    async fn new(project: Option<&str>, repo: &str, id: &str) -> Result<Self> {
+        let mut ctx = Self::for_repo(project, repo).await?;
+        ctx.pull_request_id = parse_pr_id(id)?;
+        Ok(ctx)
     }
 
     /// Fetches the pull request this context points at.
