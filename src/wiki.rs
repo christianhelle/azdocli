@@ -286,16 +286,7 @@ async fn handle_page_command(subcommand: &WikiPageSubCommands) -> Result<()> {
             if *web {
                 if let Some(ref remote_url) = page.remote_url {
                     println!("Opening {} in browser...", remote_url);
-                    #[cfg(target_os = "macos")]
-                    std::process::Command::new("open").arg(remote_url).spawn()?;
-                    #[cfg(target_os = "linux")]
-                    std::process::Command::new("xdg-open")
-                        .arg(remote_url)
-                        .spawn()?;
-                    #[cfg(target_os = "windows")]
-                    std::process::Command::new("explorer")
-                        .arg(remote_url)
-                        .spawn()?;
+                    crate::browser::open_url(remote_url)?;
                 } else {
                     println!("Web URL not available for this page.");
                 }

@@ -488,11 +488,20 @@ azdocli repos delete --id MyRepository --hard --yes</code></pre>
 
           <div class="command-example">
             <h4>List Pull Requests</h4>
-            <pre><code># List all pull requests for a repository
+            <pre><code># List active pull requests for a repository
 azdocli repos pr list --repo MyRepository
 
 # With specific project
-azdocli repos pr list --repo MyRepository --project MyProject</code></pre>
+azdocli repos pr list --repo MyRepository --project MyProject
+
+# Filter by state - active (the default), completed, abandoned, or all
+azdocli repos pr list --repo MyRepository --status completed
+
+# Filter by author, reviewer or branch, and cap the number of results
+azdocli repos pr list --repo MyRepository --creator @me
+azdocli repos pr list --repo MyRepository --reviewer alice@example.com
+azdocli repos pr list --repo MyRepository --source "feature/my-feature" --target main
+azdocli repos pr list --repo MyRepository --top 10</code></pre>
           </div>
 
           <div class="command-example">
@@ -501,7 +510,10 @@ azdocli repos pr list --repo MyRepository --project MyProject</code></pre>
 azdocli repos pr show --repo MyRepository --id 123
 
 # With specific project
-azdocli repos pr show --repo MyRepository --id 123 --project MyProject</code></pre>
+azdocli repos pr show --repo MyRepository --id 123 --project MyProject
+
+# Open the pull request in a browser instead
+azdocli repos pr show --repo MyRepository --id 123 --web</code></pre>
           </div>
           <div class="command-example">
             <h4>Create Pull Request</h4>
@@ -515,7 +527,13 @@ azdocli repos pr create --repo MyRepository --source "feature/my-feature" --titl
 azdocli repos pr create --repo MyRepository --source "feature/my-feature" --target "develop" --title "My Feature" --project MyProject
 
 # Source branch is required, target defaults to 'main'
-azdocli repos pr create --repo MyRepository --source "bugfix/fix-login"</code></pre>
+azdocli repos pr create --repo MyRepository --source "bugfix/fix-login"
+
+# Open as a draft, with reviewers, linked work items and labels
+azdocli repos pr create --repo MyRepository --source "feature/my-feature" --title "My Feature" --draft --reviewer alice@example.com --work-item 1234 --label "needs-review"
+
+# Merge automatically once policies pass, then delete the source branch
+azdocli repos pr create --repo MyRepository --source "feature/my-feature" --title "My Feature" --auto-complete --delete-source-branch</code></pre>
           </div>
 
           <div class="command-example">
@@ -544,23 +562,109 @@ azdocli repos pr commits --repo MyRepository --id 123
 # With specific project
 azdocli repos pr commits --repo MyRepository --id 123 --project MyProject</code></pre>
           </div>
+          <div class="command-example">
+            <h4>Complete, Abandon or Reactivate a Pull Request</h4>
+            <pre><code># Merge the pull request, squashing the source commits and deleting the branch
+azdocli repos pr complete --repo MyRepository --id 123 --merge-strategy squash --delete-source-branch
+
+# Merge without the confirmation prompt (for CI/CD)
+azdocli repos pr complete --repo MyRepository --id 123 --yes
+
+# Set the pull request to complete automatically once policies pass
+azdocli repos pr complete --repo MyRepository --id 123 --auto-complete --yes
+
+# Complete despite failing branch policies, recording a reason
+azdocli repos pr complete --repo MyRepository --id 123 --bypass-policy --bypass-reason "hotfix"
+
+# Close a pull request without merging, and reopen it later
+azdocli repos pr abandon --repo MyRepository --id 123 --yes
+azdocli repos pr reactivate --repo MyRepository --id 123</code></pre>
+            <p>
+              Merge strategies are <code>no-fast-forward</code>,
+              <code>squash</code>, <code>rebase</code> and
+              <code>rebase-merge</code>.
+            </p>
+          </div>
+
+          <div class="command-example">
+            <h4>Manage Reviewers</h4>
+            <pre><code># List reviewers with their votes
+azdocli repos pr reviewers list --repo MyRepository --id 123
+
+# Add one or more reviewers, optionally as required reviewers
+azdocli repos pr reviewers add --repo MyRepository --id 123 --reviewer alice@example.com --reviewer bob@example.com
+azdocli repos pr reviewers add --repo MyRepository --id 123 --reviewer alice@example.com --required
+
+# Remove a reviewer
+azdocli repos pr reviewers remove --repo MyRepository --id 123 --reviewer alice@example.com
+
+# Cast your own vote
+azdocli repos pr reviewers vote --repo MyRepository --id 123 --vote approve
+azdocli repos pr reviewers vote --repo MyRepository --id 123 --vote wait-for-author</code></pre>
+            <p>
+              Reviewers can be given as an email address, an identity ID, or
+              <code>@me</code> for the signed-in user. Valid votes are
+              <code>approve</code>, <code>approve-with-suggestions</code>,
+              <code>reset</code>, <code>wait-for-author</code> and
+              <code>reject</code>.
+            </p>
+          </div>
+
+          <div class="command-example">
+            <h4>Read and Write Comments</h4>
+            <pre><code># Read the discussion (system-generated threads are hidden unless --all is given)
+azdocli repos pr threads --repo MyRepository --id 123
+azdocli repos pr threads --repo MyRepository --id 123 --all
+
+# Start a new thread
+azdocli repos pr comment add --repo MyRepository --id 123 --message "Looks good to me"
+
+# Start a thread anchored to a file and line
+azdocli repos pr comment add --repo MyRepository --id 123 --message "Needs a null check" --file "/src/main.rs" --line 42
+
+# Reply to an existing thread, then resolve it
+azdocli repos pr comment reply --repo MyRepository --id 123 --thread 7 --message "Fixed in the latest push"
+azdocli repos pr comment resolve --repo MyRepository --id 123 --thread 7
+azdocli repos pr comment resolve --repo MyRepository --id 123 --thread 7 --status wont-fix</code></pre>
+            <p>
+              Valid thread statuses are <code>fixed</code>,
+              <code>wont-fix</code>, <code>closed</code>, <code>by-design</code>,
+              <code>active</code> and <code>pending</code>.
+            </p>
+          </div>
+
           <h4>Pull Request Features:</h4>
           <ul>
             <li>
-              <strong>Repository filtering</strong>: List shows only pull
-              requests for the specified repository
+              <strong>Server-side filtering</strong>: List by state, author,
+              reviewer, source branch or target branch
             </li>
             <li>
-              <strong>Comprehensive details</strong>: Show command displays ID,
-              title, description, status, branches, and creation date
+              <strong>Comprehensive details</strong>: Show displays status, draft
+              flag, merge status, reviewers and their votes, labels, linked work
+              items and open comment threads
             </li>
             <li>
               <strong>Branch specification</strong>: Specify source branch
               (required) and target branch (defaults to 'main')
             </li>
             <li>
-              <strong>Flexible creation</strong>: Create pull requests with or
-              without title/description
+              <strong>Flexible creation</strong>: Create pull requests with
+              drafts, reviewers, linked work items, labels and auto-complete
+            </li>
+            <li>
+              <strong>Merge control</strong>: Complete with a chosen merge
+              strategy, delete the source branch, or bypass policy with a
+              recorded reason
+            </li>
+            <li>
+              <strong>Review workflow</strong>: Add and remove reviewers, and
+              cast votes, using email addresses, identity IDs or
+              <code>@me</code>
+            </li>
+            <li>
+              <strong>Discussion</strong>: Read threads, start file- and
+              line-anchored comments, reply, and resolve
             </li>
             <li>
               <strong>Flexible updates</strong>: Update pull request title and/or
@@ -580,7 +684,7 @@ azdocli repos pr commits --repo MyRepository --id 123 --project MyProject</code>
             </li>
             <li>
               <strong>Error handling</strong>: Clear feedback for invalid pull
-              request IDs or missing repositories
+              request IDs, unmergeable pull requests, or missing repositories
             </li>
             <li>
               <strong>Commit tracking</strong>: View all commits included in a

@@ -10,14 +10,28 @@ azdocli is a modular Rust CLI for interacting with Azure DevOps. Each Azure DevO
 azdocli/
 ├── src/
 │   ├── main.rs            # CLI entrypoint & command routing
-│   ├── auth.rs            # Credential storage/retrieval, login/logout
+│   ├── auth/              # Credential storage/retrieval, login/logout, URL helpers
+│   ├── browser.rs         # Opening URLs in the default browser (--web flags)
 │   ├── config.rs          # Config directory (~/.azdocli/) management
 │   ├── project.rs         # Default project get/set
 │   ├── projects.rs        # Team project management commands (core API)
 │   ├── repos.rs           # Repository CRUD, bulk clone
-│   ├── pr.rs              # Pull request operations
+│   ├── pr/                # Pull request operations
+│   │   ├── mod.rs         # Subcommand enum, routing, shared PrContext
+│   │   ├── create.rs      # Creating pull requests
+│   │   ├── list.rs        # Listing pull requests and their commits
+│   │   ├── show.rs        # Pull request details
+│   │   ├── update.rs      # Title and description updates
+│   │   ├── complete.rs    # Complete, abandon and reactivate
+│   │   ├── reviewers.rs   # Reviewers and votes
+│   │   ├── comments.rs    # Comment threads
+│   │   ├── identity.rs    # Resolving email/GUID/@me to an identity
+│   │   └── http.rs        # Raw REST calls the SDK models cannot express
 │   ├── pipelines.rs       # Pipeline & build management
-│   └── boards.rs          # Work item CRUD, WIQL queries
+│   ├── boards.rs          # Work item CRUD, WIQL queries
+│   ├── wiki.rs            # Wiki and wiki page operations
+│   ├── user.rs            # User entitlement management
+│   └── migrate/           # Cross-organization project migration
 ├── docs/
 │   ├── web/               # Static documentation site (GitHub Pages)
 │   ├── install.sh         # Linux/macOS installer

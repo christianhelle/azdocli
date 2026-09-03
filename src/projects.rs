@@ -7,7 +7,6 @@ use azure_devops_rust_api::core::models;
 use clap::{Subcommand, ValueEnum};
 use dialoguer::Confirm;
 use serde_json::json;
-use std::process::Command;
 use tokio::time::{sleep, Duration};
 
 const CREATE_OPEN_WAIT_RETRIES: usize = 30;
@@ -363,20 +362,7 @@ fn display_operation_reference(label: &str, operation: &models::OperationReferen
 fn open_project_in_browser(base_url: &str, organization: &str, project_name: &str) -> Result<()> {
     let project_url = web_project_url(base_url, organization, project_name);
 
-    #[cfg(target_os = "windows")]
-    {
-        Command::new("explorer").arg(&project_url).spawn()?;
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        Command::new("open").arg(&project_url).spawn()?;
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        Command::new("xdg-open").arg(&project_url).spawn()?;
-    }
+    crate::browser::open_url(&project_url)?;
 
     println!("Opening project in browser: {project_url}");
     Ok(())

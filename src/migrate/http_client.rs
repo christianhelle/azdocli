@@ -5,7 +5,7 @@ use futures::TryStream;
 use reqwest::{Body, Client, Response};
 use serde::Deserialize;
 
-use crate::auth::url::normalize_base_url;
+use crate::auth::url::{normalize_base_url, percent_encode_path_segment};
 use crate::auth::Credentials;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -75,16 +75,4 @@ where
         .json::<UploadedAttachment>()
         .await
         .context("Parsing attachment upload response")
-}
-
-fn percent_encode_path_segment(segment: &str) -> String {
-    let mut encoded = String::new();
-    for byte in segment.bytes() {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
-            encoded.push(byte as char);
-        } else {
-            encoded.push_str(&format!("%{byte:02X}"));
-        }
-    }
-    encoded
 }

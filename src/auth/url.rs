@@ -101,6 +101,24 @@ pub fn web_work_item_url(
     )
 }
 
+/// Builds the web URL for a pull request.
+pub fn web_pull_request_url(
+    base_url: &str,
+    organization: &str,
+    project: &str,
+    repository: &str,
+    pull_request_id: i32,
+) -> String {
+    format!(
+        "{}/{}/{}/_git/{}/pullrequest/{}",
+        normalize_base_url(base_url),
+        percent_encode_path_segment(organization),
+        percent_encode_path_segment(project),
+        percent_encode_path_segment(repository),
+        pull_request_id
+    )
+}
+
 /// Returns true when the configured base URL is the default Azure DevOps cloud host.
 pub fn is_default_cloud_host(base_url: &str) -> bool {
     normalize_base_url(base_url) == normalize_base_url(DEFAULT_BASE_URL)
@@ -137,7 +155,8 @@ pub fn release_base_url(base_url: &str) -> String {
     }
 }
 
-fn percent_encode_path_segment(segment: &str) -> String {
+/// Percent-encodes a single URL path segment.
+pub fn percent_encode_path_segment(segment: &str) -> String {
     let mut encoded = String::new();
     for byte in segment.bytes() {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
@@ -255,6 +274,20 @@ mod tests {
         assert_eq!(
             web_work_item_url("https://dev.azure.com", "mycompany", "MyProject", "42"),
             "https://dev.azure.com/mycompany/MyProject/_workitems/edit/42"
+        );
+    }
+
+    #[test]
+    fn web_pull_request_url_encodes_segments() {
+        assert_eq!(
+            web_pull_request_url(
+                "https://dev.azure.com/",
+                "my org",
+                "My Project",
+                "my repo",
+                42
+            ),
+            "https://dev.azure.com/my%20org/My%20Project/_git/my%20repo/pullrequest/42"
         );
     }
 

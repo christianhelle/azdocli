@@ -14,35 +14,76 @@ if ($LASTEXITCODE -ne 0)
 
 $exe = "..\target\debug\azdocli.exe"
 
+# Runs the CLI and aborts the script if it reports failure, so a broken
+# subcommand cannot be reported as a passing run.
+function Invoke-Cli
+{
+  param([Parameter(ValueFromRemainingArguments = $true)][string[]]$CliArgs)
+
+  & $exe @CliArgs
+  if ($LASTEXITCODE -ne 0)
+  {
+    Write-Host "Command failed: azdocli $($CliArgs -join ' ') (exit code $LASTEXITCODE)" -ForegroundColor Red
+    exit 1
+  }
+}
+
 Write-Host "`nTesting main help..." -ForegroundColor Yellow
-& $exe --help
+Invoke-Cli --help
 
 Write-Host "`nTesting repos help..." -ForegroundColor Yellow
-& $exe repos --help
+Invoke-Cli repos --help
 
 Write-Host "`nTesting repos show help..." -ForegroundColor Yellow
-& $exe repos show --help
+Invoke-Cli repos show --help
 
 Write-Host "`nTesting repos list help..." -ForegroundColor Yellow
-& $exe repos list --help
+Invoke-Cli repos list --help
 
 Write-Host "`nTesting repos clone help..." -ForegroundColor Yellow
-& $exe repos clone --help
+Invoke-Cli repos clone --help
 
 Write-Host "`nTesting projects help..." -ForegroundColor Yellow
-& $exe projects --help
+Invoke-Cli projects --help
 
 Write-Host "`nTesting projects list help..." -ForegroundColor Yellow
-& $exe projects list --help
+Invoke-Cli projects list --help
 
 Write-Host "`nTesting projects show help..." -ForegroundColor Yellow
-& $exe projects show --help
+Invoke-Cli projects show --help
 
 Write-Host "`nTesting projects create help..." -ForegroundColor Yellow
-& $exe projects create --help
+Invoke-Cli projects create --help
 
 Write-Host "`nTesting projects delete help..." -ForegroundColor Yellow
-& $exe projects delete --help
+Invoke-Cli projects delete --help
+
+Write-Host "`nTesting repos pr help..." -ForegroundColor Yellow
+Invoke-Cli repos pr --help
+
+foreach ($subcommand in @("create", "list", "show", "commits", "update", "complete", "abandon", "reactivate", "threads"))
+{
+  Write-Host "`nTesting repos pr $subcommand help..." -ForegroundColor Yellow
+  Invoke-Cli repos pr $subcommand --help
+}
+
+Write-Host "`nTesting repos pr reviewers help..." -ForegroundColor Yellow
+Invoke-Cli repos pr reviewers --help
+
+foreach ($subcommand in @("list", "add", "remove", "vote"))
+{
+  Write-Host "`nTesting repos pr reviewers $subcommand help..." -ForegroundColor Yellow
+  Invoke-Cli repos pr reviewers $subcommand --help
+}
+
+Write-Host "`nTesting repos pr comment help..." -ForegroundColor Yellow
+Invoke-Cli repos pr comment --help
+
+foreach ($subcommand in @("add", "reply", "resolve"))
+{
+  Write-Host "`nTesting repos pr comment $subcommand help..." -ForegroundColor Yellow
+  Invoke-Cli repos pr comment $subcommand --help
+}
 
 Write-Host "`nAll command-line interface tests completed successfully!" -ForegroundColor Green
 Write-Host "Note: Actual functionality requires Azure DevOps authentication." -ForegroundColor Cyan
