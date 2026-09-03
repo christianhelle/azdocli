@@ -178,6 +178,11 @@ pub enum PullRequestsSubCommands {
         #[clap(long)]
         all: bool,
     },
+    /// Comment on a pull request
+    Comment {
+        #[clap(subcommand)]
+        subcommand: comments::CommentSubCommands,
+    },
     /// Manage the reviewers of a pull request
     Reviewers {
         #[clap(subcommand)]
@@ -327,6 +332,9 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
             all,
         } => {
             comments::list_threads(project.as_deref(), repo, id, *all).await?;
+        }
+        PullRequestsSubCommands::Comment { subcommand } => {
+            comments::handle_command(subcommand).await?;
         }
         PullRequestsSubCommands::Reviewers { subcommand } => {
             reviewers::handle_command(subcommand).await?;

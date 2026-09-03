@@ -1,9 +1,124 @@
 //! Reading and writing the comment threads on a pull request.
 
 use super::PrContext;
-use anyhow::Result;
-use azure_devops_rust_api::git::models::{comment, comment_thread, GitPullRequestCommentThread};
+use anyhow::{anyhow, Result};
+use azure_devops_rust_api::git::models::{
+    comment, comment_thread, Comment, CommentPosition, CommentThreadContext,
+    GitPullRequestCommentThread,
+};
+use clap::{Subcommand, ValueEnum};
 use colored::Colorize;
+
+#[derive(Subcommand, Clone)]
+pub enum CommentSubCommands {
+    /// Start a new comment thread on a pull request
+    Add {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+
+        /// Name of the repository containing the pull request
+        #[clap(short, long)]
+        repo: String,
+
+        /// ID of the pull request
+        #[clap(short, long)]
+        id: String,
+
+        /// The comment text
+        #[clap(short, long)]
+        message: String,
+
+        /// Anchor the comment to this file, for example /src/main.rs
+        #[clap(long, requires = "line")]
+        file: Option<String>,
+
+        /// Anchor the comment to this line of the file
+        #[clap(long, requires = "file")]
+        line: Option<i32>,
+    },
+    /// Reply to an existing comment thread
+    Reply {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+
+        /// Name of the repository containing the pull request
+        #[clap(short, long)]
+        repo: String,
+
+        /// ID of the pull request
+        #[clap(short, long)]
+        id: String,
+
+        /// ID of the thread to reply to
+        #[clap(short, long)]
+        thread: i32,
+
+        /// The reply text
+        #[clap(short, long)]
+        message: String,
+    },
+    /// Change the status of a comment thread
+    Resolve {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+
+        /// Name of the repository containing the pull request
+        #[clap(short, long)]
+        repo: String,
+
+        /// ID of the pull request
+        #[clap(short, long)]
+        id: String,
+
+        /// ID of the thread to update
+        #[clap(short, long)]
+        thread: i32,
+
+        /// The status to set
+        #[clap(long, value_enum, default_value = "fixed")]
+        status: ThreadStatusArg,
+    },
+}
+
+/// The statuses a comment thread can be moved to.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+pub enum ThreadStatusArg {
+    /// The comment has been addressed
+    #[value(name = "fixed")]
+    Fixed,
+    /// The comment will not be addressed
+    #[value(name = "wont-fix")]
+    WontFix,
+    /// The thread is closed without a resolution
+    #[value(name = "closed")]
+    Closed,
+    /// The behaviour is intentional
+    #[value(name = "by-design")]
+    ByDesign,
+    /// Reopen the thread
+    #[value(name = "active")]
+    Active,
+    /// The thread is waiting on someone
+    #[value(name = "pending")]
+    Pending,
+}
+
+impl ThreadStatusArg {
+    /// The SDK status this argument maps to.
+    fn as_status(self) -> comment_thread::Status {
+        match self {
+            ThreadStatusArg::Fixed => comment_thread::Status::Fixed,
+            ThreadStatusArg::WontFix => comment_thread::Status::WontFix,
+            ThreadStatusArg::Closed => comment_thread::Status::Closed,
+            ThreadStatusArg::ByDesign => comment_thread::Status::ByDesign,
+            ThreadStatusArg::Active => comment_thread::Status::Active,
+            ThreadStatusArg::Pending => comment_thread::Status::Pending,
+        }
+    }
+}
 
 /// Renders a thread status as the label the web UI uses.
 pub(super) fn thread_status_label(status: Option<&comment_thread::Status>) -> &'static str {
@@ -134,10 +249,200 @@ fn display_threads(threads: &[&GitPullRequestCommentThread]) {
     }
 }
 
+/// Builds the payload for a new comment thread.
+///
+/// Anchoring a thread to a diff requires both a file and a line, so the two
+/// arguments are only accepted together.
+pub(super) fn build_new_thread(
+    message: &str,
+    file: Option<&str>,
+    line: Option<i32>,
+) -> Result<GitPullRequestCommentThread> {
+    let mut entry = Comment::new();
+    entry.content = Some(message.to_string());
+    entry.comment_type = Some(comment::CommentType::Text);
+
+    let mut thread = GitPullRequestCommentThread::new();
+    thread.comment_thread.comments = vec![entry];
+    thread.comment_thread.status = Some(comment_thread::Status::Active);
+
+    match (file, line) {
+        (Some(file), Some(line)) => {
+            let mut position = CommentPosition::new();
+            position.line = Some(line);
+            position.offset = Some(1);
+
+            let mut context = CommentThreadContext::new();
+            context.file_path = Some(file.to_string());
+            context.right_file_start = Some(position.clone());
+            context.right_file_end = Some(position);
+
+            thread.comment_thread.thread_context = Some(context);
+        }
+        (None, None) => {}
+        _ => {
+            return Err(anyhow!(
+                "--file and --line must be provided together to anchor a comment"
+            ))
+        }
+    }
+
+    Ok(thread)
+}
+
+/// Builds the payload for a reply to an existing thread.
+pub(super) fn build_reply(message: &str) -> Comment {
+    let mut entry = Comment::new();
+    entry.content = Some(message.to_string());
+    entry.comment_type = Some(comment::CommentType::Text);
+    entry.parent_comment_id = Some(1);
+    entry
+}
+
+/// Builds the payload that moves a thread to a new status.
+pub(super) fn build_status_change(status: ThreadStatusArg) -> GitPullRequestCommentThread {
+    let mut thread = GitPullRequestCommentThread::new();
+    thread.comment_thread.status = Some(status.as_status());
+    thread
+}
+
+/// Routes comment subcommands to their handlers.
+pub(super) async fn handle_command(subcommand: &CommentSubCommands) -> Result<()> {
+    match subcommand {
+        CommentSubCommands::Add {
+            project,
+            repo,
+            id,
+            message,
+            file,
+            line,
+        } => {
+            add_comment(
+                project.as_deref(),
+                repo,
+                id,
+                message,
+                file.as_deref(),
+                *line,
+            )
+            .await
+        }
+        CommentSubCommands::Reply {
+            project,
+            repo,
+            id,
+            thread,
+            message,
+        } => reply_to_thread(project.as_deref(), repo, id, *thread, message).await,
+        CommentSubCommands::Resolve {
+            project,
+            repo,
+            id,
+            thread,
+            status,
+        } => set_thread_status(project.as_deref(), repo, id, *thread, *status).await,
+    }
+}
+
+/// Starts a new comment thread on a pull request.
+async fn add_comment(
+    project: Option<&str>,
+    repo: &str,
+    id: &str,
+    message: &str,
+    file: Option<&str>,
+    line: Option<i32>,
+) -> Result<()> {
+    let body = build_new_thread(message, file, line)?;
+    let ctx = PrContext::new(project, repo, id).await?;
+
+    let created = ctx
+        .client
+        .pull_request_threads_client()
+        .create(
+            &ctx.creds.organization,
+            body,
+            &ctx.repository_id,
+            ctx.pull_request_id,
+            &ctx.project,
+        )
+        .await?;
+
+    let thread_id = created
+        .comment_thread
+        .id
+        .map(|id| id.to_string())
+        .unwrap_or_else(|| "-".to_string());
+
+    println!(
+        "{}",
+        format!("✅ Comment added as thread {thread_id}").green()
+    );
+    Ok(())
+}
+
+/// Replies to an existing comment thread.
+async fn reply_to_thread(
+    project: Option<&str>,
+    repo: &str,
+    id: &str,
+    thread: i32,
+    message: &str,
+) -> Result<()> {
+    let ctx = PrContext::new(project, repo, id).await?;
+
+    ctx.client
+        .pull_request_thread_comments_client()
+        .create(
+            &ctx.creds.organization,
+            build_reply(message),
+            &ctx.repository_id,
+            ctx.pull_request_id,
+            thread,
+            &ctx.project,
+        )
+        .await?;
+
+    println!("{}", format!("✅ Replied to thread {thread}").green());
+    Ok(())
+}
+
+/// Moves a comment thread to a new status.
+async fn set_thread_status(
+    project: Option<&str>,
+    repo: &str,
+    id: &str,
+    thread: i32,
+    status: ThreadStatusArg,
+) -> Result<()> {
+    let ctx = PrContext::new(project, repo, id).await?;
+
+    ctx.client
+        .pull_request_threads_client()
+        .update(
+            &ctx.creds.organization,
+            build_status_change(status),
+            &ctx.repository_id,
+            ctx.pull_request_id,
+            thread,
+            &ctx.project,
+        )
+        .await?;
+
+    println!(
+        "{}",
+        format!(
+            "✅ Thread {thread} marked as {}",
+            thread_status_label(Some(&status.as_status()))
+        )
+        .green()
+    );
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use azure_devops_rust_api::git::models::{Comment, CommentPosition, CommentThreadContext};
 
     fn thread(comment_type: Option<comment::CommentType>) -> GitPullRequestCommentThread {
         let mut entry = Comment::new();
@@ -204,6 +509,62 @@ mod tests {
             thread_location(&with_context),
             Some("/src/main.rs:12".to_string())
         );
+    }
+
+    #[test]
+    fn build_new_thread_creates_an_active_text_comment() {
+        let thread = build_new_thread("looks good", None, None).unwrap();
+
+        assert_eq!(
+            thread.comment_thread.status,
+            Some(comment_thread::Status::Active)
+        );
+        assert_eq!(thread.comment_thread.comments.len(), 1);
+        assert_eq!(
+            thread.comment_thread.comments[0].content,
+            Some("looks good".to_string())
+        );
+        assert_eq!(
+            thread.comment_thread.comments[0].comment_type,
+            Some(comment::CommentType::Text)
+        );
+        assert!(thread.comment_thread.thread_context.is_none());
+    }
+
+    #[test]
+    fn build_new_thread_anchors_to_a_file_and_line() {
+        let thread = build_new_thread("here", Some("/src/main.rs"), Some(12)).unwrap();
+        let context = thread.comment_thread.thread_context.unwrap();
+
+        assert_eq!(context.file_path, Some("/src/main.rs".to_string()));
+        assert_eq!(context.right_file_start.unwrap().line, Some(12));
+        assert_eq!(context.right_file_end.unwrap().line, Some(12));
+    }
+
+    #[test]
+    fn build_new_thread_requires_file_and_line_together() {
+        assert!(build_new_thread("here", Some("/src/main.rs"), None).is_err());
+        assert!(build_new_thread("here", None, Some(12)).is_err());
+    }
+
+    #[test]
+    fn build_reply_targets_the_first_comment() {
+        let reply = build_reply("ack");
+
+        assert_eq!(reply.content, Some("ack".to_string()));
+        assert_eq!(reply.parent_comment_id, Some(1));
+        assert_eq!(reply.comment_type, Some(comment::CommentType::Text));
+    }
+
+    #[test]
+    fn build_status_change_sets_only_the_status() {
+        let thread = build_status_change(ThreadStatusArg::WontFix);
+
+        assert_eq!(
+            thread.comment_thread.status,
+            Some(comment_thread::Status::WontFix)
+        );
+        assert!(thread.comment_thread.comments.is_empty());
     }
 
     #[test]
