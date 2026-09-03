@@ -8,6 +8,12 @@
 
 ### Features
 - Add `repos pr update` command ([#120](https://github.com/christianhelle/azdocli/pull/120)) ([@christianhelle](https://github.com/christianhelle/))
+- Add `repos pr complete`, `repos pr abandon` and `repos pr reactivate` commands
+- Add `repos pr reviewers` commands to list, add, remove and vote as reviewers
+- Add `repos pr threads` and `repos pr comment` commands to read and write pull request discussions
+- Let `repos pr create` set drafts, reviewers, linked work items, labels, auto-complete and source branch deletion
+- Filter `repos pr list` server-side by status, author, reviewer and branch, and add `--top`
+- Show reviewers and their votes, labels, linked work items, draft and merge status on `repos pr show`, plus a `--web` flag
 
 
 ## [0.6.0](https://github.com/christianhelle/azdocli/releases/tag/0.6.0) (2026-08-26)
