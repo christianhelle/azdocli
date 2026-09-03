@@ -5,11 +5,11 @@ use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::{get_credentials, Credentials};
 use crate::repos;
 use anyhow::Result;
-use colored::Colorize;
 use azure_devops_rust_api::git::models::{
     GitPullRequestCompletionOptions, GitPullRequestCreateOptions, IdentityId, ResourceRef,
     WebApiCreateTagRequestData,
 };
+use colored::Colorize;
 use serde_json::json;
 
 /// The title given to a pull request created without `--title`.
@@ -156,10 +156,7 @@ pub(super) async fn create_pull_request(
     {
         Ok(created_pr) => created_pr,
         Err(e) => {
-            eprintln!(
-                "{}",
-                format!("❌ Failed to create pull request: {e}").red()
-            );
+            eprintln!("{}", format!("❌ Failed to create pull request: {e}").red());
             return Err(anyhow::anyhow!("Failed to create pull request: {}", e));
         }
     };
