@@ -4,6 +4,7 @@ use clap::{CommandFactory, Parser, Subcommand};
 
 mod auth;
 mod boards;
+mod browser;
 mod config;
 mod migrate;
 mod pipelines;

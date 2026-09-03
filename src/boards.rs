@@ -9,7 +9,6 @@ use azure_devops_rust_api::wit::{self, models};
 use clap::Subcommand;
 use colored::Colorize;
 use serde_json::json;
-use std::process::Command;
 
 #[derive(Subcommand, Clone)]
 pub enum BoardsSubCommands {
@@ -297,22 +296,7 @@ fn open_work_item_in_browser(
 ) -> Result<()> {
     let url = web_work_item_url(base_url, organization, project, id);
 
-    #[cfg(target_os = "windows")]
-    {
-        Command::new("cmd")
-            .args(["/C", &format!("start {}", url)])
-            .spawn()?;
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        Command::new("open").arg(&url).spawn()?;
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        Command::new("xdg-open").arg(&url).spawn()?;
-    }
+    crate::browser::open_url(&url)?;
 
     println!("Opening work item in browser: {url}");
     Ok(())
