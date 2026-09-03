@@ -11,6 +11,9 @@ use azure_devops_rust_api::git::models::{
 };
 use serde_json::json;
 
+/// The title given to a pull request created without `--title`.
+const DEFAULT_TITLE: &str = "Pull Request";
+
 /// Everything `repos pr create` accepts, after the description has been
 /// resolved and the reviewers have been turned into identity IDs.
 pub(super) struct CreateSettings<'a> {
@@ -47,7 +50,7 @@ pub(super) fn build_create_options(settings: &CreateSettings<'_>) -> GitPullRequ
     GitPullRequestCreateOptions {
         source_ref_name: settings.source_ref.to_string(),
         target_ref_name: settings.target_ref.to_string(),
-        title: settings.title.unwrap_or("Pull Request").to_string(),
+        title: settings.title.unwrap_or(DEFAULT_TITLE).to_string(),
         description: settings.description.map(|d| d.to_string()),
         is_draft: Some(settings.draft),
         labels: settings
@@ -112,7 +115,7 @@ pub(super) async fn create_pull_request(
     println!("  Repository: {repo}");
     println!("  Source branch: {source}");
     println!("  Target branch: {target}");
-    println!("  Title: {}", title.unwrap_or("Default title"));
+    println!("  Title: {}", title.unwrap_or(DEFAULT_TITLE));
     if draft {
         println!("  Draft: yes");
     }
@@ -249,7 +252,7 @@ mod tests {
     fn build_create_options_defaults_title_and_is_not_a_draft() {
         let options = build_create_options(&settings());
 
-        assert_eq!(options.title, "Pull Request");
+        assert_eq!(options.title, DEFAULT_TITLE);
         assert_eq!(options.description, None);
         assert_eq!(options.is_draft, Some(false));
         assert!(options.completion_options.is_none());
