@@ -75,7 +75,14 @@ pub(super) fn build_completion_options(settings: &CompletionSettings<'_>) -> Val
 ///
 /// Returns the last merge source commit, which Azure DevOps requires on the
 /// completion request so a stale pull request cannot be merged by accident.
-pub(super) fn ensure_completable(pull_request: &GitPullRequest) -> Result<String> {
+///
+/// A pull request blocked by branch policy is only rejected when the caller has
+/// not asked to bypass policy, since `--bypass-policy` exists precisely to
+/// complete in that situation.
+pub(super) fn ensure_completable(
+    pull_request: &GitPullRequest,
+    bypass_policy: bool,
+) -> Result<String> {
     if pull_request.status != git_pull_request::Status::Active {
         return Err(anyhow!(
             "Pull request #{} is {:?}; only active pull requests can be completed",
@@ -98,9 +105,9 @@ pub(super) fn ensure_completable(pull_request: &GitPullRequest) -> Result<String
                 pull_request.pull_request_id
             ))
         }
-        Some(git_pull_request::MergeStatus::RejectedByPolicy) => {
+        Some(git_pull_request::MergeStatus::RejectedByPolicy) if !bypass_policy => {
             return Err(anyhow!(
-                "Pull request #{} was rejected by branch policy",
+                "Pull request #{} was rejected by branch policy; pass --bypass-policy to complete it anyway",
                 pull_request.pull_request_id
             ))
         }
@@ -167,7 +174,7 @@ pub(super) async fn complete_pull_request(
             "completionOptions": completion_options,
         })
     } else {
-        let commit_id = ensure_completable(&pull_request)?;
+        let commit_id = ensure_completable(&pull_request, settings.bypass_policy)?;
         json!({
             "status": "completed",
             "lastMergeSourceCommit": { "commitId": commit_id },
@@ -339,7 +346,10 @@ mod tests {
 
     #[test]
     fn ensure_completable_returns_the_merge_source_commit() {
-        assert_eq!(ensure_completable(&pull_request()).unwrap(), "abc123");
+        assert_eq!(
+            ensure_completable(&pull_request(), false).unwrap(),
+            "abc123"
+        );
     }
 
     #[test]
@@ -347,7 +357,7 @@ mod tests {
         let mut pr = pull_request();
         pr.status = git_pull_request::Status::Completed;
 
-        let message = ensure_completable(&pr).unwrap_err().to_string();
+        let message = ensure_completable(&pr, false).unwrap_err().to_string();
         assert!(message.contains("only active pull requests"), "{message}");
     }
 
@@ -356,7 +366,7 @@ mod tests {
         let mut pr = pull_request();
         pr.is_draft = true;
 
-        let message = ensure_completable(&pr).unwrap_err().to_string();
+        let message = ensure_completable(&pr, false).unwrap_err().to_string();
         assert!(message.contains("draft"), "{message}");
     }
 
@@ -365,8 +375,35 @@ mod tests {
         let mut pr = pull_request();
         pr.merge_status = Some(git_pull_request::MergeStatus::Conflicts);
 
-        let message = ensure_completable(&pr).unwrap_err().to_string();
+        let message = ensure_completable(&pr, false).unwrap_err().to_string();
         assert!(message.contains("merge conflicts"), "{message}");
+    }
+
+    #[test]
+    fn ensure_completable_rejects_policy_failures_without_a_bypass() {
+        let mut pr = pull_request();
+        pr.merge_status = Some(git_pull_request::MergeStatus::RejectedByPolicy);
+
+        let message = ensure_completable(&pr, false).unwrap_err().to_string();
+        assert!(message.contains("branch policy"), "{message}");
+        assert!(message.contains("--bypass-policy"), "{message}");
+    }
+
+    #[test]
+    fn ensure_completable_allows_policy_failures_when_bypassing() {
+        let mut pr = pull_request();
+        pr.merge_status = Some(git_pull_request::MergeStatus::RejectedByPolicy);
+
+        assert_eq!(ensure_completable(&pr, true).unwrap(), "abc123");
+    }
+
+    #[test]
+    fn ensure_completable_still_rejects_conflicts_when_bypassing() {
+        // A policy bypass does not make a conflicted merge completable.
+        let mut pr = pull_request();
+        pr.merge_status = Some(git_pull_request::MergeStatus::Conflicts);
+
+        assert!(ensure_completable(&pr, true).is_err());
     }
 
     #[test]
@@ -374,7 +411,7 @@ mod tests {
         let mut pr = pull_request();
         pr.last_merge_source_commit = None;
 
-        let message = ensure_completable(&pr).unwrap_err().to_string();
+        let message = ensure_completable(&pr, false).unwrap_err().to_string();
         assert!(message.contains("no merge source commit"), "{message}");
     }
 
