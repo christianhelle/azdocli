@@ -3,6 +3,7 @@
 //! The subcommand enum and routing live here; each group of operations lives in
 //! its own submodule so no single file has to hold the whole surface.
 
+mod comments;
 mod complete;
 mod create;
 mod http;
@@ -159,6 +160,24 @@ pub enum PullRequestsSubCommands {
         #[clap(short = 'y', long = "yes")]
         skip_confirmation: bool,
     },
+    /// Show the comment threads on a pull request
+    Threads {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+
+        /// Name of the repository containing the pull request
+        #[clap(short, long)]
+        repo: String,
+
+        /// ID of the pull request
+        #[clap(short, long)]
+        id: String,
+
+        /// Include system-generated and deleted threads
+        #[clap(long)]
+        all: bool,
+    },
     /// Manage the reviewers of a pull request
     Reviewers {
         #[clap(subcommand)]
@@ -300,6 +319,14 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
                 *skip_confirmation,
             )
             .await?;
+        }
+        PullRequestsSubCommands::Threads {
+            project,
+            repo,
+            id,
+            all,
+        } => {
+            comments::list_threads(project.as_deref(), repo, id, *all).await?;
         }
         PullRequestsSubCommands::Reviewers { subcommand } => {
             reviewers::handle_command(subcommand).await?;
