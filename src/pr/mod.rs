@@ -533,7 +533,292 @@ async fn resolve_description(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
     use std::io::Write;
+
+    /// A parser over just the pull request subcommands, so the argument wiring
+    /// can be exercised without going through the whole CLI.
+    #[derive(Parser)]
+    struct TestCli {
+        #[clap(subcommand)]
+        command: PullRequestsSubCommands,
+    }
+
+    fn parse(args: &[&str]) -> Result<PullRequestsSubCommands, clap::Error> {
+        TestCli::try_parse_from(std::iter::once("pr").chain(args.iter().copied()))
+            .map(|cli| cli.command)
+    }
+
+    #[test]
+    fn list_defaults_to_active_pull_requests() {
+        let command = parse(&["list", "--repo", "r"]).unwrap();
+
+        let PullRequestsSubCommands::List { status, top, .. } = command else {
+            panic!("expected List");
+        };
+        assert_eq!(status, list::StatusFilter::Active);
+        assert_eq!(top, None);
+    }
+
+    #[test]
+    fn list_accepts_every_filter() {
+        let command = parse(&[
+            "list",
+            "--repo",
+            "r",
+            "--status",
+            "all",
+            "--creator",
+            "@me",
+            "--reviewer",
+            "someone@example.com",
+            "--source",
+            "feature",
+            "--target",
+            "main",
+            "--top",
+            "5",
+        ])
+        .unwrap();
+
+        let PullRequestsSubCommands::List {
+            status,
+            creator,
+            reviewer,
+            source,
+            target,
+            top,
+            ..
+        } = command
+        else {
+            panic!("expected List");
+        };
+        assert_eq!(status, list::StatusFilter::All);
+        assert_eq!(creator.as_deref(), Some("@me"));
+        assert_eq!(reviewer.as_deref(), Some("someone@example.com"));
+        assert_eq!(source.as_deref(), Some("feature"));
+        assert_eq!(target.as_deref(), Some("main"));
+        assert_eq!(top, Some(5));
+    }
+
+    #[test]
+    fn create_collects_repeated_reviewers_work_items_and_labels() {
+        let command = parse(&[
+            "create",
+            "--repo",
+            "r",
+            "--source",
+            "feature",
+            "--draft",
+            "--reviewer",
+            "a@example.com",
+            "--reviewer",
+            "b@example.com",
+            "--work-item",
+            "11",
+            "--work-item",
+            "22",
+            "--label",
+            "bug",
+        ])
+        .unwrap();
+
+        let PullRequestsSubCommands::Create {
+            draft,
+            reviewer,
+            work_item,
+            label,
+            target,
+            ..
+        } = command
+        else {
+            panic!("expected Create");
+        };
+        assert!(draft);
+        assert_eq!(reviewer, vec!["a@example.com", "b@example.com"]);
+        assert_eq!(work_item, vec![11, 22]);
+        assert_eq!(label, vec!["bug"]);
+        assert_eq!(target, "main");
+    }
+
+    #[test]
+    fn comment_add_requires_file_and_line_together() {
+        assert!(parse(&[
+            "comment",
+            "add",
+            "--repo",
+            "r",
+            "--id",
+            "1",
+            "--message",
+            "m",
+            "--file",
+            "/a.rs",
+        ])
+        .is_err());
+
+        assert!(parse(&[
+            "comment",
+            "add",
+            "--repo",
+            "r",
+            "--id",
+            "1",
+            "--message",
+            "m",
+            "--line",
+            "3",
+        ])
+        .is_err());
+
+        assert!(parse(&[
+            "comment",
+            "add",
+            "--repo",
+            "r",
+            "--id",
+            "1",
+            "--message",
+            "m",
+            "--file",
+            "/a.rs",
+            "--line",
+            "3",
+        ])
+        .is_ok());
+    }
+
+    #[test]
+    fn comment_resolve_defaults_to_fixed() {
+        let command = parse(&[
+            "comment", "resolve", "--repo", "r", "--id", "1", "--thread", "9",
+        ])
+        .unwrap();
+
+        let PullRequestsSubCommands::Comment { subcommand } = command else {
+            panic!("expected Comment");
+        };
+        let comments::CommentSubCommands::Resolve { status, thread, .. } = subcommand else {
+            panic!("expected Resolve");
+        };
+        assert_eq!(status, comments::ThreadStatusArg::Fixed);
+        assert_eq!(thread, 9);
+    }
+
+    #[test]
+    fn complete_requires_bypass_policy_for_a_bypass_reason() {
+        assert!(parse(&[
+            "complete",
+            "--repo",
+            "r",
+            "--id",
+            "1",
+            "--bypass-reason",
+            "hotfix",
+        ])
+        .is_err());
+
+        assert!(parse(&[
+            "complete",
+            "--repo",
+            "r",
+            "--id",
+            "1",
+            "--bypass-policy",
+            "--bypass-reason",
+            "hotfix",
+            "--merge-strategy",
+            "squash",
+        ])
+        .is_ok());
+    }
+
+    #[test]
+    fn reviewers_add_requires_at_least_one_reviewer() {
+        assert!(parse(&["reviewers", "add", "--repo", "r", "--id", "1"]).is_err());
+
+        let command = parse(&[
+            "reviewers",
+            "add",
+            "--repo",
+            "r",
+            "--id",
+            "1",
+            "--reviewer",
+            "a@example.com",
+            "--required",
+        ])
+        .unwrap();
+
+        let PullRequestsSubCommands::Reviewers { subcommand } = command else {
+            panic!("expected Reviewers");
+        };
+        let reviewers::ReviewersSubCommands::Add {
+            reviewer, required, ..
+        } = subcommand
+        else {
+            panic!("expected Add");
+        };
+        assert_eq!(reviewer, vec!["a@example.com"]);
+        assert!(required);
+    }
+
+    #[test]
+    fn reviewers_vote_parses_every_option() {
+        for (arg, expected) in [
+            ("approve", reviewers::VoteArg::Approve),
+            (
+                "approve-with-suggestions",
+                reviewers::VoteArg::ApproveWithSuggestions,
+            ),
+            ("reset", reviewers::VoteArg::Reset),
+            ("wait-for-author", reviewers::VoteArg::WaitForAuthor),
+            ("reject", reviewers::VoteArg::Reject),
+        ] {
+            let command = parse(&[
+                "reviewers",
+                "vote",
+                "--repo",
+                "r",
+                "--id",
+                "1",
+                "--vote",
+                arg,
+            ])
+            .unwrap();
+
+            let PullRequestsSubCommands::Reviewers { subcommand } = command else {
+                panic!("expected Reviewers");
+            };
+            let reviewers::ReviewersSubCommands::Vote { vote, .. } = subcommand else {
+                panic!("expected Vote");
+            };
+            assert_eq!(vote, expected, "for --vote {arg}");
+        }
+    }
+
+    #[test]
+    fn abandon_supports_skipping_confirmation() {
+        let command = parse(&["abandon", "--repo", "r", "--id", "1", "-y"]).unwrap();
+
+        let PullRequestsSubCommands::Abandon {
+            skip_confirmation, ..
+        } = command
+        else {
+            panic!("expected Abandon");
+        };
+        assert!(skip_confirmation);
+    }
+
+    #[test]
+    fn threads_hides_system_threads_unless_asked() {
+        let command = parse(&["threads", "--repo", "r", "--id", "1"]).unwrap();
+
+        let PullRequestsSubCommands::Threads { all, .. } = command else {
+            panic!("expected Threads");
+        };
+        assert!(!all);
+    }
 
     #[tokio::test]
     async fn resolve_description_returns_inline_when_no_file() {
