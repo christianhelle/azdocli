@@ -44,5 +44,32 @@ Write-Host "`nTesting projects create help..." -ForegroundColor Yellow
 Write-Host "`nTesting projects delete help..." -ForegroundColor Yellow
 & $exe projects delete --help
 
+Write-Host "`nTesting repos pr help..." -ForegroundColor Yellow
+& $exe repos pr --help
+
+foreach ($subcommand in @("create", "list", "show", "commits", "update", "complete", "abandon", "reactivate", "threads"))
+{
+  Write-Host "`nTesting repos pr $subcommand help..." -ForegroundColor Yellow
+  & $exe repos pr $subcommand --help
+}
+
+Write-Host "`nTesting repos pr reviewers help..." -ForegroundColor Yellow
+& $exe repos pr reviewers --help
+
+foreach ($subcommand in @("list", "add", "remove", "vote"))
+{
+  Write-Host "`nTesting repos pr reviewers $subcommand help..." -ForegroundColor Yellow
+  & $exe repos pr reviewers $subcommand --help
+}
+
+Write-Host "`nTesting repos pr comment help..." -ForegroundColor Yellow
+& $exe repos pr comment --help
+
+foreach ($subcommand in @("add", "reply", "resolve"))
+{
+  Write-Host "`nTesting repos pr comment $subcommand help..." -ForegroundColor Yellow
+  & $exe repos pr comment $subcommand --help
+}
+
 Write-Host "`nAll command-line interface tests completed successfully!" -ForegroundColor Green
 Write-Host "Note: Actual functionality requires Azure DevOps authentication." -ForegroundColor Cyan
