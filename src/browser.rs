@@ -7,11 +7,17 @@ use anyhow::{Context, Result};
 use std::process::Command;
 
 /// Opens `url` in the default browser for the current platform.
+///
+/// On Windows the URL is handed to `explorer` rather than `cmd /C start`,
+/// because `cmd` re-parses its command line and would treat characters such as
+/// `&`, `|` and `^` in the URL as shell metacharacters. Parts of these URLs
+/// come from the configured base URL and from project and repository names, so
+/// the URL must never reach a shell parser.
 pub fn open_url(url: &str) -> Result<()> {
     #[cfg(target_os = "windows")]
     let mut command = {
-        let mut command = Command::new("cmd");
-        command.args(["/C", "start", "", url]);
+        let mut command = Command::new("explorer");
+        command.arg(url);
         command
     };
 
