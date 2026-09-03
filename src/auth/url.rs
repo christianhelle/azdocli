@@ -137,7 +137,8 @@ pub fn release_base_url(base_url: &str) -> String {
     }
 }
 
-fn percent_encode_path_segment(segment: &str) -> String {
+/// Percent-encodes a single URL path segment.
+pub fn percent_encode_path_segment(segment: &str) -> String {
     let mut encoded = String::new();
     for byte in segment.bytes() {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
