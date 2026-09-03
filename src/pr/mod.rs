@@ -127,6 +127,10 @@ pub enum PullRequestsSubCommands {
         /// ID of the pull request to show
         #[clap(short, long)]
         id: String,
+
+        /// Open the pull request in a browser instead of printing it
+        #[clap(long)]
+        web: bool,
     },
     /// Show commits in a pull request
     Commits {
@@ -343,9 +347,13 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
             };
             list::list_pull_requests(project.as_deref(), repo, &filters).await?;
         }
-        PullRequestsSubCommands::Show { project, repo, id } => {
-            let project_name = get_project_or_default(project.as_deref())?;
-            show::show_pull_request(&project_name, repo, id).await?;
+        PullRequestsSubCommands::Show {
+            project,
+            repo,
+            id,
+            web,
+        } => {
+            show::show_pull_request(project.as_deref(), repo, id, *web).await?;
         }
         PullRequestsSubCommands::Commits {
             ref project,
