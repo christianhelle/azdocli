@@ -2,6 +2,7 @@ use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::auth::url::web_work_item_url;
 use crate::project::get_project_or_default;
+use crate::text::escape_control_characters;
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::wit::models::json_patch_operation::Op;
 use azure_devops_rust_api::wit::models::JsonPatchOperation;
@@ -44,6 +45,34 @@ pub enum WorkItemType {
     Feature,
     /// Epic work item type
     Epic,
+}
+
+#[derive(Subcommand, Clone)]
+pub enum WorkItemCommentSubCommands {
+    /// List the comments on a work item
+    List {
+        /// ID of the work item
+        #[clap(short, long)]
+        id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Maximum number of comments to return
+        #[clap(long)]
+        top: Option<i32>,
+    },
+    /// Add a comment to a work item
+    Add {
+        /// ID of the work item
+        #[clap(short, long)]
+        id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// The comment text
+        #[clap(short, long)]
+        message: String,
+    },
 }
 
 #[derive(Subcommand, Clone)]
@@ -99,6 +128,11 @@ pub enum WorkItemSubCommands {
         #[clap(long)]
         web: bool,
     },
+    /// Read and write the comments on a work item
+    Comment {
+        #[clap(subcommand)]
+        subcommand: WorkItemCommentSubCommands,
+    },
     /// Update a work item
     Update {
         /// ID of the work item to update
@@ -120,6 +154,80 @@ pub enum WorkItemSubCommands {
         #[clap(long)]
         priority: Option<i32>,
     },
+}
+
+async fn list_work_item_comments(
+    project: &str,
+    id: &str,
+    top: Option<i32>,
+) -> Result<Vec<models::Comment>> {
+    let creds = get_credentials()?;
+    let client = create_wit_client()?;
+
+    let mut request =
+        client
+            .comments_client()
+            .get_comments(creds.organization, project, parse_work_item_id(id)?);
+
+    if let Some(top) = top {
+        request = request.top(top);
+    }
+
+    Ok(request.await?.comments)
+}
+
+async fn add_work_item_comment(project: &str, id: &str, message: &str) -> Result<models::Comment> {
+    let creds = get_credentials()?;
+    let client = create_wit_client()?;
+
+    Ok(client
+        .comments_client()
+        .add_comment(
+            creds.organization,
+            models::CommentCreate {
+                text: Some(message.to_string()),
+            },
+            project,
+            parse_work_item_id(id)?,
+        )
+        .await?)
+}
+
+fn display_work_item_comments(comments: &[models::Comment]) {
+    if comments.is_empty() {
+        println!("No comments found.");
+        return;
+    }
+
+    for comment in comments {
+        let author = comment
+            .created_by
+            .as_ref()
+            .and_then(|identity| identity.graph_subject_base.display_name.as_deref())
+            .unwrap_or("Unknown");
+        let created = comment
+            .created_date
+            .map(|created| created.to_string())
+            .unwrap_or_else(|| "-".to_string());
+
+        println!(
+            "💬 {} - {}",
+            escape_control_characters(author).bold(),
+            created
+        );
+
+        if let Some(id) = comment.id {
+            println!("   Comment ID: {id}");
+        }
+
+        println!(
+            "{}",
+            escape_control_characters(comment.text.as_deref().unwrap_or(""))
+        );
+        println!();
+    }
+
+    println!("{} comment(s)", comments.len());
 }
 
 /// Work item ids reach us as strings from the command line.
@@ -550,6 +658,44 @@ pub async fn handle_command(subcommand: &BoardsSubCommands) -> Result<()> {
     }
 }
 
+async fn handle_work_item_comment_command(subcommand: &WorkItemCommentSubCommands) -> Result<()> {
+    match subcommand {
+        WorkItemCommentSubCommands::List { id, project, top } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match list_work_item_comments(&project_name, id, *top).await {
+                Ok(comments) => display_work_item_comments(&comments),
+                Err(e) => {
+                    eprintln!("❌ Failed to list comments on work item {id}");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        WorkItemCommentSubCommands::Add {
+            id,
+            project,
+            message,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match add_work_item_comment(&project_name, id, message).await {
+                Ok(comment) => {
+                    println!("{}", "✅ Comment added successfully!".green());
+                    if let Some(comment_id) = comment.id {
+                        println!("Created comment with ID: {comment_id}");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to add a comment to work item {id}");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()> {
     match subcommand {
         WorkItemSubCommands::Create {
@@ -670,6 +816,9 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
                     return Err(e);
                 }
             }
+        }
+        WorkItemSubCommands::Comment { subcommand } => {
+            return handle_work_item_comment_command(subcommand).await;
         }
         WorkItemSubCommands::Update {
             id,
