@@ -187,11 +187,19 @@ fn display_pipelines(pipelines: &[models::Pipeline]) {
         return;
     }
 
-    println!("{:<10} {:<40}", "ID".bold(), "Name".bold());
-    println!("{}", "-".repeat(50));
+    println!(
+        "{:<10} {:<40} {}",
+        "ID".bold(),
+        "Name".bold(),
+        "Folder".bold()
+    );
+    println!("{}", "-".repeat(70));
 
     for pipeline in pipelines {
-        println!("{:<10} {:<40}", pipeline.id, format!("{:?}", pipeline.name));
+        println!(
+            "{:<10} {:<40} {}",
+            pipeline.id, pipeline.name, pipeline.folder
+        );
     }
 }
 
