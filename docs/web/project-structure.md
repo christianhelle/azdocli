@@ -15,7 +15,7 @@ azdocli/
 │   ├── config.rs          # Config directory (~/.azdocli/) management
 │   ├── project.rs         # Default project get/set
 │   ├── projects.rs        # Team project management commands (core API)
-│   ├── repos.rs           # Repository CRUD, bulk clone
+│   ├── repos.rs           # Repository CRUD, bulk clone, branch/commit/file browsing
 │   ├── pr/                # Pull request operations
 │   │   ├── mod.rs         # Subcommand enum, routing, shared PrContext
 │   │   ├── create.rs      # Creating pull requests
