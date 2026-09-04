@@ -128,6 +128,12 @@ pub enum WorkItemSubCommands {
         #[clap(long)]
         web: bool,
     },
+    /// List the work item types available in a project
+    Types {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
     /// Read and write the comments on a work item
     Comment {
         #[clap(subcommand)]
@@ -154,6 +160,45 @@ pub enum WorkItemSubCommands {
         #[clap(long)]
         priority: Option<i32>,
     },
+}
+
+async fn list_work_item_types(project: &str) -> Result<Vec<models::WorkItemType>> {
+    let creds = get_credentials()?;
+    let client = create_wit_client()?;
+
+    Ok(client
+        .work_item_types_client()
+        .list(creds.organization, project)
+        .await?
+        .value)
+}
+
+fn display_work_item_types(work_item_types: &[models::WorkItemType]) {
+    if work_item_types.is_empty() {
+        println!("No work item types found.");
+        return;
+    }
+
+    println!("{:<28} {}", "Name".bold(), "Description".bold());
+    println!("{}", "-".repeat(90));
+
+    for work_item_type in work_item_types {
+        let description = work_item_type
+            .description
+            .as_deref()
+            .unwrap_or("")
+            .lines()
+            .next()
+            .unwrap_or("");
+
+        println!(
+            "{:<28} {}",
+            work_item_type.name.as_deref().unwrap_or("-"),
+            escape_control_characters(description)
+        );
+    }
+
+    println!("\n{} type(s)", work_item_types.len());
 }
 
 async fn list_work_item_comments(
@@ -813,6 +858,17 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
                 }
                 Err(e) => {
                     eprintln!("❌ Failed to retrieve work item: {e}");
+                    return Err(e);
+                }
+            }
+        }
+        WorkItemSubCommands::Types { project } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match list_work_item_types(&project_name).await {
+                Ok(work_item_types) => display_work_item_types(&work_item_types),
+                Err(e) => {
+                    eprintln!("❌ Failed to list the work item types of '{project_name}'");
+                    eprintln!("   {e}");
                     return Err(e);
                 }
             }
