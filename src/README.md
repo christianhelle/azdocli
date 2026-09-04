@@ -553,6 +553,38 @@ azdocli user update --email user@contoso.com --license stakeholder
 - **AAD-group filtering**: User list excludes accounts whose entitlement is inherited from AAD group rules
 - **Error handling**: Clear guidance for missing users and ambiguous email matches
 
+#### Variable Groups and Service Connections
+
+The `pipelines variable-group` and `pipelines service-connection` commands inspect the resources a
+pipeline consumes:
+
+```sh
+# List the variable groups of the default project
+azdocli pipelines variable-group list
+
+# Filter by name and cap the number of results
+azdocli pipelines variable-group list --name "release" --top 10
+
+# Show a variable group and its variables (secret values are never returned by Azure DevOps)
+azdocli pipelines variable-group show --id 7
+
+# List the service connections of the default project
+azdocli pipelines service-connection list
+
+# Only connections of one type
+azdocli pipelines service-connection list --type azurerm
+
+# Show a single service connection
+azdocli pipelines service-connection show --id 00000000-0000-0000-0000-000000000000
+```
+
+**Library Features:**
+
+- **Variable discovery**: See which variable groups exist and what they define
+- **Secret safety**: Secret variables are shown as `<secret>`; the API never returns their values
+- **Service connection inventory**: List connections with their type and readiness, filtered by type
+- **Default project support**: Use with default project or specify --project explicitly
+
 ### Board Management Features
 
 #### Work Item Management
