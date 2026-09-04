@@ -85,5 +85,14 @@ foreach ($subcommand in @("add", "reply", "resolve"))
   Invoke-Cli repos pr comment $subcommand --help
 }
 
+Write-Host "`nTesting pipelines help..." -ForegroundColor Yellow
+Invoke-Cli pipelines --help
+
+foreach ($subcommand in @("list", "runs", "show", "logs", "artifacts", "run"))
+{
+  Write-Host "`nTesting pipelines $subcommand help..." -ForegroundColor Yellow
+  Invoke-Cli pipelines $subcommand --help
+}
+
 Write-Host "`nAll command-line interface tests completed successfully!" -ForegroundColor Green
 Write-Host "Note: Actual functionality requires Azure DevOps authentication." -ForegroundColor Cyan
