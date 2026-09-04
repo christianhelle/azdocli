@@ -233,8 +233,10 @@ pub async fn get_repo(project: &str, repository_id: &str) -> Result<git::models:
         }
     };
 
-    // Find the repository by name (since ID type is unclear, we'll match by name which is always a String)
-    let repo = repos.iter().find(|repo| repo.name == repository_id);
+    // Callers pass either the repository name or its GUID, so accept both.
+    let repo = repos
+        .iter()
+        .find(|repo| repo.name == repository_id || repo.id == repository_id);
 
     match repo {
         Some(repo) => Ok(repo.clone()),
