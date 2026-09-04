@@ -3,7 +3,7 @@
 ## [Unreleased Changes]
 
 ### Features
-- Add `pipelines variable-group` and `pipelines service-connection` commands ([#126](https://github.com/christianhelle/azdocli/pull/126)) ([@christianhelle](https://github.com/christianhelle/))
+- List and inspect variable groups and service connections ([#126](https://github.com/christianhelle/azdocli/pull/126)) ([@christianhelle](https://github.com/christianhelle/))
 - Queue pipeline runs and read run logs and artifacts ([#123](https://github.com/christianhelle/azdocli/pull/123)) ([@christianhelle](https://github.com/christianhelle/))
 - Browse repository branches, commits and files without cloning ([#122](https://github.com/christianhelle/azdocli/pull/122)) ([@christianhelle](https://github.com/christianhelle/))
 - Add commands to review, discuss and merge pull requests ([#121](https://github.com/christianhelle/azdocli/pull/121)) ([@christianhelle](https://github.com/christianhelle/))
