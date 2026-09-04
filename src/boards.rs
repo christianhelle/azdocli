@@ -122,6 +122,12 @@ pub enum WorkItemSubCommands {
     },
 }
 
+/// Work item ids reach us as strings from the command line.
+fn parse_work_item_id(id: &str) -> Result<i32> {
+    id.parse::<i32>()
+        .map_err(|_| anyhow!("Invalid work item ID '{id}', must be a number"))
+}
+
 fn create_wit_client() -> Result<wit::Client> {
     let creds = get_credentials()?;
     let factory = CredentialClientFactory::new(&creds)?;
@@ -129,9 +135,7 @@ fn create_wit_client() -> Result<wit::Client> {
 }
 
 async fn get_work_item(project: &str, id: &str) -> Result<models::WorkItem> {
-    let id_int = id
-        .parse::<i32>()
-        .map_err(|_| anyhow!("Invalid work item ID, must be a number"))?;
+    let id_int = parse_work_item_id(id)?;
 
     match get_credentials() {
         Ok(creds) => {
@@ -196,9 +200,7 @@ async fn update_work_item(
     state: Option<&str>,
     priority: Option<i32>,
 ) -> Result<models::WorkItem> {
-    let id_int = id
-        .parse::<i32>()
-        .map_err(|_| anyhow!("Invalid work item ID, must be a number"))?;
+    let id_int = parse_work_item_id(id)?;
 
     match get_credentials() {
         Ok(creds) => {
@@ -260,9 +262,7 @@ async fn update_work_item(
 }
 
 async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<()> {
-    let _id_int = id
-        .parse::<i32>()
-        .map_err(|_| anyhow!("Invalid work item ID, must be a number"))?;
+    let id_int = parse_work_item_id(id)?;
     match get_credentials() {
         Ok(creds) => {
             if soft_delete {
@@ -284,11 +284,7 @@ async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<
             } else {
                 create_wit_client()?
                     .work_items_client()
-                    .delete(
-                        creds.organization,
-                        id.parse::<i32>().unwrap(),
-                        project.to_string(),
-                    )
+                    .delete(creds.organization, id_int, project.to_string())
                     .await?;
             }
             Ok(())
