@@ -175,7 +175,7 @@ SUBCOMMANDS:
 
 ## Features
 
-- **Repository Management**: List, create, delete, clone, view, and manage pull requests in repositories
+- **Repository Management**: List, create, delete, clone, view, browse and manage pull requests in repositories
 - **Pipeline Management**: Manage Azure DevOps pipelines
 - **Project Management**: Create, delete, list, and show Azure DevOps team projects in your organization
 - **Migration**: Cross-tenant team-project migration with `azdocli migrate` (see [src/README.md](src/README.md#migrate) for the full guide)
@@ -301,6 +301,41 @@ azdocli repos delete --id MyRepository --hard --yes
 - **Repository validation**: Verify repository exists before attempting deletion
 - **Error handling**: Clear feedback when repository not found or access denied
 - **Default project support**: Use with default project or specify --project explicitly
+
+#### Repository Browsing Features
+
+The `repos branches`, `repos commits`, `repos files` and `repos file` commands let you inspect the
+contents of a repository without cloning it:
+
+```sh
+# List the branches of a repository (the default branch is marked)
+azdocli repos branches --id MyRepository
+
+# Only show branches matching some text, and cap the number of results
+azdocli repos branches --id MyRepository --filter feature --top 20
+
+# List the 25 most recent commits on the default branch
+azdocli repos commits --id MyRepository
+
+# Read the history of a specific branch, author or path
+azdocli repos commits --id MyRepository --branch develop --author "Christian Helle" --path src --top 50
+
+# List the files and folders at the root of the repository
+azdocli repos files --id MyRepository
+
+# List a subfolder, on a specific branch, recursively
+azdocli repos files --id MyRepository --path /src --branch develop --recursive
+
+# Print the contents of a single file
+azdocli repos file --id MyRepository --path /README.md --branch develop
+```
+
+**Browsing Features:**
+
+- **No clone required**: Inspect branches, history and files straight from the CLI
+- **Server-side filtering**: Branch, author, path and result limits are applied by Azure DevOps
+- **Default branch aware**: Commands fall back to the repository default branch when `--branch` is omitted
+- **Pipe friendly**: `repos file` writes the raw file contents to stdout
 
 #### Pull Request Management Features
 
