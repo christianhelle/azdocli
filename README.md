@@ -560,13 +560,13 @@ azdocli pipelines show --id 42 --project MyProject --build-id 123
 
 **Show Features:**
 
-- **Detailed information**: Comprehensive details about a specific pipeline build
-- **Debug information**: Access to internal state for troubleshooting purposes
+- **Detailed information**: Run number, pipeline, state, result and timestamps
+- **Web link**: The URL of the run in the Azure DevOps web interface
 - **Error handling**: Helpful error messages when build not found
 
 #### Pipeline Run Feature
 
-The `pipelines run` command starts a new pipeline run:
+The `pipelines run` command queues a new pipeline run:
 
 ```sh
 # Run a pipeline (using default project)
@@ -574,13 +574,57 @@ azdocli pipelines run --id 42
 
 # Or specify a project explicitly
 azdocli pipelines run --id 42 --project MyProject
+
+# Run a specific branch
+azdocli pipelines run --id 42 --branch develop
+
+# Pass pipeline variables (repeat --variable for more than one)
+azdocli pipelines run --id 42 --variable environment=staging --variable verbose=true
 ```
 
 **Run Features:**
 
 - **Pipeline execution**: Start a pipeline with a single command
-- **Live updates**: See details of the running build in real-time
+- **Branch selection**: Queue the run against any branch with `--branch`
+- **Runtime variables**: Set pipeline variables with repeatable `--variable NAME=VALUE` arguments
+- **Run summary**: Prints the new run number, state and web URL
 - **Error handling**: Clear feedback when pipeline cannot be started
+
+#### Pipeline Logs Feature
+
+The `pipelines logs` command lists the logs of a run, or prints one of them:
+
+```sh
+# List the logs produced by a run
+azdocli pipelines logs --id 42 --build-id 123
+
+# Print the contents of a single log
+azdocli pipelines logs --id 42 --build-id 123 --log-id 7
+```
+
+**Logs Features:**
+
+- **Log inventory**: See every log a run produced, with line counts and timestamps
+- **Full log text**: Print a log to stdout so it can be piped, searched or saved
+- **Error handling**: Clear feedback when the run or log does not exist
+
+#### Pipeline Artifacts Feature
+
+The `pipelines artifacts` command lists the artifacts a run published:
+
+```sh
+# List the artifacts of a run
+azdocli pipelines artifacts --build-id 123
+
+# Or specify a project explicitly
+azdocli pipelines artifacts --build-id 123 --project MyProject
+```
+
+**Artifacts Features:**
+
+- **Artifact inventory**: See every artifact published by a run
+- **Download URLs**: Print the download URL of each artifact
+- **Error handling**: Clear feedback when the run does not exist
 
 ### Board Management Features
 
