@@ -671,6 +671,57 @@ azdocli boards work-item delete --id 123 --soft-delete
 - **Default project support**: Use with default project or specify --project explicitly
 - **Error handling**: Clear feedback when work item not found or access denied
 
+#### Work Item Comments
+
+The `boards work-item comment` commands read and write the discussion on a work item:
+
+```sh
+# List the comments on a work item
+azdocli boards work-item comment list --id 123
+
+# Only show the most recent comments
+azdocli boards work-item comment list --id 123 --top 5
+
+# Add a comment
+azdocli boards work-item comment add --id 123 --message "Reproduced on the staging build"
+```
+
+**Comment Features:**
+
+- **Read the discussion**: See every comment with its author and timestamp
+- **Add comments**: Post a comment from the command line or a script
+- **Safe rendering**: Terminal control characters in remote text are escaped rather than executed
+
+#### Work Item Types
+
+The `boards work-item types` command lists the work item types a project defines:
+
+```sh
+# List the work item types of the default project
+azdocli boards work-item types
+
+# Or specify a project explicitly
+azdocli boards work-item types --project MyProject
+```
+
+#### WIQL Queries
+
+The `boards query` command runs any WIQL query and lists the work items it returns:
+
+```sh
+# Run a WIQL query against the default project
+azdocli boards query --wiql "SELECT [System.Id] FROM WorkItems WHERE [System.State] = 'Active'"
+
+# Cap the number of results
+azdocli boards query --wiql "SELECT [System.Id] FROM WorkItems" --limit 10
+```
+
+**Query Features:**
+
+- **Arbitrary WIQL**: Anything the Azure DevOps query editor accepts
+- **Full work item details**: Results are shown in the same table as `work-item list`
+- **Result limits**: Cap the number of work items fetched with `--limit`
+
 ```sh
 CLI tool for interacting with Azure DevOps
 

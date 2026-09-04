@@ -2,6 +2,7 @@ use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::auth::url::web_work_item_url;
 use crate::project::get_project_or_default;
+use crate::text::escape_control_characters;
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::wit::models::json_patch_operation::Op;
 use azure_devops_rust_api::wit::models::JsonPatchOperation;
@@ -16,6 +17,18 @@ pub enum BoardsSubCommands {
     WorkItem {
         #[clap(subcommand)]
         subcommand: WorkItemSubCommands,
+    },
+    /// Run a WIQL query and list the work items it returns
+    Query {
+        /// The WIQL query to run
+        #[clap(short, long)]
+        wiql: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Maximum number of work items to return (default: 50)
+        #[clap(long, default_value = "50", value_parser = clap::value_parser!(i32).range(1..))]
+        limit: i32,
     },
 }
 
@@ -32,6 +45,34 @@ pub enum WorkItemType {
     Feature,
     /// Epic work item type
     Epic,
+}
+
+#[derive(Subcommand, Clone)]
+pub enum WorkItemCommentSubCommands {
+    /// List the comments on a work item
+    List {
+        /// ID of the work item
+        #[clap(short, long)]
+        id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Maximum number of comments to return
+        #[clap(long, value_parser = clap::value_parser!(i32).range(1..))]
+        top: Option<i32>,
+    },
+    /// Add a comment to a work item
+    Add {
+        /// ID of the work item
+        #[clap(short, long)]
+        id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// The comment text
+        #[clap(short, long)]
+        message: String,
+    },
 }
 
 #[derive(Subcommand, Clone)]
@@ -72,7 +113,7 @@ pub enum WorkItemSubCommands {
         #[clap(long)]
         work_item_type: Option<String>,
         /// Maximum number of work items to return (default: 50)
-        #[clap(long, default_value = "50")]
+        #[clap(long, default_value = "50", value_parser = clap::value_parser!(i32).range(1..))]
         limit: i32,
     },
     /// Show details of a work item
@@ -86,6 +127,17 @@ pub enum WorkItemSubCommands {
         /// Open in web browser
         #[clap(long)]
         web: bool,
+    },
+    /// List the work item types available in a project
+    Types {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
+    /// Read and write the comments on a work item
+    Comment {
+        #[clap(subcommand)]
+        subcommand: WorkItemCommentSubCommands,
     },
     /// Update a work item
     Update {
@@ -110,6 +162,125 @@ pub enum WorkItemSubCommands {
     },
 }
 
+async fn list_work_item_types(project: &str) -> Result<Vec<models::WorkItemType>> {
+    let creds = get_credentials()?;
+    let client = create_wit_client()?;
+
+    Ok(client
+        .work_item_types_client()
+        .list(creds.organization, project)
+        .await?
+        .value)
+}
+
+fn display_work_item_types(work_item_types: &[models::WorkItemType]) {
+    if work_item_types.is_empty() {
+        println!("No work item types found.");
+        return;
+    }
+
+    println!("{:<28} {}", "Name".bold(), "Description".bold());
+    println!("{}", "-".repeat(90));
+
+    for work_item_type in work_item_types {
+        let description = work_item_type
+            .description
+            .as_deref()
+            .unwrap_or("")
+            .lines()
+            .next()
+            .unwrap_or("");
+
+        println!(
+            "{:<28} {}",
+            escape_control_characters(work_item_type.name.as_deref().unwrap_or("-")),
+            escape_control_characters(description)
+        );
+    }
+
+    println!("\n{} type(s)", work_item_types.len());
+}
+
+async fn list_work_item_comments(
+    project: &str,
+    id: &str,
+    top: Option<i32>,
+) -> Result<Vec<models::Comment>> {
+    let creds = get_credentials()?;
+    let client = create_wit_client()?;
+
+    let mut request =
+        client
+            .comments_client()
+            .get_comments(creds.organization, project, parse_work_item_id(id)?);
+
+    if let Some(top) = top {
+        request = request.top(top);
+    }
+
+    Ok(request.await?.comments)
+}
+
+async fn add_work_item_comment(project: &str, id: &str, message: &str) -> Result<models::Comment> {
+    let creds = get_credentials()?;
+    let client = create_wit_client()?;
+
+    Ok(client
+        .comments_client()
+        .add_comment(
+            creds.organization,
+            models::CommentCreate {
+                text: Some(message.to_string()),
+            },
+            project,
+            parse_work_item_id(id)?,
+        )
+        .await?)
+}
+
+fn display_work_item_comments(comments: &[models::Comment]) {
+    if comments.is_empty() {
+        println!("No comments found.");
+        return;
+    }
+
+    for comment in comments {
+        let author = comment
+            .created_by
+            .as_ref()
+            .and_then(|identity| identity.graph_subject_base.display_name.as_deref())
+            .unwrap_or("Unknown");
+        let created = comment
+            .created_date
+            .map(|created| created.to_string())
+            .unwrap_or_else(|| "-".to_string());
+
+        println!(
+            "💬 {} - {}",
+            escape_control_characters(author).bold(),
+            created
+        );
+
+        if let Some(id) = comment.id {
+            println!("   Comment ID: {id}");
+        }
+
+        println!(
+            "{}",
+            escape_control_characters(comment.text.as_deref().unwrap_or(""))
+        );
+        println!();
+    }
+
+    println!("{} comment(s)", comments.len());
+}
+
+/// Work item ids reach us as strings from the command line.
+fn parse_work_item_id(id: &str) -> Result<i32> {
+    id.parse::<i32>()
+        .map_err(|_| anyhow!("Invalid work item ID '{id}', must be a number"))
+}
+
 fn create_wit_client() -> Result<wit::Client> {
     let creds = get_credentials()?;
     let factory = CredentialClientFactory::new(&creds)?;
@@ -117,9 +288,7 @@ fn create_wit_client() -> Result<wit::Client> {
 }
 
 async fn get_work_item(project: &str, id: &str) -> Result<models::WorkItem> {
-    let id_int = id
-        .parse::<i32>()
-        .map_err(|_| anyhow!("Invalid work item ID, must be a number"))?;
+    let id_int = parse_work_item_id(id)?;
 
     match get_credentials() {
         Ok(creds) => {
@@ -184,9 +353,7 @@ async fn update_work_item(
     state: Option<&str>,
     priority: Option<i32>,
 ) -> Result<models::WorkItem> {
-    let id_int = id
-        .parse::<i32>()
-        .map_err(|_| anyhow!("Invalid work item ID, must be a number"))?;
+    let id_int = parse_work_item_id(id)?;
 
     match get_credentials() {
         Ok(creds) => {
@@ -248,9 +415,7 @@ async fn update_work_item(
 }
 
 async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<()> {
-    let _id_int = id
-        .parse::<i32>()
-        .map_err(|_| anyhow!("Invalid work item ID, must be a number"))?;
+    let id_int = parse_work_item_id(id)?;
     match get_credentials() {
         Ok(creds) => {
             if soft_delete {
@@ -272,11 +437,7 @@ async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<
             } else {
                 create_wit_client()?
                     .work_items_client()
-                    .delete(
-                        creds.organization,
-                        id.parse::<i32>().unwrap(),
-                        project.to_string(),
-                    )
+                    .delete(creds.organization, id_int, project.to_string())
                     .await?;
             }
             Ok(())
@@ -355,9 +516,9 @@ fn display_work_item(work_item: &models::WorkItem) {
     }
 }
 
-fn display_work_items_list(work_items: &[models::WorkItem]) {
+fn display_work_items_list(heading: &str, work_items: &[models::WorkItem]) {
     println!();
-    println!("📋 My Work Items ({} items)", work_items.len());
+    println!("📋 {heading} ({} items)", work_items.len());
     let separator = "=".repeat(80);
     println!("{separator}");
     println!("{:<8} {:<15} {:<20} {:<30}", "ID", "Type", "State", "Title");
@@ -403,91 +564,74 @@ fn display_work_items_list(work_items: &[models::WorkItem]) {
     println!("💡 Use 'azdocli boards work-item show --id <ID> --web' to open in browser");
 }
 
+/// Runs a WIQL query and fetches the full work items behind the ids it returns.
+async fn run_wiql_query(project: &str, wiql: &str, limit: i32) -> Result<Vec<models::WorkItem>> {
+    let creds = get_credentials()?;
+    let client = create_wit_client()?;
+
+    let query_result = client
+        .wiql_client()
+        .query_by_wiql(
+            creds.organization.clone(),
+            models::Wiql {
+                query: Some(wiql.to_string()),
+            },
+            project.to_string(),
+            String::new(),
+        )
+        .await?;
+
+    let mut work_items = Vec::new();
+    // A negative limit would widen into a huge `usize`, so it is clamped to
+    // nothing rather than to everything. The CLI already rejects one.
+    let limit = usize::try_from(limit).unwrap_or(0);
+
+    for work_item_ref in query_result.work_items.iter().take(limit) {
+        if let Some(id) = work_item_ref.id {
+            match client
+                .work_items_client()
+                .get_work_item(creds.organization.clone(), id, project)
+                .await
+            {
+                Ok(work_item) => work_items.push(work_item),
+                Err(e) => eprintln!("❌ Failed to get details for work item {id}: {e}"),
+            }
+        }
+    }
+
+    Ok(work_items)
+}
+
 async fn list_my_work_items(
     project: &str,
     state_filter: Option<&str>,
     work_item_type_filter: Option<&str>,
     limit: i32,
 ) -> Result<()> {
-    match get_credentials() {
-        Ok(creds) => {
-            let client = create_wit_client()?;
+    println!("📋 Listing work items assigned to you in project: {project}");
 
-            println!("📋 Listing work items assigned to you in project: {project}");
+    if let Some(state) = state_filter {
+        println!("🔍 Filtering by state: {state}");
+    }
 
-            if let Some(state) = state_filter {
-                println!("🔍 Filtering by state: {state}");
-            }
+    if let Some(wit_type) = work_item_type_filter {
+        println!("🔍 Filtering by type: {wit_type}");
+    }
 
-            if let Some(wit_type) = work_item_type_filter {
-                println!("🔍 Filtering by type: {wit_type}");
-            }
+    println!("📊 Limit: {limit} items");
 
-            println!("📊 Limit: {limit} items");
+    let wiql_query = build_wiql_query(project, state_filter, work_item_type_filter);
 
-            let wiql_query = build_wiql_query(project, state_filter, work_item_type_filter);
-
-            // Create WIQL request body
-            let wiql_request = models::Wiql {
-                query: Some(wiql_query),
-            }; // Execute the WIQL query
-            match client
-                .wiql_client()
-                .query_by_wiql(
-                    creds.organization.clone(),
-                    wiql_request,
-                    project.to_string(),
-                    String::new(),
-                )
-                .await
-            {
-                Ok(query_result) => {
-                    let work_items = query_result.work_items;
-                    if work_items.is_empty() {
-                        display_empty_work_items_table();
-                        return Ok(());
-                    }
-
-                    // Take only the requested number of items
-                    let limited_items: Vec<_> =
-                        work_items.into_iter().take(limit as usize).collect();
-
-                    // Get detailed work item information by calling get_work_item for each ID
-                    let mut detailed_work_items = Vec::new();
-                    for work_item_ref in &limited_items {
-                        if let Some(id) = work_item_ref.id {
-                            match client
-                                .work_items_client()
-                                .get_work_item(creds.organization.clone(), id, project)
-                                .await
-                            {
-                                Ok(detailed_item) => detailed_work_items.push(detailed_item),
-                                Err(e) => {
-                                    eprintln!("❌ Failed to get details for work item {id}: {e}")
-                                }
-                            }
-                        }
-                    }
-
-                    if detailed_work_items.is_empty() {
-                        display_empty_work_items_table();
-                    } else {
-                        display_work_items_list(&detailed_work_items);
-                    }
-                }
-                Err(e) => {
-                    eprintln!("❌ Failed to execute WIQL query: {e}");
-                    display_empty_work_items_table();
-                }
-            }
-
-            Ok(())
-        }
+    match run_wiql_query(project, &wiql_query, limit).await {
+        Ok(work_items) if work_items.is_empty() => display_empty_work_items_table("My Work Items"),
+        Ok(work_items) => display_work_items_list("My Work Items", &work_items),
         Err(e) => {
-            eprintln!("Unable to list work items");
-            Err(e)
+            eprintln!("❌ Failed to execute WIQL query: {e}");
+            display_empty_work_items_table("My Work Items");
         }
     }
+
+    Ok(())
 }
 
 /// Sanitizes a string for use in WIQL queries by escaping single quotes
@@ -523,15 +667,15 @@ fn build_wiql_query(
     wiql_query
 }
 
-fn display_empty_work_items_table() {
+fn display_empty_work_items_table(heading: &str) {
     println!();
-    println!("📋 My Work Items (0 items)");
+    println!("📋 {heading} (0 items)");
     let separator = "=".repeat(80);
     println!("{separator}");
     println!("{:<8} {:<15} {:<20} {:<30}", "ID", "Type", "State", "Title");
     let dash_separator = "-".repeat(80);
     println!("{dash_separator}");
-    println!("No work items found assigned to you.");
+    println!("No work items found.");
     println!();
     println!("💡 Use 'azdocli boards work-item show --id <ID>' for detailed information");
     println!("💡 Use 'azdocli boards work-item show --id <ID> --web' to open in browser");
@@ -541,7 +685,64 @@ pub async fn handle_command(subcommand: &BoardsSubCommands) -> Result<()> {
     let _credentials = get_credentials()?;
     match subcommand {
         BoardsSubCommands::WorkItem { subcommand } => handle_work_item_command(subcommand).await,
+        BoardsSubCommands::Query {
+            wiql,
+            project,
+            limit,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match run_wiql_query(&project_name, wiql, *limit).await {
+                Ok(work_items) if work_items.is_empty() => {
+                    display_empty_work_items_table("Query Results")
+                }
+                Ok(work_items) => display_work_items_list("Query Results", &work_items),
+                Err(e) => {
+                    eprintln!("❌ Failed to execute WIQL query");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+            Ok(())
+        }
     }
+}
+
+async fn handle_work_item_comment_command(subcommand: &WorkItemCommentSubCommands) -> Result<()> {
+    match subcommand {
+        WorkItemCommentSubCommands::List { id, project, top } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match list_work_item_comments(&project_name, id, *top).await {
+                Ok(comments) => display_work_item_comments(&comments),
+                Err(e) => {
+                    eprintln!("❌ Failed to list comments on work item {id}");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        WorkItemCommentSubCommands::Add {
+            id,
+            project,
+            message,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match add_work_item_comment(&project_name, id, message).await {
+                Ok(comment) => {
+                    println!("{}", "✅ Comment added successfully!".green());
+                    if let Some(comment_id) = comment.id {
+                        println!("Created comment with ID: {comment_id}");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to add a comment to work item {id}");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()> {
@@ -664,6 +865,20 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
                     return Err(e);
                 }
             }
+        }
+        WorkItemSubCommands::Types { project } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match list_work_item_types(&project_name).await {
+                Ok(work_item_types) => display_work_item_types(&work_item_types),
+                Err(e) => {
+                    eprintln!("❌ Failed to list the work item types of '{project_name}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        WorkItemSubCommands::Comment { subcommand } => {
+            return handle_work_item_comment_command(subcommand).await;
         }
         WorkItemSubCommands::Update {
             id,

@@ -999,6 +999,70 @@ azdocli boards work-item delete --id 123 --soft-delete</code></pre>
             </li>
           </ul>
         </div>
+
+        <div class="command-section">
+          <h3>Work Item Comments</h3>
+          <p>
+            The boards work-item comment commands read and write the discussion
+            on a work item.
+          </p>
+
+          <div class="command-example">
+            <h4>Read and Add Comments</h4>
+            <pre><code># List the comments on a work item
+azdocli boards work-item comment list --id 123
+
+# Only show the most recent comments
+azdocli boards work-item comment list --id 123 --top 5
+
+# Add a comment
+azdocli boards work-item comment add --id 123 --message "Reproduced on the staging build"</code></pre>
+            <p>
+              <strong>Features</strong>: See every comment with its author and
+              timestamp, post comments from scripts, and have terminal control
+              characters in remote text escaped rather than executed.
+            </p>
+          </div>
+        </div>
+
+        <div class="command-section">
+          <h3>Work Item Types</h3>
+          <p>
+            The boards work-item types command lists the work item types a
+            project defines.
+          </p>
+
+          <div class="command-example">
+            <h4>List Work Item Types</h4>
+            <pre><code># List the work item types of the default project
+azdocli boards work-item types
+
+# With specific project
+azdocli boards work-item types --project MyProject</code></pre>
+          </div>
+        </div>
+
+        <div class="command-section">
+          <h3>WIQL Queries</h3>
+          <p>
+            The boards query command runs any WIQL query and lists the work
+            items it returns.
+          </p>
+
+          <div class="command-example">
+            <h4>Run a Query</h4>
+            <pre><code># Run a WIQL query against the default project
+azdocli boards query --wiql "SELECT [System.Id] FROM WorkItems WHERE [System.State] = 'Active'"
+
+# Cap the number of results
+azdocli boards query --wiql "SELECT [System.Id] FROM WorkItems" --limit 10</code></pre>
+            <p>
+              <strong>Features</strong>: Anything the Azure DevOps query editor
+              accepts, rendered in the same table as work-item list, with a
+              configurable result limit.
+            </p>
+          </div>
+        </div>
       </section>
 
       <section id="testing">

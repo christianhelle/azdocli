@@ -112,5 +112,29 @@ foreach ($group in @("variable-group", "service-connection"))
   }
 }
 
+Write-Host "`nTesting boards help..." -ForegroundColor Yellow
+Invoke-Cli boards --help
+
+Write-Host "`nTesting boards query help..." -ForegroundColor Yellow
+Invoke-Cli boards query --help
+
+Write-Host "`nTesting boards work-item help..." -ForegroundColor Yellow
+Invoke-Cli boards work-item --help
+
+foreach ($subcommand in @("create", "delete", "list", "show", "types", "update"))
+{
+  Write-Host "`nTesting boards work-item $subcommand help..." -ForegroundColor Yellow
+  Invoke-Cli boards work-item $subcommand --help
+}
+
+Write-Host "`nTesting boards work-item comment help..." -ForegroundColor Yellow
+Invoke-Cli boards work-item comment --help
+
+foreach ($subcommand in @("list", "add"))
+{
+  Write-Host "`nTesting boards work-item comment $subcommand help..." -ForegroundColor Yellow
+  Invoke-Cli boards work-item comment $subcommand --help
+}
+
 Write-Host "`nAll command-line interface tests completed successfully!" -ForegroundColor Green
 Write-Host "Note: Actual functionality requires Azure DevOps authentication." -ForegroundColor Cyan

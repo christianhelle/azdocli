@@ -12,6 +12,7 @@ mod pr;
 mod project;
 mod projects;
 mod repos;
+mod text;
 mod user;
 mod wiki;
 
