@@ -5,6 +5,7 @@ use crate::project::get_project_or_default;
 use anyhow::Result;
 use azure_devops_rust_api::git::{self, models::GitRepositoryCreateOptions};
 use clap::Subcommand;
+use colored::Colorize;
 use dialoguer::Confirm;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
@@ -68,6 +69,21 @@ pub enum ReposSubCommands {
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
+    },
+    /// List the branches of a repository
+    Branches {
+        /// Name or ID of the repository
+        #[clap(short, long)]
+        id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Only list branches whose name contains this text
+        #[clap(long)]
+        filter: Option<String>,
+        /// Maximum number of branches to return
+        #[clap(long)]
+        top: Option<i32>,
     },
     /// Manage pull requests in repositories
     PR {
@@ -173,6 +189,25 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
                     eprintln!(
                         "❌ Failed to retrieve repository '{id}' from project '{project_name}'"
                     );
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        ReposSubCommands::Branches {
+            id,
+            project,
+            filter,
+            top,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            let repo = get_repo(&project_name, id).await?;
+            match list_branches(&project_name, &repo, filter.as_deref(), *top).await {
+                Ok(branches) => {
+                    display_branches(&branches, repo.default_branch.as_deref());
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to list branches of repository '{id}'");
                     eprintln!("   {e}");
                     return Err(e);
                 }
@@ -285,6 +320,71 @@ async fn delete_repo(project: &str, repository_id: &str, hard_delete: bool) -> R
         }
         Err(e) => Err(anyhow::anyhow!("Failed to delete repository: {}", e)),
     }
+}
+
+/// Lists the branch refs of a repository, newest API page first.
+async fn list_branches(
+    project: &str,
+    repo: &git::models::GitRepository,
+    filter: Option<&str>,
+    top: Option<i32>,
+) -> Result<Vec<git::models::GitRef>> {
+    let creds = get_credentials()?;
+    let client = create_git_client()?;
+
+    let mut request = client
+        .refs_client()
+        .list(creds.organization, &repo.id, project)
+        .filter("heads/");
+
+    if let Some(filter) = filter {
+        request = request.filter_contains(filter);
+    }
+    if let Some(top) = top {
+        request = request.top(top);
+    }
+
+    Ok(request.await?.value)
+}
+
+/// Strips the `refs/heads/` prefix so branches read the way users type them.
+fn short_branch_name(ref_name: &str) -> &str {
+    ref_name.strip_prefix("refs/heads/").unwrap_or(ref_name)
+}
+
+fn display_branches(branches: &[git::models::GitRef], default_branch: Option<&str>) {
+    if branches.is_empty() {
+        println!("No branches found.");
+        return;
+    }
+
+    println!(
+        "{:<50} {:<10} {}",
+        "Branch".bold(),
+        "Commit".bold(),
+        "Notes".bold()
+    );
+    println!("{}", "-".repeat(75));
+
+    for branch in branches {
+        let mut notes = Vec::new();
+        if default_branch == Some(branch.name.as_str()) {
+            notes.push("default");
+        }
+        if branch.is_locked.unwrap_or(false) {
+            notes.push("locked");
+        }
+
+        println!(
+            "{:<50} {:<10} {}",
+            short_branch_name(&branch.name),
+            &branch.object_id[..branch.object_id.len().min(8)],
+            notes.join(", ")
+        );
+    }
+
+    println!("
+{} branch(es)", branches.len());
 }
 
 fn display_repo_details(repo: &git::models::GitRepository) {
