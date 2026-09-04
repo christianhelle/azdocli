@@ -3,7 +3,7 @@
 ## [Unreleased Changes]
 
 ### Features
-- Add `boards query`, `boards work-item comment` and `boards work-item types` commands ([#124](https://github.com/christianhelle/azdocli/pull/124)) ([@christianhelle](https://github.com/christianhelle/))
+- Query work items, comment on them, and list work item types ([#124](https://github.com/christianhelle/azdocli/pull/124)) ([@christianhelle](https://github.com/christianhelle/))
 - List and inspect variable groups and service connections ([#126](https://github.com/christianhelle/azdocli/pull/126)) ([@christianhelle](https://github.com/christianhelle/))
 - Queue pipeline runs and read run logs and artifacts ([#123](https://github.com/christianhelle/azdocli/pull/123)) ([@christianhelle](https://github.com/christianhelle/))
 - Browse repository branches, commits and files without cloning ([#122](https://github.com/christianhelle/azdocli/pull/122)) ([@christianhelle](https://github.com/christianhelle/))
