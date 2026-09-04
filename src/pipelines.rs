@@ -46,6 +46,13 @@ pub enum PipelinesSubCommands {
     },
 }
 
+/// Pipeline, run and log ids all reach us as strings from the command line.
+fn parse_id(value: &str, label: &str) -> Result<i32> {
+    value
+        .parse::<i32>()
+        .map_err(|_| anyhow!("Invalid {label} ID '{value}', must be a number"))
+}
+
 fn create_pipelines_client() -> Result<pipelines::Client> {
     let creds = get_credentials()?;
     let factory = CredentialClientFactory::new(&creds)?;
@@ -73,9 +80,7 @@ async fn get_pipeline_runs(project: &str, pipeline_id: &str) -> Result<Vec<model
     match get_credentials() {
         Ok(creds) => {
             let client = create_pipelines_client()?;
-            let pipeline_id_int = pipeline_id
-                .parse::<i32>()
-                .map_err(|_| anyhow!("Invalid pipeline ID, must be a number"))?;
+            let pipeline_id_int = parse_id(pipeline_id, "pipeline")?;
 
             Ok(client
                 .runs_client()
@@ -94,12 +99,8 @@ async fn get_build(project: &str, pipeline_id: &str, build_id: &str) -> Result<m
     match get_credentials() {
         Ok(creds) => {
             let client = create_pipelines_client()?;
-            let pipeline_id_int = pipeline_id
-                .parse::<i32>()
-                .map_err(|_| anyhow!("Invalid pipeline ID, must be a number"))?;
-            let build_id_int = build_id
-                .parse::<i32>()
-                .map_err(|_| anyhow!("Invalid build ID, must be a number"))?;
+            let pipeline_id_int = parse_id(pipeline_id, "pipeline")?;
+            let build_id_int = parse_id(build_id, "build")?;
 
             let run = client
                 .runs_client()
