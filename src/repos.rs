@@ -106,6 +106,24 @@ pub enum ReposSubCommands {
         #[clap(long, default_value = "25")]
         top: i32,
     },
+    /// List the files and folders in a repository
+    Files {
+        /// Name or ID of the repository
+        #[clap(short, long)]
+        id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Folder to list (defaults to the repository root)
+        #[clap(long, default_value = "/")]
+        path: String,
+        /// Branch to read from (defaults to the repository default branch)
+        #[clap(short, long)]
+        branch: Option<String>,
+        /// List the whole tree instead of the immediate children only
+        #[clap(short, long)]
+        recursive: bool,
+    },
     /// Manage pull requests in repositories
     PR {
         #[clap(subcommand)]
@@ -259,6 +277,26 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
                 }
                 Err(e) => {
                     eprintln!("❌ Failed to list commits of repository '{id}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        ReposSubCommands::Files {
+            id,
+            project,
+            path,
+            branch,
+            recursive,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            let repo = get_repo(&project_name, id).await?;
+            match list_items(&project_name, &repo, path, branch.as_deref(), *recursive).await {
+                Ok(items) => {
+                    display_items(&items);
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to list files of repository '{id}' at '{path}'");
                     eprintln!("   {e}");
                     return Err(e);
                 }
@@ -515,6 +553,61 @@ fn display_commits(commits: &[git::models::GitCommitRef]) {
     }
 
     println!("\n{} commit(s)", commits.len());
+}
+
+/// Lists the tree entries under a path in a repository.
+async fn list_items(
+    project: &str,
+    repo: &git::models::GitRepository,
+    path: &str,
+    branch: Option<&str>,
+    recursive: bool,
+) -> Result<Vec<git::models::GitItem>> {
+    let creds = get_credentials()?;
+    let client = create_git_client()?;
+
+    let mut request = client
+        .items_client()
+        .list(creds.organization, &repo.id, project)
+        .scope_path(path)
+        .recursion_level(if recursive { "full" } else { "oneLevel" });
+
+    if let Some(branch) = branch {
+        request = request
+            .version_descriptor_version(short_branch_name(branch))
+            .version_descriptor_version_type("branch");
+    }
+
+    Ok(request.await?.value)
+}
+
+fn display_items(items: &[git::models::GitItem]) {
+    // The scope path itself comes back as the first entry; it is not a child.
+    let children: Vec<&git::models::GitItem> = items
+        .iter()
+        .filter(|item| {
+            item.item_model
+                .path
+                .as_deref()
+                .is_some_and(|path| path != "/")
+        })
+        .collect();
+
+    if children.is_empty() {
+        println!("No files found.");
+        return;
+    }
+
+    for item in &children {
+        let path = item.item_model.path.as_deref().unwrap_or("-");
+        if item.item_model.is_folder.unwrap_or(false) {
+            println!("📁 {path}/");
+        } else {
+            println!("📄 {path}");
+        }
+    }
+
+    println!("\n{} item(s)", children.len());
 }
 
 fn display_repo_details(repo: &git::models::GitRepository) {
