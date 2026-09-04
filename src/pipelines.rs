@@ -209,18 +209,29 @@ fn display_pipeline_runs(runs: &[models::Run]) {
         return;
     }
 
-    println!("Pipeline Runs:\n");
+    println!(
+        "{:<10} {:<24} {:<14} {:<12} {}",
+        "Run".bold(),
+        "Name".bold(),
+        "State".bold(),
+        "Result".bold(),
+        "Created".bold()
+    );
+    println!("{}", "-".repeat(75));
 
-    runs.iter().for_each(|run| {
-        println!("Run #{}", run.run_reference.id);
-        println!("State: {:?}", run.state);
-
-        if let Some(ref result) = run.result {
-            println!("Result: {result:?}");
-        }
-
-        println!();
-    });
+    for run in runs {
+        println!(
+            "{:<10} {:<24} {:<14} {:<12} {}",
+            run.run_reference.id,
+            run.run_reference.name,
+            format!("{:?}", run.state),
+            run.result
+                .as_ref()
+                .map(|result| format!("{result:?}"))
+                .unwrap_or_else(|| "-".to_string()),
+            run.created_date.date()
+        );
+    }
 }
 
 fn display_build_details(run: &models::Run) {
