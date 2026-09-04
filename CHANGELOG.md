@@ -4,6 +4,7 @@
 
 ### Features
 - Add commands to review, discuss and merge pull requests ([#121](https://github.com/christianhelle/azdocli/pull/121)) ([@christianhelle](https://github.com/christianhelle/))
+- Add `boards query`, `boards work-item comment` and `boards work-item types` commands ([@christianhelle](https://github.com/christianhelle/))
 
 
 ## [0.6.1](https://github.com/christianhelle/azdocli/releases/tag/0.6.1) (2026-09-01)
