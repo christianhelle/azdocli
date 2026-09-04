@@ -91,6 +91,27 @@ foreach ($subcommand in @("add", "reply", "resolve"))
   Invoke-Cli repos pr comment $subcommand --help
 }
 
+Write-Host "`nTesting pipelines help..." -ForegroundColor Yellow
+Invoke-Cli pipelines --help
+
+foreach ($subcommand in @("list", "runs", "show", "logs", "artifacts", "run"))
+{
+  Write-Host "`nTesting pipelines $subcommand help..." -ForegroundColor Yellow
+  Invoke-Cli pipelines $subcommand --help
+}
+
+foreach ($group in @("variable-group", "service-connection"))
+{
+  Write-Host "`nTesting pipelines $group help..." -ForegroundColor Yellow
+  Invoke-Cli pipelines $group --help
+
+  foreach ($subcommand in @("list", "show"))
+  {
+    Write-Host "`nTesting pipelines $group $subcommand help..." -ForegroundColor Yellow
+    Invoke-Cli pipelines $group $subcommand --help
+  }
+}
+
 Write-Host "`nTesting boards help..." -ForegroundColor Yellow
 Invoke-Cli boards --help
 
