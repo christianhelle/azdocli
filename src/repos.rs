@@ -85,6 +85,27 @@ pub enum ReposSubCommands {
         #[clap(long)]
         top: Option<i32>,
     },
+    /// List the commit history of a repository
+    Commits {
+        /// Name or ID of the repository
+        #[clap(short, long)]
+        id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Branch to read history from (defaults to the repository default branch)
+        #[clap(short, long)]
+        branch: Option<String>,
+        /// Only list commits written by this author
+        #[clap(long)]
+        author: Option<String>,
+        /// Only list commits that touch this path
+        #[clap(long)]
+        path: Option<String>,
+        /// Maximum number of commits to return (default: 25)
+        #[clap(long, default_value = "25")]
+        top: i32,
+    },
     /// Manage pull requests in repositories
     PR {
         #[clap(subcommand)]
@@ -208,6 +229,36 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
                 }
                 Err(e) => {
                     eprintln!("❌ Failed to list branches of repository '{id}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        ReposSubCommands::Commits {
+            id,
+            project,
+            branch,
+            author,
+            path,
+            top,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            let repo = get_repo(&project_name, id).await?;
+            match list_commits(
+                &project_name,
+                &repo,
+                branch.as_deref(),
+                author.as_deref(),
+                path.as_deref(),
+                *top,
+            )
+            .await
+            {
+                Ok(commits) => {
+                    display_commits(&commits);
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to list commits of repository '{id}'");
                     eprintln!("   {e}");
                     return Err(e);
                 }
@@ -385,6 +436,87 @@ fn display_branches(branches: &[git::models::GitRef], default_branch: Option<&st
 
     println!("
 {} branch(es)", branches.len());
+}
+
+/// Lists commits reachable from a branch, most recent first.
+async fn list_commits(
+    project: &str,
+    repo: &git::models::GitRepository,
+    branch: Option<&str>,
+    author: Option<&str>,
+    path: Option<&str>,
+    top: i32,
+) -> Result<Vec<git::models::GitCommitRef>> {
+    let creds = get_credentials()?;
+    let client = create_git_client()?;
+
+    let mut request = client
+        .commits_client()
+        .get_commits(creds.organization, &repo.id, project)
+        .search_criteria_top(top);
+
+    if let Some(branch) = branch {
+        request = request
+            .search_criteria_item_version_version(short_branch_name(branch))
+            .search_criteria_item_version_version_type("branch");
+    }
+    if let Some(author) = author {
+        request = request.search_criteria_author(author);
+    }
+    if let Some(path) = path {
+        request = request.search_criteria_item_path(path);
+    }
+
+    Ok(request.await?.value)
+}
+
+/// Commit messages are multi-line; the listing only has room for the subject.
+fn commit_subject(comment: Option<&str>) -> String {
+    let subject = comment.unwrap_or("").lines().next().unwrap_or("").trim();
+    if subject.chars().count() > 60 {
+        format!("{}...", subject.chars().take(57).collect::<String>())
+    } else {
+        subject.to_string()
+    }
+}
+
+fn display_commits(commits: &[git::models::GitCommitRef]) {
+    if commits.is_empty() {
+        println!("No commits found.");
+        return;
+    }
+
+    println!(
+        "{:<10} {:<12} {:<24} {}",
+        "Commit".bold(),
+        "Date".bold(),
+        "Author".bold(),
+        "Message".bold()
+    );
+    println!("{}", "-".repeat(110));
+
+    for commit in commits {
+        let commit_id = commit.commit_id.as_deref().unwrap_or("-");
+        let author = commit.author.as_ref();
+        let date = author
+            .and_then(|author| author.date)
+            .map(|date| date.date().to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let name = author
+            .and_then(|author| author.name.as_deref())
+            .unwrap_or("-");
+
+        println!(
+            "{:<10} {:<12} {:<24} {}",
+            &commit_id[..commit_id.len().min(8)],
+            date,
+            name,
+            commit_subject(commit.comment.as_deref())
+        );
+    }
+
+    println!("
+{} commit(s)", commits.len());
 }
 
 fn display_repo_details(repo: &git::models::GitRepository) {
