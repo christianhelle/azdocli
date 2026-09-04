@@ -59,6 +59,18 @@ pub enum ProjectsSubCommands {
         #[clap(long)]
         top: Option<i32>,
     },
+    /// List the members of a team
+    Members {
+        /// Name or ID of the team
+        #[clap(short, long)]
+        team: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Maximum number of members to return
+        #[clap(long)]
+        top: Option<i32>,
+    },
     /// List the process templates available in the organization
     Processes,
     /// Show team project
@@ -166,6 +178,17 @@ pub async fn handle_command(subcommand: &ProjectsSubCommands) -> Result<()> {
                 Ok(teams) => display_teams(&teams),
                 Err(e) => {
                     eprintln!("❌ Failed to list the teams of project '{project_name}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        ProjectsSubCommands::Members { team, project, top } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match list_team_members(&project_name, team, *top).await {
+                Ok(members) => display_team_members(&members),
+                Err(e) => {
+                    eprintln!("❌ Failed to list the members of team '{team}'");
                     eprintln!("   {e}");
                     return Err(e);
                 }
@@ -283,6 +306,52 @@ fn display_teams(teams: &[models::WebApiTeam]) {
     }
 
     println!("\n{} team(s)", teams.len());
+}
+
+async fn list_team_members(
+    project: &str,
+    team: &str,
+    top: Option<i32>,
+) -> Result<Vec<models::TeamMember>> {
+    let creds = get_credentials()?;
+    let client = create_core_client().await?;
+
+    let mut request = client
+        .teams_client()
+        .get_team_members_with_extended_properties(&creds.organization, project, team);
+
+    if let Some(top) = top {
+        request = request.top(top);
+    }
+
+    Ok(request.await?.value)
+}
+
+fn display_team_members(members: &[models::TeamMember]) {
+    if members.is_empty() {
+        println!("No team members found.");
+        return;
+    }
+
+    for member in members {
+        let identity = member.identity.as_ref();
+        let name = identity
+            .and_then(|identity| identity.graph_subject_base.display_name.as_deref())
+            .unwrap_or("-");
+        let admin = if member.is_team_admin == Some(true) {
+            " (admin)"
+        } else {
+            ""
+        };
+
+        println!("👤 {name}{admin}");
+
+        if let Some(unique_name) = identity.and_then(|identity| identity.unique_name.as_deref()) {
+            println!("   {unique_name}");
+        }
+    }
+
+    println!("\n{} member(s)", members.len());
 }
 
 async fn list_processes() -> Result<Vec<models::Process>> {
