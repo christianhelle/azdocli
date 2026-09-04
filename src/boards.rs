@@ -403,91 +403,70 @@ fn display_work_items_list(work_items: &[models::WorkItem]) {
     println!("💡 Use 'azdocli boards work-item show --id <ID> --web' to open in browser");
 }
 
+/// Runs a WIQL query and fetches the full work items behind the ids it returns.
+async fn run_wiql_query(project: &str, wiql: &str, limit: i32) -> Result<Vec<models::WorkItem>> {
+    let creds = get_credentials()?;
+    let client = create_wit_client()?;
+
+    let query_result = client
+        .wiql_client()
+        .query_by_wiql(
+            creds.organization.clone(),
+            models::Wiql {
+                query: Some(wiql.to_string()),
+            },
+            project.to_string(),
+            String::new(),
+        )
+        .await?;
+
+    let mut work_items = Vec::new();
+    for work_item_ref in query_result.work_items.iter().take(limit as usize) {
+        if let Some(id) = work_item_ref.id {
+            match client
+                .work_items_client()
+                .get_work_item(creds.organization.clone(), id, project)
+                .await
+            {
+                Ok(work_item) => work_items.push(work_item),
+                Err(e) => eprintln!("❌ Failed to get details for work item {id}: {e}"),
+            }
+        }
+    }
+
+    Ok(work_items)
+}
+
 async fn list_my_work_items(
     project: &str,
     state_filter: Option<&str>,
     work_item_type_filter: Option<&str>,
     limit: i32,
 ) -> Result<()> {
-    match get_credentials() {
-        Ok(creds) => {
-            let client = create_wit_client()?;
+    println!("📋 Listing work items assigned to you in project: {project}");
 
-            println!("📋 Listing work items assigned to you in project: {project}");
+    if let Some(state) = state_filter {
+        println!("🔍 Filtering by state: {state}");
+    }
 
-            if let Some(state) = state_filter {
-                println!("🔍 Filtering by state: {state}");
-            }
+    if let Some(wit_type) = work_item_type_filter {
+        println!("🔍 Filtering by type: {wit_type}");
+    }
 
-            if let Some(wit_type) = work_item_type_filter {
-                println!("🔍 Filtering by type: {wit_type}");
-            }
+    println!("📊 Limit: {limit} items");
 
-            println!("📊 Limit: {limit} items");
+    let wiql_query = build_wiql_query(project, state_filter, work_item_type_filter);
 
-            let wiql_query = build_wiql_query(project, state_filter, work_item_type_filter);
-
-            // Create WIQL request body
-            let wiql_request = models::Wiql {
-                query: Some(wiql_query),
-            }; // Execute the WIQL query
-            match client
-                .wiql_client()
-                .query_by_wiql(
-                    creds.organization.clone(),
-                    wiql_request,
-                    project.to_string(),
-                    String::new(),
-                )
-                .await
-            {
-                Ok(query_result) => {
-                    let work_items = query_result.work_items;
-                    if work_items.is_empty() {
-                        display_empty_work_items_table();
-                        return Ok(());
-                    }
-
-                    // Take only the requested number of items
-                    let limited_items: Vec<_> =
-                        work_items.into_iter().take(limit as usize).collect();
-
-                    // Get detailed work item information by calling get_work_item for each ID
-                    let mut detailed_work_items = Vec::new();
-                    for work_item_ref in &limited_items {
-                        if let Some(id) = work_item_ref.id {
-                            match client
-                                .work_items_client()
-                                .get_work_item(creds.organization.clone(), id, project)
-                                .await
-                            {
-                                Ok(detailed_item) => detailed_work_items.push(detailed_item),
-                                Err(e) => {
-                                    eprintln!("❌ Failed to get details for work item {id}: {e}")
-                                }
-                            }
-                        }
-                    }
-
-                    if detailed_work_items.is_empty() {
-                        display_empty_work_items_table();
-                    } else {
-                        display_work_items_list(&detailed_work_items);
-                    }
-                }
-                Err(e) => {
-                    eprintln!("❌ Failed to execute WIQL query: {e}");
-                    display_empty_work_items_table();
-                }
-            }
-
-            Ok(())
-        }
+    match run_wiql_query(project, &wiql_query, limit).await {
+        Ok(work_items) if work_items.is_empty() => display_empty_work_items_table(),
+        Ok(work_items) => display_work_items_list(&work_items),
         Err(e) => {
-            eprintln!("Unable to list work items");
-            Err(e)
+            eprintln!("❌ Failed to execute WIQL query: {e}");
+            display_empty_work_items_table();
         }
     }
+
+    Ok(())
 }
 
 /// Sanitizes a string for use in WIQL queries by escaping single quotes
