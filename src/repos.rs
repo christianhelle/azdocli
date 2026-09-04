@@ -124,6 +124,21 @@ pub enum ReposSubCommands {
         #[clap(short, long)]
         recursive: bool,
     },
+    /// Print the contents of a file in a repository
+    File {
+        /// Name or ID of the repository
+        #[clap(short, long)]
+        id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Path of the file to print
+        #[clap(long)]
+        path: String,
+        /// Branch to read from (defaults to the repository default branch)
+        #[clap(short, long)]
+        branch: Option<String>,
+    },
     /// Manage pull requests in repositories
     PR {
         #[clap(subcommand)]
@@ -297,6 +312,25 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
                 }
                 Err(e) => {
                     eprintln!("❌ Failed to list files of repository '{id}' at '{path}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        ReposSubCommands::File {
+            id,
+            project,
+            path,
+            branch,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            let repo = get_repo(&project_name, id).await?;
+            match get_file_content(&project_name, &repo, path, branch.as_deref()).await {
+                Ok(content) => {
+                    print!("{content}");
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to read '{path}' from repository '{id}'");
                     eprintln!("   {e}");
                     return Err(e);
                 }
@@ -608,6 +642,34 @@ fn display_items(items: &[git::models::GitItem]) {
     }
 
     println!("\n{} item(s)", children.len());
+}
+
+/// Reads the text content of a single file from a repository.
+async fn get_file_content(
+    project: &str,
+    repo: &git::models::GitRepository,
+    path: &str,
+    branch: Option<&str>,
+) -> Result<String> {
+    let creds = get_credentials()?;
+    let client = create_git_client()?;
+
+    let mut request = client
+        .items_client()
+        .get(creds.organization, &repo.id, path, project)
+        .include_content(true);
+
+    if let Some(branch) = branch {
+        request = request
+            .version_descriptor_version(short_branch_name(branch))
+            .version_descriptor_version_type("branch");
+    }
+
+    let item = request.await?;
+
+    item.item_model.content.ok_or_else(|| {
+        anyhow::anyhow!("'{path}' has no text content; it may be a folder or a binary file")
+    })
 }
 
 fn display_repo_details(repo: &git::models::GitRepository) {
