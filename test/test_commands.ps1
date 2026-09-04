@@ -43,6 +43,12 @@ Invoke-Cli repos list --help
 Write-Host "`nTesting repos clone help..." -ForegroundColor Yellow
 Invoke-Cli repos clone --help
 
+foreach ($subcommand in @("branches", "commits", "files", "file"))
+{
+  Write-Host "`nTesting repos $subcommand help..." -ForegroundColor Yellow
+  Invoke-Cli repos $subcommand --help
+}
+
 Write-Host "`nTesting projects help..." -ForegroundColor Yellow
 Invoke-Cli projects --help
 
