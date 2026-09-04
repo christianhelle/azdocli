@@ -177,7 +177,7 @@ SUBCOMMANDS:
 
 - **Repository Management**: List, create, delete, clone, view, and manage pull requests in repositories
 - **Pipeline Management**: Manage Azure DevOps pipelines
-- **Project Management**: Create, delete, list, and show Azure DevOps team projects in your organization
+- **Project Management**: Create, delete, list, and show Azure DevOps team projects, their teams, team members and process templates
 - **Migration**: Cross-tenant team-project migration with `azdocli migrate` (see [src/README.md](src/README.md#migrate) for the full guide)
 - **Board Management**: Manage Azure DevOps boards
 - **Authentication**: Secure login using Personal Access Tokens (PAT)
@@ -207,6 +207,34 @@ azdocli repos list --project Other  # Overrides default with "Other"
 - **Optional override**: Use `--project` to override the default for any command
 - **All modules supported**: Works with repos, pipelines, boards, and projects
 - **Helpful error messages**: Clear feedback when no default is set and no --project is provided
+
+### Team Project Features
+
+The `projects` commands manage the team projects of your organization, and the teams inside them:
+
+```sh
+# List every team in the default project
+azdocli projects teams
+
+# Only the teams you belong to, capped at 10 results
+azdocli projects teams --mine --top 10
+
+# List the members of a team (administrators are marked)
+azdocli projects members --team "MyProject Team"
+
+# Or specify a project explicitly
+azdocli projects members --team "MyProject Team" --project MyProject
+
+# List the process templates, with the names and IDs accepted by projects create --process
+azdocli projects processes
+```
+
+**Team Project Features:**
+
+- **Team discovery**: List the teams of a project, optionally only your own
+- **Team membership**: See who is on a team and which of them are administrators
+- **Process templates**: Discover the processes available before creating a project
+- **Default project support**: Use with default project or specify --project explicitly
 
 ### Repository Management Features
 

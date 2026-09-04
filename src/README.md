@@ -7,6 +7,7 @@ CLI tool for interacting with Azure DevOps.
 - **Repository Management**: List, create, delete, clone, view, and manage pull requests in repositories
 - **Pipeline Management**: Manage Azure DevOps pipelines
 - **Board Management**: Manage Azure DevOps boards
+- **Project Management**: Create, delete, list, and show team projects, their teams, team members and process templates
 - **User Management**: Add, list, show, remove, and update organization users
 - **Authentication**: Secure login using Personal Access Tokens (PAT)
 - **Default Project**: Set a default project to avoid specifying --project for every command
@@ -138,6 +139,34 @@ The migration does not migrate permissions/security groups, repo permissions, br
 - `git push --mirror` is destructive, so the implementation refuses to push when the target repository or wiki backing repository is not empty.
 - Work item migration requires the Azure DevOps **Bypass rules on work item updates** permission when those phases are implemented.
 - Secrets are not migrated. Variable group secrets are blanked, and service connections are exported for documentation/manual recreation only.
+
+### Team Project Features
+
+The `projects` commands manage the team projects of your organization, and the teams inside them:
+
+```sh
+# List every team in the default project
+azdocli projects teams
+
+# Only the teams you belong to, capped at 10 results
+azdocli projects teams --mine --top 10
+
+# List the members of a team (administrators are marked)
+azdocli projects members --team "MyProject Team"
+
+# Or specify a project explicitly
+azdocli projects members --team "MyProject Team" --project MyProject
+
+# List the process templates, with the names and IDs accepted by projects create --process
+azdocli projects processes
+```
+
+**Team Project Features:**
+
+- **Team discovery**: List the teams of a project, optionally only your own
+- **Team membership**: See who is on a team and which of them are administrators
+- **Process templates**: Discover the processes available before creating a project
+- **Default project support**: Use with default project or specify --project explicitly
 
 ### Repository Management Features
 
