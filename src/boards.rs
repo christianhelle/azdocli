@@ -27,7 +27,7 @@ pub enum BoardsSubCommands {
         #[clap(short, long)]
         project: Option<String>,
         /// Maximum number of work items to return (default: 50)
-        #[clap(long, default_value = "50")]
+        #[clap(long, default_value = "50", value_parser = clap::value_parser!(i32).range(1..))]
         limit: i32,
     },
 }
@@ -58,7 +58,7 @@ pub enum WorkItemCommentSubCommands {
         #[clap(short, long)]
         project: Option<String>,
         /// Maximum number of comments to return
-        #[clap(long)]
+        #[clap(long, value_parser = clap::value_parser!(i32).range(1..))]
         top: Option<i32>,
     },
     /// Add a comment to a work item
@@ -113,7 +113,7 @@ pub enum WorkItemSubCommands {
         #[clap(long)]
         work_item_type: Option<String>,
         /// Maximum number of work items to return (default: 50)
-        #[clap(long, default_value = "50")]
+        #[clap(long, default_value = "50", value_parser = clap::value_parser!(i32).range(1..))]
         limit: i32,
     },
     /// Show details of a work item
@@ -193,7 +193,7 @@ fn display_work_item_types(work_item_types: &[models::WorkItemType]) {
 
         println!(
             "{:<28} {}",
-            work_item_type.name.as_deref().unwrap_or("-"),
+            escape_control_characters(work_item_type.name.as_deref().unwrap_or("-")),
             escape_control_characters(description)
         );
     }
@@ -582,7 +582,11 @@ async fn run_wiql_query(project: &str, wiql: &str, limit: i32) -> Result<Vec<mod
         .await?;
 
     let mut work_items = Vec::new();
-    for work_item_ref in query_result.work_items.iter().take(limit as usize) {
+    // A negative limit would widen into a huge `usize`, so it is clamped to
+    // nothing rather than to everything. The CLI already rejects one.
+    let limit = usize::try_from(limit).unwrap_or(0);
+
+    for work_item_ref in query_result.work_items.iter().take(limit) {
         if let Some(id) = work_item_ref.id {
             match client
                 .work_items_client()
