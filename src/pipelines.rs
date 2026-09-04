@@ -2,6 +2,7 @@ use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::project::get_project_or_default;
 use anyhow::{anyhow, Context, Result};
+use azure_devops_rust_api::build::models::BuildArtifact;
 use azure_devops_rust_api::pipelines::{self, models};
 use clap::Subcommand;
 use colored::Colorize;
@@ -50,6 +51,15 @@ pub enum PipelinesSubCommands {
         /// Print the contents of this log instead of listing the logs
         #[clap(long)]
         log_id: Option<String>,
+    },
+    /// List the artifacts published by a pipeline run
+    Artifacts {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Run (build) ID to list artifacts for
+        #[clap(short = 'b', long)]
+        build_id: String,
     },
     /// Run a pipeline
     Run {
@@ -287,6 +297,42 @@ fn display_run_logs(logs: &[models::Log]) {
     }
 }
 
+/// Artifacts are published against the build that a pipeline run creates, so
+/// they are read through the build API rather than the pipelines API.
+async fn list_build_artifacts(project: &str, build_id: &str) -> Result<Vec<BuildArtifact>> {
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds)?;
+
+    Ok(factory
+        .build_build()
+        .artifacts_client()
+        .list(creds.organization, project, parse_id(build_id, "build")?)
+        .await?
+        .value)
+}
+
+fn display_build_artifacts(artifacts: &[BuildArtifact]) {
+    if artifacts.is_empty() {
+        println!("No artifacts found.");
+        return;
+    }
+
+    for artifact in artifacts {
+        println!("📦 {}", artifact.name.as_deref().unwrap_or("-"));
+
+        if let Some(resource) = &artifact.resource {
+            if let Some(type_) = &resource.type_ {
+                println!("   Type: {type_}");
+            }
+            if let Some(download_url) = &resource.download_url {
+                println!("   Download: {download_url}");
+            }
+        }
+    }
+
+    println!("\n{} artifact(s)", artifacts.len());
+}
+
 fn display_pipelines(pipelines: &[models::Pipeline]) {
     if pipelines.is_empty() {
         println!("No pipelines found.");
@@ -403,6 +449,17 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
                         return Err(e);
                     }
                 },
+            }
+        }
+        PipelinesSubCommands::Artifacts { project, build_id } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match list_build_artifacts(&project_name, build_id).await {
+                Ok(artifacts) => display_build_artifacts(&artifacts),
+                Err(e) => {
+                    eprintln!("❌ Failed to list artifacts of build {build_id}");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
             }
         }
         PipelinesSubCommands::Run {
