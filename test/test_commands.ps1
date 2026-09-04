@@ -58,6 +58,12 @@ Invoke-Cli projects create --help
 Write-Host "`nTesting projects delete help..." -ForegroundColor Yellow
 Invoke-Cli projects delete --help
 
+foreach ($subcommand in @("teams", "members", "processes"))
+{
+  Write-Host "`nTesting projects $subcommand help..." -ForegroundColor Yellow
+  Invoke-Cli projects $subcommand --help
+}
+
 Write-Host "`nTesting repos pr help..." -ForegroundColor Yellow
 Invoke-Cli repos pr --help
 
