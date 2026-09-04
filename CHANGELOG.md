@@ -4,8 +4,8 @@
 
 ### Features
 - Add commands to review, discuss and merge pull requests ([#121](https://github.com/christianhelle/azdocli/pull/121)) ([@christianhelle](https://github.com/christianhelle/))
-- Queue pipeline runs with `pipelines run`, and add `pipelines logs` and `pipelines artifacts` ([@christianhelle](https://github.com/christianhelle/))
-- Add `pipelines variable-group` and `pipelines service-connection` commands ([@christianhelle](https://github.com/christianhelle/))
+- Queue pipeline runs with `pipelines run`, and add `pipelines logs` and `pipelines artifacts` ([#123](https://github.com/christianhelle/azdocli/pull/123)) ([@christianhelle](https://github.com/christianhelle/))
+- Add `pipelines variable-group` and `pipelines service-connection` commands ([#126](https://github.com/christianhelle/azdocli/pull/126)) ([@christianhelle](https://github.com/christianhelle/))
 
 
 ## [0.6.1](https://github.com/christianhelle/azdocli/releases/tag/0.6.1) (2026-09-01)
