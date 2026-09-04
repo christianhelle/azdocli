@@ -504,3 +504,52 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn full_ref_name_expands_plain_branch_names() {
+        assert_eq!(full_ref_name("main"), "refs/heads/main");
+        assert_eq!(full_ref_name("feature/x"), "refs/heads/feature/x");
+        assert_eq!(full_ref_name("refs/heads/main"), "refs/heads/main");
+        assert_eq!(full_ref_name("refs/tags/v1"), "refs/tags/v1");
+    }
+
+    #[test]
+    fn parse_variable_splits_on_the_first_equals_sign() {
+        assert_eq!(parse_variable("name=value").unwrap(), ("name", "value"));
+        assert_eq!(parse_variable("name=a=b").unwrap(), ("name", "a=b"));
+        assert_eq!(parse_variable("name=").unwrap(), ("name", ""));
+    }
+
+    #[test]
+    fn parse_variable_rejects_input_without_a_name() {
+        assert!(parse_variable("novalue").is_err());
+        assert!(parse_variable("=value").is_err());
+    }
+
+    #[test]
+    fn build_run_parameters_sets_the_branch_and_variables() {
+        let parameters = build_run_parameters(Some("develop"), &["env=prod".to_string()]).unwrap();
+
+        let repositories = parameters.resources.unwrap().repositories.unwrap();
+        assert_eq!(repositories["self"]["refName"], "refs/heads/develop");
+        assert_eq!(parameters.variables.unwrap()["env"]["value"], "prod");
+    }
+
+    #[test]
+    fn build_run_parameters_leaves_unset_fields_empty() {
+        let parameters = build_run_parameters(None, &[]).unwrap();
+
+        assert!(parameters.resources.is_none());
+        assert!(parameters.variables.is_none());
+    }
+
+    #[test]
+    fn parse_id_rejects_non_numeric_input() {
+        assert_eq!(parse_id("12", "pipeline").unwrap(), 12);
+        assert!(parse_id("abc", "pipeline").is_err());
+    }
+}
