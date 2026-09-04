@@ -3,12 +3,15 @@
 ## [Unreleased Changes]
 
 ### Features
+- Queue pipeline runs and read run logs and artifacts ([#123](https://github.com/christianhelle/azdocli/pull/123)) ([@christianhelle](https://github.com/christianhelle/))
 - List a project's teams, team members and process templates ([#125](https://github.com/christianhelle/azdocli/pull/125)) ([@christianhelle](https://github.com/christianhelle/))
 - Query work items, comment on them, and list work item types ([#124](https://github.com/christianhelle/azdocli/pull/124)) ([@christianhelle](https://github.com/christianhelle/))
 - List and inspect variable groups and service connections ([#126](https://github.com/christianhelle/azdocli/pull/126)) ([@christianhelle](https://github.com/christianhelle/))
-- Queue pipeline runs and read run logs and artifacts ([#123](https://github.com/christianhelle/azdocli/pull/123)) ([@christianhelle](https://github.com/christianhelle/))
 - Browse repository branches, commits and files without cloning ([#122](https://github.com/christianhelle/azdocli/pull/122)) ([@christianhelle](https://github.com/christianhelle/))
 - Add commands to review, discuss and merge pull requests ([#121](https://github.com/christianhelle/azdocli/pull/121)) ([@christianhelle](https://github.com/christianhelle/))
+
+### Bug Fixes
+- Bound the pipeline log download with connect and read timeouts ([#127](https://github.com/christianhelle/azdocli/pull/127)) ([@christianhelle](https://github.com/christianhelle/))
 
 
 ## [0.6.1](https://github.com/christianhelle/azdocli/releases/tag/0.6.1) (2026-09-01)
