@@ -14,7 +14,7 @@ azdocli/
 │   ├── browser.rs         # Opening URLs in the default browser (--web flags)
 │   ├── config.rs          # Config directory (~/.azdocli/) management
 │   ├── project.rs         # Default project get/set
-│   ├── projects.rs        # Team project management commands (core API)
+│   ├── projects.rs        # Team project, team, member and process commands (core API)
 │   ├── repos.rs           # Repository CRUD, bulk clone
 │   ├── pr/                # Pull request operations
 │   │   ├── mod.rs         # Subcommand enum, routing, shared PrContext
