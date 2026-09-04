@@ -870,6 +870,23 @@ mod tests {
     }
 
     #[test]
+    fn format_variable_value_hides_secrets() {
+        let secret = serde_json::json!({ "isSecret": true, "value": "leaked" });
+        assert_eq!(format_variable_value(&secret), "<secret>");
+    }
+
+    #[test]
+    fn format_variable_value_returns_plain_values() {
+        let plain = serde_json::json!({ "value": "prod" });
+        assert_eq!(format_variable_value(&plain), "prod");
+    }
+
+    #[test]
+    fn format_variable_value_handles_missing_values() {
+        assert_eq!(format_variable_value(&serde_json::json!({})), "");
+    }
+
+    #[test]
     fn parse_id_rejects_non_numeric_input() {
         assert_eq!(parse_id("12", "pipeline").unwrap(), 12);
         assert!(parse_id("abc", "pipeline").is_err());
