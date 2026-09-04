@@ -5,6 +5,7 @@ use crate::project::get_project_or_default;
 use anyhow::Result;
 use azure_devops_rust_api::git::{self, models::GitRepositoryCreateOptions};
 use clap::Subcommand;
+use colored::Colorize;
 use dialoguer::Confirm;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
@@ -68,6 +69,75 @@ pub enum ReposSubCommands {
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
+    },
+    /// List the branches of a repository
+    Branches {
+        /// Name or ID of the repository
+        #[clap(short, long)]
+        id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Only list branches whose name contains this text
+        #[clap(long)]
+        filter: Option<String>,
+        /// Maximum number of branches to return
+        #[clap(long)]
+        top: Option<i32>,
+    },
+    /// List the commit history of a repository
+    Commits {
+        /// Name or ID of the repository
+        #[clap(short, long)]
+        id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Branch to read history from (defaults to the repository default branch)
+        #[clap(short, long)]
+        branch: Option<String>,
+        /// Only list commits written by this author
+        #[clap(long)]
+        author: Option<String>,
+        /// Only list commits that touch this path
+        #[clap(long)]
+        path: Option<String>,
+        /// Maximum number of commits to return (default: 25)
+        #[clap(long, default_value = "25")]
+        top: i32,
+    },
+    /// List the files and folders in a repository
+    Files {
+        /// Name or ID of the repository
+        #[clap(short, long)]
+        id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Folder to list (defaults to the repository root)
+        #[clap(long, default_value = "/")]
+        path: String,
+        /// Branch to read from (defaults to the repository default branch)
+        #[clap(short, long)]
+        branch: Option<String>,
+        /// List the whole tree instead of the immediate children only
+        #[clap(short, long)]
+        recursive: bool,
+    },
+    /// Print the contents of a file in a repository
+    File {
+        /// Name or ID of the repository
+        #[clap(short, long)]
+        id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Path of the file to print
+        #[clap(long)]
+        path: String,
+        /// Branch to read from (defaults to the repository default branch)
+        #[clap(short, long)]
+        branch: Option<String>,
     },
     /// Manage pull requests in repositories
     PR {
@@ -178,6 +248,94 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
                 }
             }
         }
+        ReposSubCommands::Branches {
+            id,
+            project,
+            filter,
+            top,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            let repo = get_repo(&project_name, id).await?;
+            match list_branches(&project_name, &repo, filter.as_deref(), *top).await {
+                Ok(branches) => {
+                    display_branches(&branches, repo.default_branch.as_deref());
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to list branches of repository '{id}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        ReposSubCommands::Commits {
+            id,
+            project,
+            branch,
+            author,
+            path,
+            top,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            let repo = get_repo(&project_name, id).await?;
+            match list_commits(
+                &project_name,
+                &repo,
+                branch.as_deref(),
+                author.as_deref(),
+                path.as_deref(),
+                *top,
+            )
+            .await
+            {
+                Ok(commits) => {
+                    display_commits(&commits);
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to list commits of repository '{id}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        ReposSubCommands::Files {
+            id,
+            project,
+            path,
+            branch,
+            recursive,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            let repo = get_repo(&project_name, id).await?;
+            match list_items(&project_name, &repo, path, branch.as_deref(), *recursive).await {
+                Ok(items) => {
+                    display_items(&items, path);
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to list files of repository '{id}' at '{path}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        ReposSubCommands::File {
+            id,
+            project,
+            path,
+            branch,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            let repo = get_repo(&project_name, id).await?;
+            match get_file_content(&project_name, &repo, path, branch.as_deref()).await {
+                Ok(content) => {
+                    print!("{content}");
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to read '{path}' from repository '{id}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
         ReposSubCommands::PR { subcommand } => {
             pr::handle_command(subcommand).await?;
         }
@@ -233,8 +391,10 @@ pub async fn get_repo(project: &str, repository_id: &str) -> Result<git::models:
         }
     };
 
-    // Find the repository by name (since ID type is unclear, we'll match by name which is always a String)
-    let repo = repos.iter().find(|repo| repo.name == repository_id);
+    // Callers pass either the repository name or its GUID, so accept both.
+    let repo = repos
+        .iter()
+        .find(|repo| repo.name == repository_id || repo.id == repository_id);
 
     match repo {
         Some(repo) => Ok(repo.clone()),
@@ -283,6 +443,240 @@ async fn delete_repo(project: &str, repository_id: &str, hard_delete: bool) -> R
         }
         Err(e) => Err(anyhow::anyhow!("Failed to delete repository: {}", e)),
     }
+}
+
+/// Lists the branch refs of a repository, newest API page first.
+async fn list_branches(
+    project: &str,
+    repo: &git::models::GitRepository,
+    filter: Option<&str>,
+    top: Option<i32>,
+) -> Result<Vec<git::models::GitRef>> {
+    let creds = get_credentials()?;
+    let client = create_git_client()?;
+
+    let mut request = client
+        .refs_client()
+        .list(creds.organization, &repo.id, project)
+        .filter("heads/");
+
+    if let Some(filter) = filter {
+        request = request.filter_contains(filter);
+    }
+    if let Some(top) = top {
+        request = request.top(top);
+    }
+
+    Ok(request.await?.value)
+}
+
+/// Strips the `refs/heads/` prefix so branches read the way users type them.
+fn short_branch_name(ref_name: &str) -> &str {
+    ref_name.strip_prefix("refs/heads/").unwrap_or(ref_name)
+}
+
+fn display_branches(branches: &[git::models::GitRef], default_branch: Option<&str>) {
+    if branches.is_empty() {
+        println!("No branches found.");
+        return;
+    }
+
+    println!(
+        "{:<50} {:<10} {}",
+        "Branch".bold(),
+        "Commit".bold(),
+        "Notes".bold()
+    );
+    println!("{}", "-".repeat(75));
+
+    for branch in branches {
+        let mut notes = Vec::new();
+        if default_branch == Some(branch.name.as_str()) {
+            notes.push("default");
+        }
+        if branch.is_locked.unwrap_or(false) {
+            notes.push("locked");
+        }
+
+        println!(
+            "{:<50} {:<10} {}",
+            short_branch_name(&branch.name),
+            &branch.object_id[..branch.object_id.len().min(8)],
+            notes.join(", ")
+        );
+    }
+
+    println!("\n{} branch(es)", branches.len());
+}
+
+/// Lists commits reachable from a branch, most recent first.
+async fn list_commits(
+    project: &str,
+    repo: &git::models::GitRepository,
+    branch: Option<&str>,
+    author: Option<&str>,
+    path: Option<&str>,
+    top: i32,
+) -> Result<Vec<git::models::GitCommitRef>> {
+    let creds = get_credentials()?;
+    let client = create_git_client()?;
+
+    let mut request = client
+        .commits_client()
+        .get_commits(creds.organization, &repo.id, project)
+        .search_criteria_top(top);
+
+    if let Some(branch) = branch {
+        request = request
+            .search_criteria_item_version_version(short_branch_name(branch))
+            .search_criteria_item_version_version_type("branch");
+    }
+    if let Some(author) = author {
+        request = request.search_criteria_author(author);
+    }
+    if let Some(path) = path {
+        request = request.search_criteria_item_path(path);
+    }
+
+    Ok(request.await?.value)
+}
+
+/// Commit messages are multi-line; the listing only has room for the subject.
+fn commit_subject(comment: Option<&str>) -> String {
+    let subject = comment.unwrap_or("").lines().next().unwrap_or("").trim();
+    if subject.chars().count() > 60 {
+        format!("{}...", subject.chars().take(57).collect::<String>())
+    } else {
+        subject.to_string()
+    }
+}
+
+fn display_commits(commits: &[git::models::GitCommitRef]) {
+    if commits.is_empty() {
+        println!("No commits found.");
+        return;
+    }
+
+    println!(
+        "{:<10} {:<12} {:<24} {}",
+        "Commit".bold(),
+        "Date".bold(),
+        "Author".bold(),
+        "Message".bold()
+    );
+    println!("{}", "-".repeat(110));
+
+    for commit in commits {
+        let commit_id = commit.commit_id.as_deref().unwrap_or("-");
+        let author = commit.author.as_ref();
+        let date = author
+            .and_then(|author| author.date)
+            .map(|date| date.date().to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let name = author
+            .and_then(|author| author.name.as_deref())
+            .unwrap_or("-");
+
+        println!(
+            "{:<10} {:<12} {:<24} {}",
+            &commit_id[..commit_id.len().min(8)],
+            date,
+            name,
+            commit_subject(commit.comment.as_deref())
+        );
+    }
+
+    println!("\n{} commit(s)", commits.len());
+}
+
+/// Lists the tree entries under a path in a repository.
+async fn list_items(
+    project: &str,
+    repo: &git::models::GitRepository,
+    path: &str,
+    branch: Option<&str>,
+    recursive: bool,
+) -> Result<Vec<git::models::GitItem>> {
+    let creds = get_credentials()?;
+    let client = create_git_client()?;
+
+    let mut request = client
+        .items_client()
+        .list(creds.organization, &repo.id, project)
+        .scope_path(path)
+        .recursion_level(if recursive { "full" } else { "oneLevel" });
+
+    if let Some(branch) = branch {
+        request = request
+            .version_descriptor_version(short_branch_name(branch))
+            .version_descriptor_version_type("branch");
+    }
+
+    Ok(request.await?.value)
+}
+
+/// Item paths differ from what users type only in their leading and trailing
+/// slashes, so both sides are trimmed before they are compared.
+fn normalize_item_path(path: &str) -> &str {
+    path.trim_end_matches('/').trim_start_matches('/')
+}
+
+fn display_items(items: &[git::models::GitItem], scope_path: &str) {
+    // The scope path itself comes back alongside its children; it is not one.
+    let scope = normalize_item_path(scope_path);
+    let children: Vec<&git::models::GitItem> = items
+        .iter()
+        .filter(|item| {
+            item.item_model
+                .path
+                .as_deref()
+                .is_some_and(|path| normalize_item_path(path) != scope)
+        })
+        .collect();
+
+    if children.is_empty() {
+        println!("No files found.");
+        return;
+    }
+
+    for item in &children {
+        let path = item.item_model.path.as_deref().unwrap_or("-");
+        if item.item_model.is_folder.unwrap_or(false) {
+            println!("📁 {path}/");
+        } else {
+            println!("📄 {path}");
+        }
+    }
+
+    println!("\n{} item(s)", children.len());
+}
+
+/// Reads the text content of a single file from a repository.
+async fn get_file_content(
+    project: &str,
+    repo: &git::models::GitRepository,
+    path: &str,
+    branch: Option<&str>,
+) -> Result<String> {
+    let creds = get_credentials()?;
+    let client = create_git_client()?;
+
+    let mut request = client
+        .items_client()
+        .get(creds.organization, &repo.id, path, project)
+        .include_content(true);
+
+    if let Some(branch) = branch {
+        request = request
+            .version_descriptor_version(short_branch_name(branch))
+            .version_descriptor_version_type("branch");
+    }
+
+    let item = request.await?;
+
+    item.item_model.content.ok_or_else(|| {
+        anyhow::anyhow!("'{path}' has no text content; it may be a folder or a binary file")
+    })
 }
 
 fn display_repo_details(repo: &git::models::GitRepository) {
@@ -640,6 +1034,35 @@ mod tests {
             .find(|repo| repo.name == repository_name)
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("Repository '{}' not found", repository_name))
+    }
+
+    #[test]
+    fn short_branch_name_strips_the_ref_prefix() {
+        assert_eq!(short_branch_name("refs/heads/feature/x"), "feature/x");
+        assert_eq!(short_branch_name("feature/x"), "feature/x");
+        assert_eq!(short_branch_name("refs/tags/v1"), "refs/tags/v1");
+    }
+
+    #[test]
+    fn normalize_item_path_ignores_surrounding_slashes() {
+        assert_eq!(normalize_item_path("/src"), "src");
+        assert_eq!(normalize_item_path("src/"), "src");
+        assert_eq!(normalize_item_path("/src/"), "src");
+        assert_eq!(normalize_item_path("/"), "");
+        assert_eq!(normalize_item_path("/src/lib"), "src/lib");
+    }
+
+    #[test]
+    fn commit_subject_keeps_only_the_first_line() {
+        assert_eq!(commit_subject(Some("title\n\nbody text")), "title");
+        assert_eq!(commit_subject(None), "");
+    }
+
+    #[test]
+    fn commit_subject_truncates_long_subjects() {
+        let subject = commit_subject(Some(&"a".repeat(100)));
+        assert_eq!(subject.chars().count(), 60);
+        assert!(subject.ends_with("..."));
     }
 
     #[tokio::test]

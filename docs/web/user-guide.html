@@ -504,6 +504,68 @@ azdocli repos delete --id MyRepository --hard --yes</code></pre>
         </div>
 
         <div class="command-section">
+          <h3>Repository Browsing</h3>
+          <p>
+            The repos branches, repos commits, repos files and repos file
+            commands let you inspect the contents of a repository without
+            cloning it.
+          </p>
+
+          <div class="command-example">
+            <h4>List Branches</h4>
+            <pre><code># List the branches of a repository (the default branch is marked)
+azdocli repos branches --id MyRepository
+
+# Only show branches matching some text, and cap the number of results
+azdocli repos branches --id MyRepository --filter feature --top 20</code></pre>
+          </div>
+
+          <div class="command-example">
+            <h4>List Commits</h4>
+            <pre><code># List the 25 most recent commits on the default branch
+azdocli repos commits --id MyRepository
+
+# Read the history of a specific branch, author or path
+azdocli repos commits --id MyRepository --branch develop --author "Christian Helle" --path src --top 50</code></pre>
+          </div>
+
+          <div class="command-example">
+            <h4>Browse Files</h4>
+            <pre><code># List the files and folders at the root of the repository
+azdocli repos files --id MyRepository
+
+# List a subfolder, on a specific branch, recursively
+azdocli repos files --id MyRepository --path /src --branch develop --recursive</code></pre>
+          </div>
+
+          <div class="command-example">
+            <h4>Print a File</h4>
+            <pre><code># Print the contents of a single file
+azdocli repos file --id MyRepository --path /README.md --branch develop</code></pre>
+          </div>
+
+          <h4>Browsing Features:</h4>
+          <ul>
+            <li>
+              <strong>No clone required</strong>: Inspect branches, history and
+              files straight from the CLI
+            </li>
+            <li>
+              <strong>Server-side filtering</strong>: Branch, author, path and
+              result limits are applied by Azure DevOps
+            </li>
+            <li>
+              <strong>Default branch aware</strong>: Commands fall back to the
+              repository default branch when --branch is omitted
+            </li>
+            <li>
+              <strong>Pipe friendly</strong>: repos file writes the raw file
+              contents to stdout
+            </li>
+          </ul>
+        </div>
+
+        <div class="command-section">
           <h3>Pull Request Management</h3>
           <p>
             The repos pr commands allow you to manage pull requests within

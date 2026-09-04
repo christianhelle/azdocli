@@ -4,6 +4,7 @@
 
 ### Features
 - Add commands to review, discuss and merge pull requests ([#121](https://github.com/christianhelle/azdocli/pull/121)) ([@christianhelle](https://github.com/christianhelle/))
+- Add `repos branches`, `repos commits`, `repos files` and `repos file` commands to browse repositories ([#122](https://github.com/christianhelle/azdocli/pull/122)) ([@christianhelle](https://github.com/christianhelle/))
 - Add `projects teams`, `projects members` and `projects processes` commands ([#125](https://github.com/christianhelle/azdocli/pull/125)) ([@christianhelle](https://github.com/christianhelle/))
 
 
