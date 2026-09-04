@@ -520,13 +520,13 @@ azdocli pipelines show --id 42 --project MyProject --build-id 123
 
 **Show Features:**
 
-- **Detailed information**: Comprehensive details about a specific pipeline build
-- **Debug information**: Access to internal state for troubleshooting purposes
+- **Detailed information**: Run number, pipeline, state, result and timestamps
+- **Web link**: The URL of the run in the Azure DevOps web interface
 - **Error handling**: Helpful error messages when build not found
 
 #### Pipeline Run Feature
 
-The `pipelines run` command starts a new pipeline run:
+The `pipelines run` command queues a new pipeline run:
 
 ```sh
 # Run a pipeline (using default project)
@@ -534,13 +534,57 @@ azdocli pipelines run --id 42
 
 # Or specify a project explicitly
 azdocli pipelines run --id 42 --project MyProject
+
+# Run a specific branch
+azdocli pipelines run --id 42 --branch develop
+
+# Pass pipeline variables (repeat --variable for more than one)
+azdocli pipelines run --id 42 --variable environment=staging --variable verbose=true
 ```
 
 **Run Features:**
 
 - **Pipeline execution**: Start a pipeline with a single command
-- **Live updates**: See details of the running build in real-time
+- **Branch selection**: Queue the run against any branch with `--branch`
+- **Runtime variables**: Set pipeline variables with repeatable `--variable NAME=VALUE` arguments
+- **Run summary**: Prints the new run number, state and web URL
 - **Error handling**: Clear feedback when pipeline cannot be started
+
+#### Pipeline Logs Feature
+
+The `pipelines logs` command lists the logs of a run, or prints one of them:
+
+```sh
+# List the logs produced by a run
+azdocli pipelines logs --id 42 --build-id 123
+
+# Print the contents of a single log
+azdocli pipelines logs --id 42 --build-id 123 --log-id 7
+```
+
+**Logs Features:**
+
+- **Log inventory**: See every log a run produced, with line counts and timestamps
+- **Full log text**: Print a log to stdout so it can be piped, searched or saved
+- **Error handling**: Clear feedback when the run or log does not exist
+
+#### Pipeline Artifacts Feature
+
+The `pipelines artifacts` command lists the artifacts a run published:
+
+```sh
+# List the artifacts of a run
+azdocli pipelines artifacts --build-id 123
+
+# Or specify a project explicitly
+azdocli pipelines artifacts --build-id 123 --project MyProject
+```
+
+**Artifacts Features:**
+
+- **Artifact inventory**: See every artifact published by a run
+- **Download URLs**: Print the download URL of each artifact
+- **Error handling**: Clear feedback when the run does not exist
 
 ### User Management Features
 
@@ -572,6 +616,38 @@ azdocli user update --email user@contoso.com --license stakeholder
 - **License updates**: Set raw Azure DevOps account license types (`none`, `earlyAdopter`, `express`, `professional`, `advanced`, `stakeholder`)
 - **AAD-group filtering**: User list excludes accounts whose entitlement is inherited from AAD group rules
 - **Error handling**: Clear guidance for missing users and ambiguous email matches
+
+#### Variable Groups and Service Connections
+
+The `pipelines variable-group` and `pipelines service-connection` commands inspect the resources a
+pipeline consumes:
+
+```sh
+# List the variable groups of the default project
+azdocli pipelines variable-group list
+
+# Filter by name and cap the number of results
+azdocli pipelines variable-group list --name "release" --top 10
+
+# Show a variable group and its variables (secret values are never returned by Azure DevOps)
+azdocli pipelines variable-group show --id 7
+
+# List the service connections of the default project
+azdocli pipelines service-connection list
+
+# Only connections of one type
+azdocli pipelines service-connection list --type azurerm
+
+# Show a single service connection
+azdocli pipelines service-connection show --id 00000000-0000-0000-0000-000000000000
+```
+
+**Library Features:**
+
+- **Variable discovery**: See which variable groups exist and what they define
+- **Secret safety**: Secret variables are shown as `<secret>`; the API never returns their values
+- **Service connection inventory**: List connections with their type and readiness, filtered by type
+- **Default project support**: Use with default project or specify --project explicitly
 
 ### Board Management Features
 
@@ -623,6 +699,57 @@ azdocli boards work-item delete --id 123 --soft-delete
 - **Field updates**: Update title, description, state, and priority
 - **Default project support**: Use with default project or specify --project explicitly
 - **Error handling**: Clear feedback when work item not found or access denied
+
+#### Work Item Comments
+
+The `boards work-item comment` commands read and write the discussion on a work item:
+
+```sh
+# List the comments on a work item
+azdocli boards work-item comment list --id 123
+
+# Only show the most recent comments
+azdocli boards work-item comment list --id 123 --top 5
+
+# Add a comment
+azdocli boards work-item comment add --id 123 --message "Reproduced on the staging build"
+```
+
+**Comment Features:**
+
+- **Read the discussion**: See every comment with its author and timestamp
+- **Add comments**: Post a comment from the command line or a script
+- **Safe rendering**: Terminal control characters in remote text are escaped rather than executed
+
+#### Work Item Types
+
+The `boards work-item types` command lists the work item types a project defines:
+
+```sh
+# List the work item types of the default project
+azdocli boards work-item types
+
+# Or specify a project explicitly
+azdocli boards work-item types --project MyProject
+```
+
+#### WIQL Queries
+
+The `boards query` command runs any WIQL query and lists the work items it returns:
+
+```sh
+# Run a WIQL query against the default project
+azdocli boards query --wiql "SELECT [System.Id] FROM WorkItems WHERE [System.State] = 'Active'"
+
+# Cap the number of results
+azdocli boards query --wiql "SELECT [System.Id] FROM WorkItems" --limit 10
+```
+
+**Query Features:**
+
+- **Arbitrary WIQL**: Anything the Azure DevOps query editor accepts
+- **Full work item details**: Results are shown in the same table as `work-item list`
+- **Result limits**: Cap the number of work items fetched with `--limit`
 
 ```sh
 CLI tool for interacting with Azure DevOps
@@ -769,6 +896,9 @@ azdocli repos pr comment add --repo MyRepo --id 123 --message "Looks good" # Sta
 azdocli pipelines list                       # List all pipelines
 azdocli pipelines runs --id 42               # Show pipeline runs
 azdocli pipelines show --id 42 --build-id 123 # Show build details
+azdocli pipelines run --id 42 --branch develop # Queue a run of a branch
+azdocli pipelines logs --id 42 --build-id 123 # List the logs of a run
+azdocli pipelines artifacts --build-id 123   # List the artifacts of a run
 
 # User management
 azdocli user list                            # List organization users

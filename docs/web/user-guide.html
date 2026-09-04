@@ -832,10 +832,78 @@ azdocli pipelines show --id 42 --project MyProject --build-id 123</code></pre>
 azdocli pipelines run --id 42
 
 # With specific project
-azdocli pipelines run --id 42 --project MyProject</code></pre>
+azdocli pipelines run --id 42 --project MyProject
+
+# Run a specific branch
+azdocli pipelines run --id 42 --branch develop
+
+# Pass pipeline variables (repeat --variable for more than one)
+azdocli pipelines run --id 42 --variable environment=staging --variable verbose=true</code></pre>
             <p>
-              <strong>Features</strong>: Pipeline execution with real-time
-              updates and clear error feedback.
+              <strong>Features</strong>: Queue a run against any branch, set
+              runtime variables, and print the new run number, state and web
+              URL.
+            </p>
+          </div>
+
+          <div class="command-example">
+            <h4>Pipeline Logs</h4>
+            <pre><code># List the logs produced by a run
+azdocli pipelines logs --id 42 --build-id 123
+
+# Print the contents of a single log
+azdocli pipelines logs --id 42 --build-id 123 --log-id 7</code></pre>
+            <p>
+              <strong>Features</strong>: See every log a run produced with line
+              counts and timestamps, or print one log to stdout so it can be
+              piped, searched or saved.
+            </p>
+          </div>
+
+          <div class="command-example">
+            <h4>Variable Groups</h4>
+            <pre><code># List the variable groups of the default project
+azdocli pipelines variable-group list
+
+# Filter by name and cap the number of results
+azdocli pipelines variable-group list --name "release" --top 10
+
+# Show a variable group and its variables
+azdocli pipelines variable-group show --id 7</code></pre>
+            <p>
+              <strong>Features</strong>: See which variable groups exist and
+              what they define. Secret variables are shown as
+              <code>&lt;secret&gt;</code>, since Azure DevOps never returns
+              their values.
+            </p>
+          </div>
+
+          <div class="command-example">
+            <h4>Service Connections</h4>
+            <pre><code># List the service connections of the default project
+azdocli pipelines service-connection list
+
+# Only connections of one type
+azdocli pipelines service-connection list --type azurerm
+
+# Show a single service connection
+azdocli pipelines service-connection show --id 00000000-0000-0000-0000-000000000000</code></pre>
+            <p>
+              <strong>Features</strong>: List connections with their type and
+              readiness, filtered by type, or show one in full.
+            </p>
+          </div>
+
+          <div class="command-example">
+            <h4>Pipeline Artifacts</h4>
+            <pre><code># List the artifacts of a run
+azdocli pipelines artifacts --build-id 123
+
+# With specific project
+azdocli pipelines artifacts --build-id 123 --project MyProject</code></pre>
+            <p>
+              <strong>Features</strong>: List every artifact a run published,
+              with its type and download URL.
             </p>
           </div>
         </div>
@@ -954,6 +1022,70 @@ azdocli boards work-item delete --id 123 --soft-delete</code></pre>
               Query Language for efficient data retrieval
             </li>
           </ul>
+        </div>
+
+        <div class="command-section">
+          <h3>Work Item Comments</h3>
+          <p>
+            The boards work-item comment commands read and write the discussion
+            on a work item.
+          </p>
+
+          <div class="command-example">
+            <h4>Read and Add Comments</h4>
+            <pre><code># List the comments on a work item
+azdocli boards work-item comment list --id 123
+
+# Only show the most recent comments
+azdocli boards work-item comment list --id 123 --top 5
+
+# Add a comment
+azdocli boards work-item comment add --id 123 --message "Reproduced on the staging build"</code></pre>
+            <p>
+              <strong>Features</strong>: See every comment with its author and
+              timestamp, post comments from scripts, and have terminal control
+              characters in remote text escaped rather than executed.
+            </p>
+          </div>
+        </div>
+
+        <div class="command-section">
+          <h3>Work Item Types</h3>
+          <p>
+            The boards work-item types command lists the work item types a
+            project defines.
+          </p>
+
+          <div class="command-example">
+            <h4>List Work Item Types</h4>
+            <pre><code># List the work item types of the default project
+azdocli boards work-item types
+
+# With specific project
+azdocli boards work-item types --project MyProject</code></pre>
+          </div>
+        </div>
+
+        <div class="command-section">
+          <h3>WIQL Queries</h3>
+          <p>
+            The boards query command runs any WIQL query and lists the work
+            items it returns.
+          </p>
+
+          <div class="command-example">
+            <h4>Run a Query</h4>
+            <pre><code># Run a WIQL query against the default project
+azdocli boards query --wiql "SELECT [System.Id] FROM WorkItems WHERE [System.State] = 'Active'"
+
+# Cap the number of results
+azdocli boards query --wiql "SELECT [System.Id] FROM WorkItems" --limit 10</code></pre>
+            <p>
+              <strong>Features</strong>: Anything the Azure DevOps query editor
+              accepts, rendered in the same table as work-item list, with a
+              configurable result limit.
+            </p>
+          </div>
         </div>
       </section>
 
