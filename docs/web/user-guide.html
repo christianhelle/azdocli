@@ -746,10 +746,44 @@ azdocli pipelines show --id 42 --project MyProject --build-id 123</code></pre>
 azdocli pipelines run --id 42
 
 # With specific project
-azdocli pipelines run --id 42 --project MyProject</code></pre>
+azdocli pipelines run --id 42 --project MyProject
+
+# Run a specific branch
+azdocli pipelines run --id 42 --branch develop
+
+# Pass pipeline variables (repeat --variable for more than one)
+azdocli pipelines run --id 42 --variable environment=staging --variable verbose=true</code></pre>
             <p>
-              <strong>Features</strong>: Pipeline execution with real-time
-              updates and clear error feedback.
+              <strong>Features</strong>: Queue a run against any branch, set
+              runtime variables, and print the new run number, state and web
+              URL.
+            </p>
+          </div>
+
+          <div class="command-example">
+            <h4>Pipeline Logs</h4>
+            <pre><code># List the logs produced by a run
+azdocli pipelines logs --id 42 --build-id 123
+
+# Print the contents of a single log
+azdocli pipelines logs --id 42 --build-id 123 --log-id 7</code></pre>
+            <p>
+              <strong>Features</strong>: See every log a run produced with line
+              counts and timestamps, or print one log to stdout so it can be
+              piped, searched or saved.
+            </p>
+          </div>
+
+          <div class="command-example">
+            <h4>Pipeline Artifacts</h4>
+            <pre><code># List the artifacts of a run
+azdocli pipelines artifacts --build-id 123
+
+# With specific project
+azdocli pipelines artifacts --build-id 123 --project MyProject</code></pre>
+            <p>
+              <strong>Features</strong>: List every artifact a run published,
+              with its type and download URL.
             </p>
           </div>
         </div>
