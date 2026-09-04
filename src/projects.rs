@@ -1,6 +1,7 @@
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::auth::url::web_project_url;
+use crate::project::get_project_or_default;
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::core as azure_core;
 use azure_devops_rust_api::core::models;
@@ -45,6 +46,18 @@ pub enum ProjectsSubCommands {
         /// Do not prompt for confirmation
         #[clap(short = 'y', long)]
         yes: bool,
+    },
+    /// List the teams of a team project
+    Teams {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Only list the teams you are a member of
+        #[clap(long)]
+        mine: bool,
+        /// Maximum number of teams to return
+        #[clap(long)]
+        top: Option<i32>,
     },
     /// List the process templates available in the organization
     Processes,
@@ -147,6 +160,17 @@ pub async fn handle_command(subcommand: &ProjectsSubCommands) -> Result<()> {
             let operation = delete_project(&project_id).await?;
             display_operation_reference("Project delete queued", &operation);
         }
+        ProjectsSubCommands::Teams { project, mine, top } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match list_teams(&project_name, *mine, *top).await {
+                Ok(teams) => display_teams(&teams),
+                Err(e) => {
+                    eprintln!("❌ Failed to list the teams of project '{project_name}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
         ProjectsSubCommands::Processes => {
             let processes = list_processes().await?;
             display_processes(&processes);
@@ -214,6 +238,51 @@ async fn delete_project(project_id: &str) -> Result<models::OperationReference> 
         .projects_client()
         .delete(&creds.organization, project_id)
         .await?)
+}
+
+async fn list_teams(
+    project: &str,
+    mine: bool,
+    top: Option<i32>,
+) -> Result<Vec<models::WebApiTeam>> {
+    let creds = get_credentials()?;
+    let client = create_core_client().await?;
+
+    let mut request = client
+        .teams_client()
+        .get_teams(&creds.organization, project);
+
+    if mine {
+        request = request.mine(true);
+    }
+    if let Some(top) = top {
+        request = request.top(top);
+    }
+
+    Ok(request.await?.value)
+}
+
+fn display_teams(teams: &[models::WebApiTeam]) {
+    if teams.is_empty() {
+        println!("No teams found.");
+        return;
+    }
+
+    for team in teams {
+        println!(
+            "👥 {}",
+            team.web_api_team_ref.name.as_deref().unwrap_or("-")
+        );
+
+        if let Some(id) = &team.web_api_team_ref.id {
+            println!("   ID: {id}");
+        }
+        if let Some(description) = &team.description {
+            println!("   {description}");
+        }
+    }
+
+    println!("\n{} team(s)", teams.len());
 }
 
 async fn list_processes() -> Result<Vec<models::Process>> {
