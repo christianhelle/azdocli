@@ -434,8 +434,7 @@ fn display_branches(branches: &[git::models::GitRef], default_branch: Option<&st
         );
     }
 
-    println!("
-{} branch(es)", branches.len());
+    println!("\n{} branch(es)", branches.len());
 }
 
 /// Lists commits reachable from a branch, most recent first.
@@ -515,8 +514,7 @@ fn display_commits(commits: &[git::models::GitCommitRef]) {
         );
     }
 
-    println!("
-{} commit(s)", commits.len());
+    println!("\n{} commit(s)", commits.len());
 }
 
 fn display_repo_details(repo: &git::models::GitRepository) {
