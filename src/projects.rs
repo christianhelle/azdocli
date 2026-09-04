@@ -46,6 +46,8 @@ pub enum ProjectsSubCommands {
         #[clap(short = 'y', long)]
         yes: bool,
     },
+    /// List the process templates available in the organization
+    Processes,
     /// Show team project
     Show {
         /// Name or ID of the project
@@ -145,6 +147,10 @@ pub async fn handle_command(subcommand: &ProjectsSubCommands) -> Result<()> {
             let operation = delete_project(&project_id).await?;
             display_operation_reference("Project delete queued", &operation);
         }
+        ProjectsSubCommands::Processes => {
+            let processes = list_processes().await?;
+            display_processes(&processes);
+        }
         ProjectsSubCommands::Show { project, open } => {
             let team_project = get_project(project).await?;
             display_project_details(&team_project);
@@ -208,6 +214,47 @@ async fn delete_project(project_id: &str) -> Result<models::OperationReference> 
         .projects_client()
         .delete(&creds.organization, project_id)
         .await?)
+}
+
+async fn list_processes() -> Result<Vec<models::Process>> {
+    let creds = get_credentials()?;
+    let client = create_core_client().await?;
+
+    Ok(client
+        .processes_client()
+        .list(&creds.organization)
+        .await?
+        .value)
+}
+
+fn display_processes(processes: &[models::Process]) {
+    if processes.is_empty() {
+        println!("No process templates found.");
+        return;
+    }
+
+    for process in processes {
+        let default = if process.is_default == Some(true) {
+            " (default)"
+        } else {
+            ""
+        };
+
+        println!(
+            "⚙ {}{}",
+            process.process_reference.name.as_deref().unwrap_or("-"),
+            default
+        );
+
+        if let Some(id) = &process.id {
+            println!("   ID: {id}");
+        }
+        if let Some(description) = &process.description {
+            println!("   {description}");
+        }
+    }
+
+    println!("\n{} process template(s)", processes.len());
 }
 
 async fn get_project(project: &str) -> Result<models::TeamProject> {
