@@ -1029,6 +1029,26 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("Repository '{}' not found", repository_name))
     }
 
+    #[test]
+    fn short_branch_name_strips_the_ref_prefix() {
+        assert_eq!(short_branch_name("refs/heads/feature/x"), "feature/x");
+        assert_eq!(short_branch_name("feature/x"), "feature/x");
+        assert_eq!(short_branch_name("refs/tags/v1"), "refs/tags/v1");
+    }
+
+    #[test]
+    fn commit_subject_keeps_only_the_first_line() {
+        assert_eq!(commit_subject(Some("title\n\nbody text")), "title");
+        assert_eq!(commit_subject(None), "");
+    }
+
+    #[test]
+    fn commit_subject_truncates_long_subjects() {
+        let subject = commit_subject(Some(&"a".repeat(100)));
+        assert_eq!(subject.chars().count(), 60);
+        assert!(subject.ends_with("..."));
+    }
+
     #[tokio::test]
     #[ignore] // Requires test_config.json with valid credentials
     async fn test_create_show_clone_delete_repository() -> Result<()> {
