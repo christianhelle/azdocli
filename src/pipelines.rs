@@ -217,16 +217,27 @@ fn display_pipeline_runs(runs: &[models::Run]) {
 
 fn display_build_details(run: &models::Run) {
     println!("📋 Pipeline Run Details");
-    println!("=====================");
-
-    println!("State: {:?}", run.state);
+    println!("=======================");
+    println!(
+        "🆔 Run: #{} ({})",
+        run.run_reference.id, run.run_reference.name
+    );
+    println!("📛 Pipeline: {}", run.pipeline.pipeline_base.name);
+    println!("🚦 State: {:?}", run.state);
 
     if let Some(ref result) = run.result {
-        println!("Result: {result:?}");
+        println!("🎯 Result: {result:?}");
     }
 
-    println!("\nFull details:");
-    println!("{run:#?}");
+    println!("🕐 Created: {}", run.created_date);
+
+    if let Some(finished_date) = run.finished_date {
+        println!("🏁 Finished: {finished_date}");
+    }
+
+    if let Some(web) = &run.links.web {
+        println!("🌐 URL: {}", web.href);
+    }
 }
 
 pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
