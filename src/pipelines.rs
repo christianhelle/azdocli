@@ -7,6 +7,7 @@ use azure_devops_rust_api::pipelines::{self, models};
 use clap::Subcommand;
 use colored::Colorize;
 use serde_json::{json, Value};
+use std::io::Write;
 
 #[derive(Subcommand, Clone)]
 pub enum PipelinesSubCommands {
@@ -229,12 +230,16 @@ async fn list_run_logs(
 /// Log text lives behind a short-lived signed URL rather than in the API
 /// response, so it is fetched separately. That URL carries its own token, so no
 /// credentials are attached to the download.
-async fn get_run_log_content(
+///
+/// The body is streamed to stdout chunk by chunk. A pipeline log can be
+/// hundreds of megabytes, and buffering one into a `String` first would cost
+/// that much memory for output we only ever write straight back out.
+async fn print_run_log(
     project: &str,
     pipeline_id: &str,
     build_id: &str,
     log_id: &str,
-) -> Result<String> {
+) -> Result<()> {
     let creds = get_credentials()?;
     let client = create_pipelines_client()?;
 
@@ -255,16 +260,26 @@ async fn get_run_log_content(
         .and_then(|content| content.url)
         .ok_or_else(|| anyhow!("Azure DevOps returned no download URL for log {log_id}"))?;
 
-    let response = reqwest::get(url)
+    let mut response = reqwest::get(url)
         .await
         .context("Downloading the pipeline log")?
         .error_for_status()
         .context("Downloading the pipeline log")?;
 
-    response
-        .text()
+    let stdout = std::io::stdout();
+    let mut stdout = stdout.lock();
+
+    while let Some(chunk) = response
+        .chunk()
         .await
-        .context("Reading the pipeline log content")
+        .context("Reading the pipeline log content")?
+    {
+        stdout
+            .write_all(&chunk)
+            .context("Writing the pipeline log to stdout")?;
+    }
+
+    stdout.flush().context("Writing the pipeline log to stdout")
 }
 
 fn display_run_logs(logs: &[models::Log]) {
@@ -432,13 +447,10 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
             let project_name = get_project_or_default(project.as_deref())?;
             match log_id {
                 Some(log_id) => {
-                    match get_run_log_content(&project_name, id, build_id, log_id).await {
-                        Ok(content) => print!("{content}"),
-                        Err(e) => {
-                            eprintln!("❌ Failed to read log {log_id} of build {build_id}");
-                            eprintln!("   {e}");
-                            return Err(e);
-                        }
+                    if let Err(e) = print_run_log(&project_name, id, build_id, log_id).await {
+                        eprintln!("❌ Failed to read log {log_id} of build {build_id}");
+                        eprintln!("   {e}");
+                        return Err(e);
                     }
                 }
                 None => match list_run_logs(&project_name, id, build_id).await {
