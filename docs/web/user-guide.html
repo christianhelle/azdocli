@@ -268,6 +268,30 @@
             <pre><code>azdocli projects delete --id 00000000-0000-0000-0000-000000000000 --yes</code></pre>
           </div>
 
+          <div class="command-example">
+            <h4>List the teams of a project</h4>
+            <pre><code># List every team in the default project
+azdocli projects teams
+
+# Only the teams you belong to, capped at 10 results
+azdocli projects teams --mine --top 10</code></pre>
+          </div>
+
+          <div class="command-example">
+            <h4>List the members of a team</h4>
+            <pre><code># Team administrators are marked in the listing
+azdocli projects members --team "MyProject Team"
+
+# With specific project
+azdocli projects members --team "MyProject Team" --project MyProject</code></pre>
+          </div>
+
+          <div class="command-example">
+            <h4>List the process templates</h4>
+            <pre><code># The names and IDs accepted by projects create --process
+azdocli projects processes</code></pre>
+          </div>
+
           <p>
             Note: <code>azdocli projects</code> commands are organization-scoped
             and rely on your stored credentials from
