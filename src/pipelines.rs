@@ -10,6 +10,7 @@ use clap::Subcommand;
 use colored::Colorize;
 use serde_json::{json, Value};
 use std::io::Write;
+use std::time::Duration;
 
 #[derive(Subcommand, Clone)]
 pub enum PipelinesSubCommands {
@@ -286,6 +287,13 @@ async fn list_run_logs(
         .logs)
 }
 
+/// A stalled download would otherwise hang the CLI indefinitely, since
+/// `reqwest`'s default client sets no timeouts. These bound the connection and
+/// each individual read rather than the whole transfer, because a large log can
+/// legitimately take a long time to stream.
+const LOG_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+const LOG_READ_TIMEOUT: Duration = Duration::from_secs(60);
+
 /// Log text lives behind a short-lived signed URL rather than in the API
 /// response, so it is fetched separately. That URL carries its own token, so no
 /// credentials are attached to the download.
@@ -319,11 +327,19 @@ async fn print_run_log(
         .and_then(|content| content.url)
         .ok_or_else(|| anyhow!("Azure DevOps returned no download URL for log {log_id}"))?;
 
-    let mut response = reqwest::get(url)
+    let http_client = reqwest::Client::builder()
+        .connect_timeout(LOG_CONNECT_TIMEOUT)
+        .read_timeout(LOG_READ_TIMEOUT)
+        .build()
+        .context("Building the pipeline log download client")?;
+
+    let mut response = http_client
+        .get(url)
+        .send()
         .await
-        .context("Downloading the pipeline log")?
+        .context("Requesting the pipeline log")?
         .error_for_status()
-        .context("Downloading the pipeline log")?;
+        .context("The pipeline log download was rejected")?;
 
     let stdout = std::io::stdout();
     let mut stdout = stdout.lock();
