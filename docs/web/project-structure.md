@@ -27,7 +27,7 @@ azdocli/
 │   │   ├── comments.rs    # Comment threads
 │   │   ├── identity.rs    # Resolving email/GUID/@me to an identity
 │   │   └── http.rs        # Raw REST calls the SDK models cannot express
-│   ├── pipelines.rs       # Pipeline & build management, runs, logs and artifacts
+│   ├── pipelines.rs       # Pipelines, runs, logs, artifacts, variable groups, service connections
 │   ├── boards.rs          # Work item CRUD, WIQL queries
 │   ├── wiki.rs            # Wiki and wiki page operations
 │   ├── user.rs            # User entitlement management

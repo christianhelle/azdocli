@@ -837,6 +837,40 @@ azdocli pipelines logs --id 42 --build-id 123 --log-id 7</code></pre>
           </div>
 
           <div class="command-example">
+            <h4>Variable Groups</h4>
+            <pre><code># List the variable groups of the default project
+azdocli pipelines variable-group list
+
+# Filter by name and cap the number of results
+azdocli pipelines variable-group list --name "release" --top 10
+
+# Show a variable group and its variables
+azdocli pipelines variable-group show --id 7</code></pre>
+            <p>
+              <strong>Features</strong>: See which variable groups exist and
+              what they define. Secret variables are shown as
+              <code>&lt;secret&gt;</code>, since Azure DevOps never returns
+              their values.
+            </p>
+          </div>
+
+          <div class="command-example">
+            <h4>Service Connections</h4>
+            <pre><code># List the service connections of the default project
+azdocli pipelines service-connection list
+
+# Only connections of one type
+azdocli pipelines service-connection list --type azurerm
+
+# Show a single service connection
+azdocli pipelines service-connection show --id 00000000-0000-0000-0000-000000000000</code></pre>
+            <p>
+              <strong>Features</strong>: List connections with their type and
+              readiness, filtered by type, or show one in full.
+            </p>
+          </div>
+
+          <div class="command-example">
             <h4>Pipeline Artifacts</h4>
             <pre><code># List the artifacts of a run
 azdocli pipelines artifacts --build-id 123
