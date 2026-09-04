@@ -355,9 +355,9 @@ fn display_work_item(work_item: &models::WorkItem) {
     }
 }
 
-fn display_work_items_list(work_items: &[models::WorkItem]) {
+fn display_work_items_list(heading: &str, work_items: &[models::WorkItem]) {
     println!();
-    println!("📋 My Work Items ({} items)", work_items.len());
+    println!("📋 {heading} ({} items)", work_items.len());
     let separator = "=".repeat(80);
     println!("{separator}");
     println!("{:<8} {:<15} {:<20} {:<30}", "ID", "Type", "State", "Title");
@@ -458,11 +458,11 @@ async fn list_my_work_items(
     let wiql_query = build_wiql_query(project, state_filter, work_item_type_filter);
 
     match run_wiql_query(project, &wiql_query, limit).await {
-        Ok(work_items) if work_items.is_empty() => display_empty_work_items_table(),
-        Ok(work_items) => display_work_items_list(&work_items),
+        Ok(work_items) if work_items.is_empty() => display_empty_work_items_table("My Work Items"),
+        Ok(work_items) => display_work_items_list("My Work Items", &work_items),
         Err(e) => {
             eprintln!("❌ Failed to execute WIQL query: {e}");
-            display_empty_work_items_table();
+            display_empty_work_items_table("My Work Items");
         }
     }
 
@@ -502,15 +502,15 @@ fn build_wiql_query(
     wiql_query
 }
 
-fn display_empty_work_items_table() {
+fn display_empty_work_items_table(heading: &str) {
     println!();
-    println!("📋 My Work Items (0 items)");
+    println!("📋 {heading} (0 items)");
     let separator = "=".repeat(80);
     println!("{separator}");
     println!("{:<8} {:<15} {:<20} {:<30}", "ID", "Type", "State", "Title");
     let dash_separator = "-".repeat(80);
     println!("{dash_separator}");
-    println!("No work items found assigned to you.");
+    println!("No work items found.");
     println!();
     println!("💡 Use 'azdocli boards work-item show --id <ID>' for detailed information");
     println!("💡 Use 'azdocli boards work-item show --id <ID> --web' to open in browser");
