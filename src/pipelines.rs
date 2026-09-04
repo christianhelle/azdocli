@@ -337,9 +337,9 @@ async fn print_run_log(
         .get(url)
         .send()
         .await
-        .context("Downloading the pipeline log")?
+        .context("Requesting the pipeline log")?
         .error_for_status()
-        .context("Downloading the pipeline log")?;
+        .context("The pipeline log download was rejected")?;
 
     let stdout = std::io::stdout();
     let mut stdout = stdout.lock();
