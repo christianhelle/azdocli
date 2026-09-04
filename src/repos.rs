@@ -308,7 +308,7 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
             let repo = get_repo(&project_name, id).await?;
             match list_items(&project_name, &repo, path, branch.as_deref(), *recursive).await {
                 Ok(items) => {
-                    display_items(&items);
+                    display_items(&items, path);
                 }
                 Err(e) => {
                     eprintln!("❌ Failed to list files of repository '{id}' at '{path}'");
@@ -615,15 +615,22 @@ async fn list_items(
     Ok(request.await?.value)
 }
 
-fn display_items(items: &[git::models::GitItem]) {
-    // The scope path itself comes back as the first entry; it is not a child.
+/// Item paths differ from what users type only in their leading and trailing
+/// slashes, so both sides are trimmed before they are compared.
+fn normalize_item_path(path: &str) -> &str {
+    path.trim_end_matches('/').trim_start_matches('/')
+}
+
+fn display_items(items: &[git::models::GitItem], scope_path: &str) {
+    // The scope path itself comes back alongside its children; it is not one.
+    let scope = normalize_item_path(scope_path);
     let children: Vec<&git::models::GitItem> = items
         .iter()
         .filter(|item| {
             item.item_model
                 .path
                 .as_deref()
-                .is_some_and(|path| path != "/")
+                .is_some_and(|path| normalize_item_path(path) != scope)
         })
         .collect();
 
@@ -1034,6 +1041,15 @@ mod tests {
         assert_eq!(short_branch_name("refs/heads/feature/x"), "feature/x");
         assert_eq!(short_branch_name("feature/x"), "feature/x");
         assert_eq!(short_branch_name("refs/tags/v1"), "refs/tags/v1");
+    }
+
+    #[test]
+    fn normalize_item_path_ignores_surrounding_slashes() {
+        assert_eq!(normalize_item_path("/src"), "src");
+        assert_eq!(normalize_item_path("src/"), "src");
+        assert_eq!(normalize_item_path("/src/"), "src");
+        assert_eq!(normalize_item_path("/"), "");
+        assert_eq!(normalize_item_path("/src/lib"), "src/lib");
     }
 
     #[test]
