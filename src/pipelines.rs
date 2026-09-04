@@ -5,6 +5,7 @@ use anyhow::{anyhow, Context, Result};
 use azure_devops_rust_api::build::models::BuildArtifact;
 use azure_devops_rust_api::distributed_task::models::VariableGroup;
 use azure_devops_rust_api::pipelines::{self, models};
+use azure_devops_rust_api::service_endpoint::models::ServiceEndpoint;
 use clap::Subcommand;
 use colored::Colorize;
 use serde_json::{json, Value};
@@ -67,6 +68,11 @@ pub enum PipelinesSubCommands {
         #[clap(subcommand)]
         subcommand: VariableGroupSubCommands,
     },
+    /// Inspect the service connections of a project
+    ServiceConnection {
+        #[clap(subcommand)]
+        subcommand: ServiceConnectionSubCommands,
+    },
     /// Run a pipeline
     Run {
         /// ID of the pipeline to start
@@ -101,6 +107,28 @@ pub enum VariableGroupSubCommands {
     /// Show a variable group and its variables
     Show {
         /// ID of the variable group
+        #[clap(short, long)]
+        id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
+}
+
+#[derive(Subcommand, Clone)]
+pub enum ServiceConnectionSubCommands {
+    /// List the service connections of a project
+    List {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Only list connections of this type, such as 'azurerm' or 'github'
+        #[clap(long = "type", value_name = "TYPE")]
+        endpoint_type: Option<String>,
+    },
+    /// Show a service connection
+    Show {
+        /// ID of the service connection
         #[clap(short, long)]
         id: String,
         /// Team project name (optional if default project is set)
@@ -478,6 +506,86 @@ fn display_variable_group(group: &VariableGroup) {
     }
 }
 
+async fn list_service_connections(
+    project: &str,
+    endpoint_type: Option<&str>,
+) -> Result<Vec<ServiceEndpoint>> {
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds)?;
+
+    let mut request = factory
+        .build_service_endpoint()
+        .endpoints_client()
+        .get_service_endpoints(&creds.organization, project);
+
+    if let Some(endpoint_type) = endpoint_type {
+        request = request.type_(endpoint_type);
+    }
+
+    Ok(request.await?.value)
+}
+
+/// The list endpoint is the only one that takes an id filter, so a single
+/// connection is fetched by filtering the project's connections.
+async fn get_service_connection(project: &str, id: &str) -> Result<ServiceEndpoint> {
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds)?;
+
+    factory
+        .build_service_endpoint()
+        .endpoints_client()
+        .get_service_endpoints(&creds.organization, project)
+        .endpoint_ids(id)
+        .await?
+        .value
+        .into_iter()
+        .next()
+        .ok_or_else(|| anyhow!("Service connection '{id}' not found in project '{project}'"))
+}
+
+fn display_service_connections(connections: &[ServiceEndpoint]) {
+    if connections.is_empty() {
+        println!("No service connections found.");
+        return;
+    }
+
+    println!(
+        "{:<40} {:<20} {}",
+        "Name".bold(),
+        "Type".bold(),
+        "ID".bold()
+    );
+    println!("{}", "-".repeat(100));
+
+    for connection in connections {
+        println!(
+            "{:<40} {:<20} {}",
+            connection.name, connection.type_, connection.id
+        );
+    }
+}
+
+fn display_service_connection(connection: &ServiceEndpoint) {
+    println!("🔌 Service Connection");
+    println!("======================");
+    println!("Name: {}", connection.name);
+    println!("ID: {}", connection.id);
+    println!("Type: {}", connection.type_);
+    println!("URL: {}", connection.url);
+    println!("Ready: {}", if connection.is_ready { "Yes" } else { "No" });
+    println!(
+        "Shared: {}",
+        if connection.is_shared { "Yes" } else { "No" }
+    );
+
+    if let Some(description) = &connection.description {
+        println!("Description: {description}");
+    }
+    if let Some(scheme) = &connection.authorization.scheme {
+        println!("Authorization scheme: {scheme}");
+    }
+}
+
 fn display_pipelines(pipelines: &[models::Pipeline]) {
     if pipelines.is_empty() {
         println!("No pipelines found.");
@@ -585,6 +693,40 @@ async fn handle_variable_group_command(subcommand: &VariableGroupSubCommands) ->
     Ok(())
 }
 
+async fn handle_service_connection_command(
+    subcommand: &ServiceConnectionSubCommands,
+) -> Result<()> {
+    match subcommand {
+        ServiceConnectionSubCommands::List {
+            project,
+            endpoint_type,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match list_service_connections(&project_name, endpoint_type.as_deref()).await {
+                Ok(connections) => display_service_connections(&connections),
+                Err(e) => {
+                    eprintln!("❌ Failed to list the service connections of '{project_name}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        ServiceConnectionSubCommands::Show { id, project } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match get_service_connection(&project_name, id).await {
+                Ok(connection) => display_service_connection(&connection),
+                Err(e) => {
+                    eprintln!("❌ Failed to retrieve service connection {id}");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
     match subcommand {
         PipelinesSubCommands::List { project } => {
@@ -638,6 +780,9 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
         }
         PipelinesSubCommands::VariableGroup { subcommand } => {
             return handle_variable_group_command(subcommand).await;
+        }
+        PipelinesSubCommands::ServiceConnection { subcommand } => {
+            return handle_service_connection_command(subcommand).await;
         }
         PipelinesSubCommands::Run {
             id,
