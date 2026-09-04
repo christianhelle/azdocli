@@ -17,6 +17,18 @@ pub enum BoardsSubCommands {
         #[clap(subcommand)]
         subcommand: WorkItemSubCommands,
     },
+    /// Run a WIQL query and list the work items it returns
+    Query {
+        /// The WIQL query to run
+        #[clap(short, long)]
+        wiql: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Maximum number of work items to return (default: 50)
+        #[clap(long, default_value = "50")]
+        limit: i32,
+    },
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -520,6 +532,25 @@ pub async fn handle_command(subcommand: &BoardsSubCommands) -> Result<()> {
     let _credentials = get_credentials()?;
     match subcommand {
         BoardsSubCommands::WorkItem { subcommand } => handle_work_item_command(subcommand).await,
+        BoardsSubCommands::Query {
+            wiql,
+            project,
+            limit,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match run_wiql_query(&project_name, wiql, *limit).await {
+                Ok(work_items) if work_items.is_empty() => {
+                    display_empty_work_items_table("Query Results")
+                }
+                Ok(work_items) => display_work_items_list("Query Results", &work_items),
+                Err(e) => {
+                    eprintln!("❌ Failed to execute WIQL query");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+            Ok(())
+        }
     }
 }
 
