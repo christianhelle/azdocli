@@ -1,7 +1,7 @@
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::project::get_project_or_default;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use azure_devops_rust_api::pipelines::{self, models};
 use clap::Subcommand;
 use colored::Colorize;
@@ -35,6 +35,21 @@ pub enum PipelinesSubCommands {
         /// Build ID to show details for
         #[clap(short = 'b', long)]
         build_id: String,
+    },
+    /// List the logs of a pipeline run, or print one of them
+    Logs {
+        /// ID of the pipeline
+        #[clap(short, long)]
+        id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Run (build) ID to read logs from
+        #[clap(short = 'b', long)]
+        build_id: String,
+        /// Print the contents of this log instead of listing the logs
+        #[clap(long)]
+        log_id: Option<String>,
     },
     /// Run a pipeline
     Run {
@@ -181,6 +196,97 @@ async fn run_pipeline(
         .await?)
 }
 
+async fn list_run_logs(
+    project: &str,
+    pipeline_id: &str,
+    build_id: &str,
+) -> Result<Vec<models::Log>> {
+    let creds = get_credentials()?;
+    let client = create_pipelines_client()?;
+
+    Ok(client
+        .logs_client()
+        .list(
+            creds.organization,
+            project,
+            parse_id(pipeline_id, "pipeline")?,
+            parse_id(build_id, "build")?,
+        )
+        .await?
+        .logs)
+}
+
+/// Log text lives behind a short-lived signed URL rather than in the API
+/// response, so it is fetched separately. That URL carries its own token, so no
+/// credentials are attached to the download.
+async fn get_run_log_content(
+    project: &str,
+    pipeline_id: &str,
+    build_id: &str,
+    log_id: &str,
+) -> Result<String> {
+    let creds = get_credentials()?;
+    let client = create_pipelines_client()?;
+
+    let log = client
+        .logs_client()
+        .get(
+            creds.organization,
+            project,
+            parse_id(pipeline_id, "pipeline")?,
+            parse_id(build_id, "build")?,
+            parse_id(log_id, "log")?,
+        )
+        .expand("signedContent")
+        .await?;
+
+    let url = log
+        .signed_content
+        .and_then(|content| content.url)
+        .ok_or_else(|| anyhow!("Azure DevOps returned no download URL for log {log_id}"))?;
+
+    let response = reqwest::get(url)
+        .await
+        .context("Downloading the pipeline log")?
+        .error_for_status()
+        .context("Downloading the pipeline log")?;
+
+    response
+        .text()
+        .await
+        .context("Reading the pipeline log content")
+}
+
+fn display_run_logs(logs: &[models::Log]) {
+    if logs.is_empty() {
+        println!("No logs found.");
+        return;
+    }
+
+    println!(
+        "{:<10} {:<10} {}",
+        "Log".bold(),
+        "Lines".bold(),
+        "Created".bold()
+    );
+    println!("{}", "-".repeat(40));
+
+    for log in logs {
+        println!(
+            "{:<10} {:<10} {}",
+            log.id
+                .map(|id| id.to_string())
+                .unwrap_or_else(|| "-".to_string()),
+            log.line_count
+                .map(|lines| lines.to_string())
+                .unwrap_or_else(|| "-".to_string()),
+            log.created_on
+                .map(|created| created.date().to_string())
+                .unwrap_or_else(|| "-".to_string())
+        );
+    }
+}
+
 fn display_pipelines(pipelines: &[models::Pipeline]) {
     if pipelines.is_empty() {
         println!("No pipelines found.");
@@ -270,6 +376,34 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
             let project_name = get_project_or_default(project.as_deref())?;
             let runs = get_pipeline_runs(&project_name, id).await?;
             display_pipeline_runs(&runs);
+        }
+        PipelinesSubCommands::Logs {
+            id,
+            project,
+            build_id,
+            log_id,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match log_id {
+                Some(log_id) => {
+                    match get_run_log_content(&project_name, id, build_id, log_id).await {
+                        Ok(content) => print!("{content}"),
+                        Err(e) => {
+                            eprintln!("❌ Failed to read log {log_id} of build {build_id}");
+                            eprintln!("   {e}");
+                            return Err(e);
+                        }
+                    }
+                }
+                None => match list_run_logs(&project_name, id, build_id).await {
+                    Ok(logs) => display_run_logs(&logs),
+                    Err(e) => {
+                        eprintln!("❌ Failed to list logs of build {build_id}");
+                        eprintln!("   {e}");
+                        return Err(e);
+                    }
+                },
+            }
         }
         PipelinesSubCommands::Run {
             id,
