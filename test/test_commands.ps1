@@ -94,5 +94,17 @@ foreach ($subcommand in @("list", "runs", "show", "logs", "artifacts", "run"))
   Invoke-Cli pipelines $subcommand --help
 }
 
+foreach ($group in @("variable-group", "service-connection"))
+{
+  Write-Host "`nTesting pipelines $group help..." -ForegroundColor Yellow
+  Invoke-Cli pipelines $group --help
+
+  foreach ($subcommand in @("list", "show"))
+  {
+    Write-Host "`nTesting pipelines $group $subcommand help..." -ForegroundColor Yellow
+    Invoke-Cli pipelines $group $subcommand --help
+  }
+}
+
 Write-Host "`nAll command-line interface tests completed successfully!" -ForegroundColor Green
 Write-Host "Note: Actual functionality requires Azure DevOps authentication." -ForegroundColor Cyan
