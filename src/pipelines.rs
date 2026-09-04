@@ -3,6 +3,7 @@ use crate::auth::get_credentials;
 use crate::project::get_project_or_default;
 use anyhow::{anyhow, Context, Result};
 use azure_devops_rust_api::build::models::BuildArtifact;
+use azure_devops_rust_api::distributed_task::models::VariableGroup;
 use azure_devops_rust_api::pipelines::{self, models};
 use clap::Subcommand;
 use colored::Colorize;
@@ -61,6 +62,11 @@ pub enum PipelinesSubCommands {
         #[clap(short = 'b', long)]
         build_id: String,
     },
+    /// Inspect the variable groups of a project
+    VariableGroup {
+        #[clap(subcommand)]
+        subcommand: VariableGroupSubCommands,
+    },
     /// Run a pipeline
     Run {
         /// ID of the pipeline to start
@@ -75,6 +81,31 @@ pub enum PipelinesSubCommands {
         /// Pipeline variable to set, in NAME=VALUE form (repeatable)
         #[clap(long = "variable", value_name = "NAME=VALUE")]
         variables: Vec<String>,
+    },
+}
+
+#[derive(Subcommand, Clone)]
+pub enum VariableGroupSubCommands {
+    /// List the variable groups of a project
+    List {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Only list groups whose name matches this text
+        #[clap(long)]
+        name: Option<String>,
+        /// Maximum number of variable groups to return
+        #[clap(long)]
+        top: Option<i32>,
+    },
+    /// Show a variable group and its variables
+    Show {
+        /// ID of the variable group
+        #[clap(short, long)]
+        id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
     },
 }
 
@@ -333,6 +364,120 @@ fn display_build_artifacts(artifacts: &[BuildArtifact]) {
     println!("\n{} artifact(s)", artifacts.len());
 }
 
+async fn list_variable_groups(
+    project: &str,
+    name: Option<&str>,
+    top: Option<i32>,
+) -> Result<Vec<VariableGroup>> {
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds)?;
+
+    let mut request = factory
+        .build_distributed_task()
+        .variablegroups_client()
+        .get_variable_groups(&creds.organization, project);
+
+    if let Some(name) = name {
+        request = request.group_name(name);
+    }
+    if let Some(top) = top {
+        request = request.top(top);
+    }
+
+    Ok(request.await?.value)
+}
+
+async fn get_variable_group(project: &str, group_id: &str) -> Result<VariableGroup> {
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds)?;
+
+    Ok(factory
+        .build_distributed_task()
+        .variablegroups_client()
+        .get(
+            &creds.organization,
+            project,
+            parse_id(group_id, "variable group")?,
+        )
+        .await?)
+}
+
+/// Variables arrive as a free-form JSON map. Azure DevOps never returns the
+/// value of a secret variable, so those are rendered as a placeholder rather
+/// than as an empty string, which would read like an empty value.
+fn format_variable_value(variable: &Value) -> String {
+    if variable
+        .get("isSecret")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return "<secret>".to_string();
+    }
+
+    variable
+        .get("value")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string()
+}
+
+fn display_variable_groups(groups: &[VariableGroup]) {
+    if groups.is_empty() {
+        println!("No variable groups found.");
+        return;
+    }
+
+    println!(
+        "{:<10} {:<40} {}",
+        "ID".bold(),
+        "Name".bold(),
+        "Type".bold()
+    );
+    println!("{}", "-".repeat(70));
+
+    for group in groups {
+        println!(
+            "{:<10} {:<40} {}",
+            group
+                .id
+                .map(|id| id.to_string())
+                .unwrap_or_else(|| "-".to_string()),
+            group.name.as_deref().unwrap_or("-"),
+            group.type_.as_deref().unwrap_or("-")
+        );
+    }
+}
+
+fn display_variable_group(group: &VariableGroup) {
+    println!("📚 Variable Group");
+    println!("=====================");
+    println!(
+        "ID: {}",
+        group
+            .id
+            .map(|id| id.to_string())
+            .unwrap_or_else(|| "-".to_string())
+    );
+    println!("Name: {}", group.name.as_deref().unwrap_or("-"));
+
+    if let Some(description) = &group.description {
+        println!("Description: {description}");
+    }
+    if let Some(type_) = &group.type_ {
+        println!("Type: {type_}");
+    }
+
+    match group.variables.as_ref().and_then(Value::as_object) {
+        Some(variables) if !variables.is_empty() => {
+            println!("\nVariables:");
+            for (name, variable) in variables {
+                println!("  {name} = {}", format_variable_value(variable));
+            }
+        }
+        _ => println!("\nNo variables."),
+    }
+}
+
 fn display_pipelines(pipelines: &[models::Pipeline]) {
     if pipelines.is_empty() {
         println!("No pipelines found.");
@@ -411,6 +556,35 @@ fn display_build_details(run: &models::Run) {
     }
 }
 
+async fn handle_variable_group_command(subcommand: &VariableGroupSubCommands) -> Result<()> {
+    match subcommand {
+        VariableGroupSubCommands::List { project, name, top } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match list_variable_groups(&project_name, name.as_deref(), *top).await {
+                Ok(groups) => display_variable_groups(&groups),
+                Err(e) => {
+                    eprintln!("❌ Failed to list the variable groups of '{project_name}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        VariableGroupSubCommands::Show { id, project } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match get_variable_group(&project_name, id).await {
+                Ok(group) => display_variable_group(&group),
+                Err(e) => {
+                    eprintln!("❌ Failed to retrieve variable group {id}");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
     match subcommand {
         PipelinesSubCommands::List { project } => {
@@ -461,6 +635,9 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
                     return Err(e);
                 }
             }
+        }
+        PipelinesSubCommands::VariableGroup { subcommand } => {
+            return handle_variable_group_command(subcommand).await;
         }
         PipelinesSubCommands::Run {
             id,
