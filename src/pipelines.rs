@@ -294,7 +294,7 @@ fn display_run_logs(logs: &[models::Log]) {
         "Lines".bold(),
         "Created".bold()
     );
-    println!("{}", "-".repeat(40));
+    println!("{}", "-".repeat(45));
 
     for log in logs {
         println!(
@@ -306,7 +306,18 @@ fn display_run_logs(logs: &[models::Log]) {
                 .map(|lines| lines.to_string())
                 .unwrap_or_else(|| "-".to_string()),
             log.created_on
-                .map(|created| created.date().to_string())
+                .map(|created| {
+                    // Logs within one run are often seconds apart, so the date
+                    // alone is not enough to order or correlate them.
+                    let time = created.time();
+                    format!(
+                        "{} {:02}:{:02}:{:02}",
+                        created.date(),
+                        time.hour(),
+                        time.minute(),
+                        time.second()
+                    )
+                })
                 .unwrap_or_else(|| "-".to_string())
         );
     }
