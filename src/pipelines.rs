@@ -5,6 +5,7 @@ use anyhow::{anyhow, Result};
 use azure_devops_rust_api::pipelines::{self, models};
 use clap::Subcommand;
 use colored::Colorize;
+use serde_json::{json, Value};
 
 #[derive(Subcommand, Clone)]
 pub enum PipelinesSubCommands {
@@ -43,6 +44,12 @@ pub enum PipelinesSubCommands {
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
+        /// Branch to run the pipeline from (defaults to the pipeline default branch)
+        #[clap(short, long)]
+        branch: Option<String>,
+        /// Pipeline variable to set, in NAME=VALUE form (repeatable)
+        #[clap(long = "variable", value_name = "NAME=VALUE")]
+        variables: Vec<String>,
     },
 }
 
@@ -116,9 +123,62 @@ async fn get_build(project: &str, pipeline_id: &str, build_id: &str) -> Result<m
     }
 }
 
-fn run_pipeline(_project: &str, _pipeline_id: &str) -> Result<models::Run> {
-    // Not yet implemented
-    Err(anyhow!("Running pipelines is not yet fully implemented"))
+/// Azure DevOps expects a full ref, but users think in branch names.
+fn full_ref_name(branch: &str) -> String {
+    if branch.starts_with("refs/") {
+        branch.to_string()
+    } else {
+        format!("refs/heads/{branch}")
+    }
+}
+
+fn parse_variable(variable: &str) -> Result<(&str, &str)> {
+    variable
+        .split_once('=')
+        .filter(|(name, _)| !name.is_empty())
+        .ok_or_else(|| anyhow!("Invalid variable '{variable}', expected NAME=VALUE"))
+}
+
+/// Builds the run request body from the branch and variable arguments.
+fn build_run_parameters(
+    branch: Option<&str>,
+    variables: &[String],
+) -> Result<models::RunPipelineParameters> {
+    let mut parameters = models::RunPipelineParameters::new();
+
+    if let Some(branch) = branch {
+        let mut resources = models::RunResourcesParameters::new();
+        resources.repositories = Some(json!({ "self": { "refName": full_ref_name(branch) } }));
+        parameters.resources = Some(resources);
+    }
+
+    if !variables.is_empty() {
+        let mut values = serde_json::Map::new();
+        for variable in variables {
+            let (name, value) = parse_variable(variable)?;
+            values.insert(name.to_string(), json!({ "value": value }));
+        }
+        parameters.variables = Some(Value::Object(values));
+    }
+
+    Ok(parameters)
+}
+
+async fn run_pipeline(
+    project: &str,
+    pipeline_id: &str,
+    branch: Option<&str>,
+    variables: &[String],
+) -> Result<models::Run> {
+    let creds = get_credentials()?;
+    let client = create_pipelines_client()?;
+    let pipeline_id_int = parse_id(pipeline_id, "pipeline")?;
+    let parameters = build_run_parameters(branch, variables)?;
+
+    Ok(client
+        .runs_client()
+        .run_pipeline(creds.organization, parameters, project, pipeline_id_int)
+        .await?)
 }
 
 fn display_pipelines(pipelines: &[models::Pipeline]) {
@@ -181,16 +241,21 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
             let runs = get_pipeline_runs(&project_name, id).await?;
             display_pipeline_runs(&runs);
         }
-        PipelinesSubCommands::Run { id, project } => {
+        PipelinesSubCommands::Run {
+            id,
+            project,
+            branch,
+            variables,
+        } => {
             let project_name = get_project_or_default(project.as_deref())?;
             println!("Starting pipeline with ID: {id} in project: {project_name}");
-            match run_pipeline(&project_name, id) {
+            match run_pipeline(&project_name, id, branch.as_deref(), variables).await {
                 Ok(run) => {
-                    println!("Pipeline started successfully!");
+                    println!("{}", "✅ Pipeline started successfully".green());
                     display_build_details(&run);
                 }
                 Err(e) => {
-                    eprintln!("❌ Failed to start pipeline: {e}");
+                    eprintln!("{}", format!("❌ Failed to start pipeline: {e}").red());
                     return Err(e);
                 }
             }
