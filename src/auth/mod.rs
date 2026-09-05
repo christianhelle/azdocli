@@ -5,7 +5,7 @@ use crate::auth::url::{default_base_url, normalize_base_url, parse_organization_
 use crate::config::get_config_dir;
 use anyhow::{anyhow, Result};
 use colored::Colorize;
-use dialoguer::{Input, Password};
+use dialoguer::Input;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
@@ -167,6 +167,15 @@ fn save_pat(pat: &str, base_url: &str) -> Result<()> {
     Ok(())
 }
 
+/// Rejects a blank Personal Access Token so the user is re-prompted instead of
+/// storing an empty credential.
+fn validate_pat(pat: &str) -> Result<(), &'static str> {
+    if pat.trim().is_empty() {
+        return Err("PAT cannot be empty");
+    }
+    Ok(())
+}
+
 fn show_pat_instructions() {
     println!();
     println!("{}", "Create a Personal Access Token".bold());
@@ -213,10 +222,11 @@ pub async fn login(profile: Option<&str>) -> Result<()> {
             .interact_text()?;
     }
 
-    let pat: String = Password::new()
+    let pat: String = Input::new()
         .with_prompt("Personal Access Token (PAT)")
-        .with_confirmation("Confirm PAT", "PATs don't match")
-        .interact()?;
+        .validate_with(|pat: &String| validate_pat(pat))
+        .interact_text()?;
+    let pat = pat.trim().to_string();
     println!("Validating credentials...");
 
     match profile {
@@ -288,5 +298,25 @@ pub fn get_credentials_for(profile: Option<&str>) -> Result<Credentials> {
     match profile {
         Some(name) => load_profile(name),
         None => get_credentials(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_pat_accepts_a_token() {
+        assert!(validate_pat("abc123").is_ok());
+    }
+
+    #[test]
+    fn validate_pat_rejects_an_empty_token() {
+        assert!(validate_pat("").is_err());
+    }
+
+    #[test]
+    fn validate_pat_rejects_a_whitespace_only_token() {
+        assert!(validate_pat("   ").is_err());
     }
 }
