@@ -167,6 +167,15 @@ fn save_pat(pat: &str, base_url: &str) -> Result<()> {
     Ok(())
 }
 
+/// Rejects a blank Personal Access Token so the user is re-prompted instead of
+/// storing an empty credential.
+fn validate_pat(pat: &String) -> Result<(), &'static str> {
+    if pat.trim().is_empty() {
+        return Err("PAT cannot be empty");
+    }
+    Ok(())
+}
+
 fn show_pat_instructions() {
     println!();
     println!("{}", "Create a Personal Access Token".bold());
@@ -288,5 +297,25 @@ pub fn get_credentials_for(profile: Option<&str>) -> Result<Credentials> {
     match profile {
         Some(name) => load_profile(name),
         None => get_credentials(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_pat_accepts_a_token() {
+        assert!(validate_pat(&"abc123".to_string()).is_ok());
+    }
+
+    #[test]
+    fn validate_pat_rejects_an_empty_token() {
+        assert!(validate_pat(&String::new()).is_err());
+    }
+
+    #[test]
+    fn validate_pat_rejects_a_whitespace_only_token() {
+        assert!(validate_pat(&"   ".to_string()).is_err());
     }
 }
