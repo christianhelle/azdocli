@@ -2,6 +2,7 @@
 
 [![Build](https://github.com/christianhelle/azdocli/actions/workflows/build.yml/badge.svg)](https://github.com/christianhelle/azdocli/actions/workflows/build.yml)
 [![Security Audit](https://github.com/christianhelle/azdocli/actions/workflows/security-audit.yml/badge.svg)](https://github.com/christianhelle/azdocli/actions/workflows/security-audit.yml)
+![Crates.io Version](https://img.shields.io/crates/v/azdocli)
 
 CLI tool for interacting with Azure DevOps.
 
