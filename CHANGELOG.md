@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased Changes]
+## [0.6.2](https://github.com/christianhelle/azdocli/releases/tag/0.6.2) (2026-09-08)
 
 ### Features
 - Queue pipeline runs and read run logs and artifacts ([#123](https://github.com/christianhelle/azdocli/pull/123)) ([@christianhelle](https://github.com/christianhelle/))
@@ -18,9 +18,9 @@
 
 ### Merged Pull Requests
 - Fix GitHub Pages deployment for docs/web site ([#119](https://github.com/christianhelle/azdocli/pull/119)) (@Copilot)
-- Add --description-file support for PR creation ([#118](https://github.com/christianhelle/azdocli/pull/118)) ([@christianhelle](https://github.com/christianhelle/))
 
 ### Features
+- Add --description-file support for PR creation ([#118](https://github.com/christianhelle/azdocli/pull/118)) ([@christianhelle](https://github.com/christianhelle/))
 - Add `repos pr update` command ([#120](https://github.com/christianhelle/azdocli/pull/120)) ([@christianhelle](https://github.com/christianhelle/))
 
 
