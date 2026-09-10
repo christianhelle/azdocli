@@ -516,7 +516,7 @@ fn display_work_item(work_item: &models::WorkItem) {
     }
 }
 
-fn display_work_items_list(heading: &str, work_items: &[models::WorkItem]) {
+pub(crate) fn display_work_items_list(heading: &str, work_items: &[models::WorkItem]) {
     println!();
     println!("📋 {heading} ({} items)", work_items.len());
     let separator = "=".repeat(80);
@@ -667,7 +667,7 @@ fn build_wiql_query(
     wiql_query
 }
 
-fn display_empty_work_items_table(heading: &str) {
+pub(crate) fn display_empty_work_items_table(heading: &str) {
     println!();
     println!("📋 {heading} (0 items)");
     let separator = "=".repeat(80);

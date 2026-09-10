@@ -697,6 +697,25 @@ azdocli repos pr reviewers vote --repo MyRepository --id 123 --vote wait-for-aut
           </div>
 
           <div class="command-example">
+            <h4>Manage Linked Work Items</h4>
+            <pre><code># List the linked work items with their type, state and title
+azdocli repos pr work-item list --repo MyRepository --id 123
+
+# Link one or more work items, repeating the flag or separating IDs with commas
+azdocli repos pr work-item add --repo MyRepository --id 123 --work-item 42 --work-item 43
+azdocli repos pr work-item add --repo MyRepository --id 123 --work-item 42,43
+
+# Unlink a work item
+azdocli repos pr work-item remove --repo MyRepository --id 123 --work-item 42</code></pre>
+            <p>
+              Work items can also be linked when the pull request is created,
+              with <code>repos pr create --work-item</code>. A work item that is
+              already linked is reported and skipped, so <code>add</code> can be
+              run again safely.
+            </p>
+          </div>
+
+          <div class="command-example">
             <h4>Read and Write Comments</h4>
             <pre><code># Read the discussion (system-generated threads are hidden unless --all is given)
 azdocli repos pr threads --repo MyRepository --id 123

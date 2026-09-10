@@ -499,6 +499,26 @@ azdocli repos pr reviewers vote --repo MyRepository --id 123 --vote wait-for-aut
 
 Valid votes are `approve`, `approve-with-suggestions`, `reset`, `wait-for-author` and `reject`.
 
+##### Manage Linked Work Items
+
+Work items can also be linked when the pull request is created, with
+`repos pr create --work-item`.
+
+```sh
+# List the linked work items with their type, state and title
+azdocli repos pr work-item list --repo MyRepository --id 123
+
+# Link one or more work items, repeating the flag or separating IDs with commas
+azdocli repos pr work-item add --repo MyRepository --id 123 --work-item 42 --work-item 43
+azdocli repos pr work-item add --repo MyRepository --id 123 --work-item 42,43
+
+# Unlink a work item
+azdocli repos pr work-item remove --repo MyRepository --id 123 --work-item 42
+```
+
+A work item that is already linked is reported and skipped, so `add` can be run
+again safely.
+
 ##### Read and Write Comments
 
 ```sh

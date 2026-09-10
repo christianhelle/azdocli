@@ -12,6 +12,7 @@ mod list;
 mod reviewers;
 mod show;
 mod update;
+mod work_items;
 
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::{get_credentials, Credentials};
@@ -243,6 +244,11 @@ pub enum PullRequestsSubCommands {
         #[clap(subcommand)]
         subcommand: reviewers::ReviewersSubCommands,
     },
+    /// Manage the work items linked to a pull request
+    WorkItem {
+        #[clap(subcommand)]
+        subcommand: work_items::WorkItemSubCommands,
+    },
     /// Abandon a pull request
     Abandon {
         /// Team project name (optional if default project is set)
@@ -426,6 +432,9 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
         PullRequestsSubCommands::Reviewers { subcommand } => {
             reviewers::handle_command(subcommand).await?;
         }
+        PullRequestsSubCommands::WorkItem { subcommand } => {
+            work_items::handle_command(subcommand).await?;
+        }
         PullRequestsSubCommands::Abandon {
             project,
             repo,
@@ -448,6 +457,7 @@ struct PrContext {
     creds: Credentials,
     client: git::Client,
     project: String,
+    project_id: String,
     repository_id: String,
     pull_request_id: i32,
 }
@@ -461,11 +471,15 @@ impl PrContext {
         let factory = CredentialClientFactory::new(&creds)?;
         let client = factory.build_git();
         let repository = crate::repos::get_repo(&project, repo).await?;
+        let project_id = repository.project.id.clone().ok_or_else(|| {
+            anyhow::anyhow!("Azure DevOps did not report an ID for project '{project}'")
+        })?;
 
         Ok(Self {
             creds,
             client,
             project,
+            project_id,
             repository_id: repository.id,
             pull_request_id: 0,
         })
@@ -731,6 +745,130 @@ mod tests {
             "squash",
         ])
         .is_ok());
+    }
+
+    #[test]
+    fn work_item_list_parses_the_repository_and_pull_request() {
+        let command = parse(&[
+            "work-item",
+            "list",
+            "--project",
+            "p",
+            "--repo",
+            "r",
+            "--id",
+            "123",
+        ])
+        .unwrap();
+
+        let PullRequestsSubCommands::WorkItem { subcommand } = command else {
+            panic!("expected WorkItem");
+        };
+        let work_items::WorkItemSubCommands::List { project, repo, id } = subcommand else {
+            panic!("expected List");
+        };
+        assert_eq!(project.as_deref(), Some("p"));
+        assert_eq!(repo, "r");
+        assert_eq!(id, "123");
+    }
+
+    #[test]
+    fn work_item_list_requires_the_pull_request_id() {
+        assert!(parse(&["work-item", "list", "--repo", "r"]).is_err());
+    }
+
+    #[test]
+    fn work_item_add_accepts_repeated_and_comma_separated_ids() {
+        for args in [
+            vec![
+                "work-item",
+                "add",
+                "--repo",
+                "r",
+                "--id",
+                "1",
+                "--work-item",
+                "42",
+                "--work-item",
+                "43",
+            ],
+            vec![
+                "work-item",
+                "add",
+                "--repo",
+                "r",
+                "--id",
+                "1",
+                "--work-item",
+                "42,43",
+            ],
+        ] {
+            let command = parse(&args).unwrap();
+
+            let PullRequestsSubCommands::WorkItem { subcommand } = command else {
+                panic!("expected WorkItem");
+            };
+            let work_items::WorkItemSubCommands::Add { work_item, .. } = subcommand else {
+                panic!("expected Add");
+            };
+            assert_eq!(work_item, vec![42, 43]);
+        }
+    }
+
+    #[test]
+    fn work_item_add_requires_at_least_one_work_item() {
+        assert!(parse(&["work-item", "add", "--repo", "r", "--id", "1"]).is_err());
+    }
+
+    #[test]
+    fn work_item_remove_accepts_repeated_and_comma_separated_ids() {
+        for args in [
+            vec![
+                "work-item",
+                "remove",
+                "--repo",
+                "r",
+                "--id",
+                "1",
+                "--work-item",
+                "42",
+                "--work-item",
+                "43",
+            ],
+            vec![
+                "work-item",
+                "remove",
+                "--repo",
+                "r",
+                "--id",
+                "1",
+                "--work-item",
+                "42,43",
+            ],
+        ] {
+            let command = parse(&args).unwrap();
+
+            let PullRequestsSubCommands::WorkItem { subcommand } = command else {
+                panic!("expected WorkItem");
+            };
+            let work_items::WorkItemSubCommands::Remove {
+                repo,
+                id,
+                work_item,
+                ..
+            } = subcommand
+            else {
+                panic!("expected Remove");
+            };
+            assert_eq!(repo, "r");
+            assert_eq!(id, "1");
+            assert_eq!(work_item, vec![42, 43]);
+        }
+    }
+
+    #[test]
+    fn work_item_remove_requires_at_least_one_work_item() {
+        assert!(parse(&["work-item", "remove", "--repo", "r", "--id", "1"]).is_err());
     }
 
     #[test]
