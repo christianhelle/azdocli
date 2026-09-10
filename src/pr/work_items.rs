@@ -9,7 +9,9 @@
 use super::PrContext;
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use anyhow::{anyhow, Result};
-use azure_devops_rust_api::wit::models::{json_patch_operation::Op, JsonPatchOperation, WorkItem};
+use azure_devops_rust_api::wit::models::{
+    json_patch_operation::Op, JsonPatchOperation, WorkItem, WorkItemRelation,
+};
 use clap::Subcommand;
 use colored::Colorize;
 use serde_json::json;
@@ -48,6 +50,24 @@ pub enum WorkItemSubCommands {
         #[clap(long, required = true, value_delimiter = ',')]
         work_item: Vec<i32>,
     },
+    /// Unlink one or more work items from a pull request
+    Remove {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+
+        /// Name of the repository containing the pull request
+        #[clap(short, long)]
+        repo: String,
+
+        /// ID of the pull request
+        #[clap(short, long)]
+        id: String,
+
+        /// ID of a work item to unlink (repeat, or separate with commas)
+        #[clap(long, required = true, value_delimiter = ',')]
+        work_item: Vec<i32>,
+    },
 }
 
 /// Routes work item subcommands to their handlers.
@@ -62,6 +82,12 @@ pub(super) async fn handle_command(subcommand: &WorkItemSubCommands) -> Result<(
             id,
             work_item,
         } => add_work_items(project.as_deref(), repo, id, work_item).await,
+        WorkItemSubCommands::Remove {
+            project,
+            repo,
+            id,
+            work_item,
+        } => remove_work_items(project.as_deref(), repo, id, work_item).await,
     }
 }
 
@@ -85,6 +111,37 @@ fn add_relation_patch(artifact_url: &str) -> Vec<JsonPatchOperation> {
             "attributes": { "name": "Pull Request" },
         })),
     }]
+}
+
+/// Builds the patch that detaches the relation at `index` from a work item.
+fn remove_relation_patch(index: usize) -> Vec<JsonPatchOperation> {
+    vec![JsonPatchOperation {
+        from: None,
+        op: Some(Op::Remove),
+        path: Some(format!("/relations/{index}")),
+        value: None,
+    }]
+}
+
+/// Finds the position of the artifact link pointing at `artifact_url`.
+///
+/// Azure DevOps does not guarantee the casing of the GUIDs it stores, and links
+/// created by older clients record the separators unencoded, so both forms are
+/// normalized before comparing.
+fn find_artifact_relation_index(
+    relations: &[WorkItemRelation],
+    artifact_url: &str,
+) -> Option<usize> {
+    let wanted = normalize_artifact_url(artifact_url);
+
+    relations.iter().position(|relation| {
+        relation.link.rel == "ArtifactLink" && normalize_artifact_url(&relation.link.url) == wanted
+    })
+}
+
+/// Reduces an artifact URI to a form that can be compared for equality.
+fn normalize_artifact_url(url: &str) -> String {
+    url.to_lowercase().replace("%2f", "/")
 }
 
 /// Links work items to a pull request by adding an artifact link to each one.
@@ -178,10 +235,61 @@ async fn fetch_work_items(ctx: &PrContext, ids: &[i32]) -> Result<Vec<WorkItem>>
     Ok(work_items)
 }
 
+/// Unlinks work items from a pull request by removing their artifact link.
+async fn remove_work_items(
+    project: Option<&str>,
+    repo: &str,
+    id: &str,
+    work_items: &[i32],
+) -> Result<()> {
+    let ctx = PrContext::new(project, repo, id).await?;
+    let client = CredentialClientFactory::new(&ctx.creds)?.build_wit();
+    let artifact_url = artifact_link_url(&ctx.project_id, &ctx.repository_id, ctx.pull_request_id);
+
+    for work_item in work_items {
+        // Relations are only returned when they are explicitly expanded.
+        let existing = client
+            .work_items_client()
+            .get_work_item(&ctx.creds.organization, *work_item, &ctx.project)
+            .expand("Relations")
+            .await
+            .map_err(|e| anyhow!("Fetching work item {work_item}: {e}"))?;
+
+        let Some(index) = find_artifact_relation_index(&existing.relations, &artifact_url) else {
+            return Err(anyhow!(
+                "Work item {work_item} is not linked to pull request {}",
+                ctx.pull_request_id
+            ));
+        };
+
+        client
+            .work_items_client()
+            .update(
+                &ctx.creds.organization,
+                remove_relation_patch(index),
+                *work_item,
+                &ctx.project,
+            )
+            .await
+            .map_err(|e| anyhow!("Unlinking work item {work_item} from the pull request: {e}"))?;
+
+        println!(
+            "{}",
+            format!(
+                "✅ Unlinked work item {work_item} from pull request {}",
+                ctx.pull_request_id
+            )
+            .green()
+        );
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use azure_devops_rust_api::wit::models::json_patch_operation::Op;
+    use azure_devops_rust_api::wit::models::{json_patch_operation::Op, Link, WorkItemRelation};
 
     #[test]
     fn artifact_link_url_encodes_the_separators() {
@@ -189,6 +297,64 @@ mod tests {
             artifact_link_url("proj-guid", "repo-guid", 123),
             "vstfs:///Git/PullRequestId/proj-guid%2Frepo-guid%2F123"
         );
+    }
+
+    fn relation(rel: &str, url: &str) -> WorkItemRelation {
+        WorkItemRelation::new(Link::new(json!({}), rel.to_string(), url.to_string()))
+    }
+
+    #[test]
+    fn find_artifact_relation_index_locates_the_pull_request_link() {
+        let relations = vec![
+            relation("AttachedFile", "https://example.test/attachments/a"),
+            relation("ArtifactLink", "vstfs:///Git/PullRequestId/p%2Fr%2F1"),
+        ];
+
+        assert_eq!(
+            find_artifact_relation_index(&relations, "vstfs:///Git/PullRequestId/p%2Fr%2F1"),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn find_artifact_relation_index_ignores_casing_and_separator_encoding() {
+        // Azure DevOps does not guarantee the casing of the GUIDs it stores, and
+        // older links are recorded with unencoded separators.
+        let relations = vec![relation(
+            "ArtifactLink",
+            "vstfs:///Git/PullRequestId/ABC/DEF/1",
+        )];
+
+        assert_eq!(
+            find_artifact_relation_index(&relations, "vstfs:///Git/PullRequestId/abc%2Fdef%2F1"),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn find_artifact_relation_index_does_not_match_another_pull_request() {
+        let relations = vec![
+            relation("ArtifactLink", "vstfs:///Git/PullRequestId/p%2Fr%2F2"),
+            relation(
+                "System.LinkTypes.Related",
+                "vstfs:///Git/PullRequestId/p%2Fr%2F1",
+            ),
+        ];
+
+        assert_eq!(
+            find_artifact_relation_index(&relations, "vstfs:///Git/PullRequestId/p%2Fr%2F1"),
+            None
+        );
+    }
+
+    #[test]
+    fn remove_relation_patch_removes_the_relation_at_the_index() {
+        let patch = remove_relation_patch(2);
+
+        assert_eq!(patch.len(), 1);
+        assert_eq!(patch[0].op, Some(Op::Remove));
+        assert_eq!(patch[0].path.as_deref(), Some("/relations/2"));
+        assert!(patch[0].value.is_none());
     }
 
     #[test]
