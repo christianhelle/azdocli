@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased Changes]
+
+### Features
+- Link work items to an existing pull request ([#129](https://github.com/christianhelle/azdocli/pull/129)) ([@christianhelle](https://github.com/christianhelle/))
+
+
 ## [0.6.2](https://github.com/christianhelle/azdocli/releases/tag/0.6.2) (2026-09-08)
 
 ### Features
