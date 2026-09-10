@@ -821,6 +821,57 @@ mod tests {
     }
 
     #[test]
+    fn work_item_remove_accepts_repeated_and_comma_separated_ids() {
+        for args in [
+            vec![
+                "work-item",
+                "remove",
+                "--repo",
+                "r",
+                "--id",
+                "1",
+                "--work-item",
+                "42",
+                "--work-item",
+                "43",
+            ],
+            vec![
+                "work-item",
+                "remove",
+                "--repo",
+                "r",
+                "--id",
+                "1",
+                "--work-item",
+                "42,43",
+            ],
+        ] {
+            let command = parse(&args).unwrap();
+
+            let PullRequestsSubCommands::WorkItem { subcommand } = command else {
+                panic!("expected WorkItem");
+            };
+            let work_items::WorkItemSubCommands::Remove {
+                repo,
+                id,
+                work_item,
+                ..
+            } = subcommand
+            else {
+                panic!("expected Remove");
+            };
+            assert_eq!(repo, "r");
+            assert_eq!(id, "1");
+            assert_eq!(work_item, vec![42, 43]);
+        }
+    }
+
+    #[test]
+    fn work_item_remove_requires_at_least_one_work_item() {
+        assert!(parse(&["work-item", "remove", "--repo", "r", "--id", "1"]).is_err());
+    }
+
+    #[test]
     fn reviewers_add_requires_at_least_one_reviewer() {
         assert!(parse(&["reviewers", "add", "--repo", "r", "--id", "1"]).is_err());
 
