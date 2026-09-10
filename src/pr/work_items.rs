@@ -156,6 +156,27 @@ async fn add_work_items(
     let artifact_url = artifact_link_url(&ctx.project_id, &ctx.repository_id, ctx.pull_request_id);
 
     for work_item in work_items {
+        // Azure DevOps rejects a duplicate relation outright, so an item that is
+        // already linked is skipped rather than failing the whole command.
+        let existing = client
+            .work_items_client()
+            .get_work_item(&ctx.creds.organization, *work_item, &ctx.project)
+            .expand("Relations")
+            .await
+            .map_err(|e| anyhow!("Fetching work item {work_item}: {e}"))?;
+
+        if find_artifact_relation_index(&existing.relations, &artifact_url).is_some() {
+            println!(
+                "{}",
+                format!(
+                    "⚠ Work item {work_item} is already linked to pull request {}",
+                    ctx.pull_request_id
+                )
+                .yellow()
+            );
+            continue;
+        }
+
         client
             .work_items_client()
             .update(
@@ -345,6 +366,21 @@ mod tests {
             find_artifact_relation_index(&relations, "vstfs:///Git/PullRequestId/p%2Fr%2F1"),
             None
         );
+    }
+
+    #[test]
+    fn a_link_added_by_the_add_patch_is_found_again() {
+        // The URL written on add and the URL matched on remove have to agree,
+        // otherwise a link could be created but never detected or deleted.
+        let url = artifact_link_url("proj-guid", "repo-guid", 123);
+        let patch = add_relation_patch(&url);
+        let written = patch[0].value.as_ref().unwrap();
+        let relations = vec![relation(
+            written["rel"].as_str().unwrap(),
+            written["url"].as_str().unwrap(),
+        )];
+
+        assert_eq!(find_artifact_relation_index(&relations, &url), Some(0));
     }
 
     #[test]
