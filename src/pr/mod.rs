@@ -12,6 +12,7 @@ mod list;
 mod reviewers;
 mod show;
 mod update;
+mod work_items;
 
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::{get_credentials, Credentials};
@@ -243,6 +244,11 @@ pub enum PullRequestsSubCommands {
         #[clap(subcommand)]
         subcommand: reviewers::ReviewersSubCommands,
     },
+    /// Manage the work items linked to a pull request
+    WorkItem {
+        #[clap(subcommand)]
+        subcommand: work_items::WorkItemSubCommands,
+    },
     /// Abandon a pull request
     Abandon {
         /// Team project name (optional if default project is set)
@@ -425,6 +431,9 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
         }
         PullRequestsSubCommands::Reviewers { subcommand } => {
             reviewers::handle_command(subcommand).await?;
+        }
+        PullRequestsSubCommands::WorkItem { subcommand } => {
+            work_items::handle_command(subcommand).await?;
         }
         PullRequestsSubCommands::Abandon {
             project,
@@ -731,6 +740,34 @@ mod tests {
             "squash",
         ])
         .is_ok());
+    }
+
+    #[test]
+    fn work_item_list_parses_the_repository_and_pull_request() {
+        let command = parse(&[
+            "work-item",
+            "list",
+            "--project",
+            "p",
+            "--repo",
+            "r",
+            "--id",
+            "123",
+        ])
+        .unwrap();
+
+        let PullRequestsSubCommands::WorkItem { subcommand } = command else {
+            panic!("expected WorkItem");
+        };
+        let work_items::WorkItemSubCommands::List { project, repo, id } = subcommand;
+        assert_eq!(project.as_deref(), Some("p"));
+        assert_eq!(repo, "r");
+        assert_eq!(id, "123");
+    }
+
+    #[test]
+    fn work_item_list_requires_the_pull_request_id() {
+        assert!(parse(&["work-item", "list", "--repo", "r"]).is_err());
     }
 
     #[test]
