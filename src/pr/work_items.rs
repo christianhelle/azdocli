@@ -144,6 +144,21 @@ fn normalize_artifact_url(url: &str) -> String {
     url.to_lowercase().replace("%2f", "/")
 }
 
+/// Describes the work items that turned out not to be linked at all.
+fn unlinked_message(work_items: &[i32], pull_request_id: i32) -> String {
+    let ids = work_items
+        .iter()
+        .map(i32::to_string)
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    if work_items.len() == 1 {
+        format!("Work item {ids} is not linked to pull request {pull_request_id}")
+    } else {
+        format!("Work items {ids} are not linked to pull request {pull_request_id}")
+    }
+}
+
 /// Links work items to a pull request by adding an artifact link to each one.
 async fn add_work_items(
     project: Option<&str>,
@@ -267,6 +282,10 @@ async fn remove_work_items(
     let client = CredentialClientFactory::new(&ctx.creds)?.build_wit();
     let artifact_url = artifact_link_url(&ctx.project_id, &ctx.repository_id, ctx.pull_request_id);
 
+    // A work item that is not linked should not stop the ones after it from
+    // being unlinked, so the misses are collected and reported at the end.
+    let mut unlinked = Vec::new();
+
     for work_item in work_items {
         // Relations are only returned when they are explicitly expanded.
         let existing = client
@@ -277,10 +296,16 @@ async fn remove_work_items(
             .map_err(|e| anyhow!("Fetching work item {work_item}: {e}"))?;
 
         let Some(index) = find_artifact_relation_index(&existing.relations, &artifact_url) else {
-            return Err(anyhow!(
-                "Work item {work_item} is not linked to pull request {}",
-                ctx.pull_request_id
-            ));
+            eprintln!(
+                "{}",
+                format!(
+                    "⚠ Work item {work_item} is not linked to pull request {}",
+                    ctx.pull_request_id
+                )
+                .yellow()
+            );
+            unlinked.push(*work_item);
+            continue;
         };
 
         client
@@ -302,6 +327,10 @@ async fn remove_work_items(
             )
             .green()
         );
+    }
+
+    if !unlinked.is_empty() {
+        return Err(anyhow!(unlinked_message(&unlinked, ctx.pull_request_id)));
     }
 
     Ok(())
@@ -381,6 +410,18 @@ mod tests {
         )];
 
         assert_eq!(find_artifact_relation_index(&relations, &url), Some(0));
+    }
+
+    #[test]
+    fn unlinked_message_reads_naturally_for_one_and_for_many() {
+        assert_eq!(
+            unlinked_message(&[42], 123),
+            "Work item 42 is not linked to pull request 123"
+        );
+        assert_eq!(
+            unlinked_message(&[42, 43], 123),
+            "Work items 42, 43 are not linked to pull request 123"
+        );
     }
 
     #[test]
