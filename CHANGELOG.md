@@ -2,6 +2,9 @@
 
 ## [Unreleased Changes]
 
+### Merged Pull Requests
+- Use the app icon for the Windows executable and snap package ([#131](https://github.com/christianhelle/azdocli/pull/131)) ([@christianhelle](https://github.com/christianhelle/))
+
 ### Features
 - Link work items to an existing pull request ([#129](https://github.com/christianhelle/azdocli/pull/129)) ([@christianhelle](https://github.com/christianhelle/))
 
