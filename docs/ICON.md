@@ -5,7 +5,7 @@ This project includes application icon support for Windows, macOS, and Linux.
 ## Icon Files
 
 - **images/icon.png** - Source icon file (PNG format)
-- **images/icon.ico** - Windows icon file (ICO format, auto-generated from PNG with white background)
+- **images/icon.ico** - Windows icon file (ICO format, generated from the PNG with a transparent background)
 
 ## Platform Support
 
@@ -41,8 +41,6 @@ The `build.rs` script automatically:
 3. Compiles the icon resource into the binary
 
 No manual steps are required - just run `cargo build` or `cargo build --release`.
-
-**Note:** The ICO file uses a white background instead of transparency to prevent black appearance when zooming in Windows Explorer.
 
 ## Updating the Icon
 
