@@ -10,7 +10,7 @@ This project includes application icon support for Windows, macOS, and Linux.
 ## Platform Support
 
 ### Windows
-The Windows executable embeds `images/icon.ico` at build time via the `build.rs` script using `winres`. The icon will be visible in:
+The Windows executable embeds `images/icon.ico` at build time via the `build.rs` script using `winresource`. The icon will be visible in:
 - Windows Explorer file listings
 - Task Manager
 - Taskbar when the application runs
@@ -37,7 +37,7 @@ For Snap packages, the icon is already configured in `snapcraft.yaml`.
 
 The `build.rs` script automatically:
 1. Detects when building for Windows
-2. Uses `winres` to embed `images/icon.ico` into the executable
+2. Uses `winresource` to embed `images/icon.ico` into the executable
 3. Compiles the icon resource into the binary
 
 No manual steps are required - just run `cargo build` or `cargo build --release`.
@@ -111,4 +111,4 @@ To update the application icon:
 
 ## Dependencies
 
-- **winres** (build dependency) - Windows resource compiler for Rust
+- **winresource** (build dependency) - Windows resource compiler for Rust
