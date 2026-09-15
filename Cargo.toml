@@ -61,7 +61,7 @@ futures = "0.3"
 tempfile = "3.10"
 
 [build-dependencies]
-winres = "0.1"
+winresource = "0.1.31"
 
 [profile.release]
 opt-level = "z"
