@@ -1,9 +1,9 @@
 fn main() {
-    #[cfg(windows)]
-    {
-        let mut res = winresource::WindowsResource::new();
-        res.set_icon("images/icon.ico");
-        res.compile()
+    // Only PE executables carry an icon resource; check the target, not the host, so cross-compiles work.
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        winresource::WindowsResource::new()
+            .set_icon("images/icon.ico")
+            .compile()
             .expect("Failed to compile Windows icon resource");
     }
 }
