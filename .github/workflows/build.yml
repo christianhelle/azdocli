@@ -6,6 +6,8 @@ on:
       - ".github/workflows/build.yml"
       - "Cargo.toml"
       - "src/**/*.rs"
+      - "build.rs"
+      - "images/icon.ico"
   workflow_dispatch:
 
 env:
