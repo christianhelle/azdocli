@@ -6,6 +6,7 @@
 - Use the app icon for the Windows executable and snap package ([#131](https://github.com/christianhelle/azdocli/pull/131)) ([@christianhelle](https://github.com/christianhelle/))
 
 ### Features
+- Create work items with a parent ([#132](https://github.com/christianhelle/azdocli/pull/132)) ([@christianhelle](https://github.com/christianhelle/))
 - Link work items to an existing pull request ([#129](https://github.com/christianhelle/azdocli/pull/129)) ([@christianhelle](https://github.com/christianhelle/))
 
 
