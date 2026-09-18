@@ -101,6 +101,16 @@ pub fn web_work_item_url(
     )
 }
 
+/// Builds the REST API URL for a work item, as used by work item relations.
+pub fn api_work_item_url(base_url: &str, organization: &str, work_item_id: i32) -> String {
+    format!(
+        "{}/{}/_apis/wit/workItems/{}",
+        normalize_base_url(base_url),
+        percent_encode_path_segment(organization),
+        work_item_id
+    )
+}
+
 /// Builds the web URL for a pull request.
 pub fn web_pull_request_url(
     base_url: &str,
@@ -274,6 +284,22 @@ mod tests {
         assert_eq!(
             web_work_item_url("https://dev.azure.com", "mycompany", "MyProject", "42"),
             "https://dev.azure.com/mycompany/MyProject/_workitems/edit/42"
+        );
+    }
+
+    #[test]
+    fn api_work_item_url_points_at_the_organization_scoped_api() {
+        assert_eq!(
+            api_work_item_url("https://dev.azure.com", "mycompany", 42),
+            "https://dev.azure.com/mycompany/_apis/wit/workItems/42"
+        );
+    }
+
+    #[test]
+    fn api_work_item_url_normalizes_base_and_encodes_organization() {
+        assert_eq!(
+            api_work_item_url("https://tfs.mycompany.com/tfs/", "my company", 7),
+            "https://tfs.mycompany.com/tfs/my%20company/_apis/wit/workItems/7"
         );
     }
 
