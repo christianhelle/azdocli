@@ -979,7 +979,10 @@ azdocli boards work-item create bug --title "Fix login issue" --description "Use
 azdocli boards work-item create task --title "Update documentation"
 azdocli boards work-item create user-story --title "User registration feature"
 azdocli boards work-item create feature --title "New reporting dashboard"
-azdocli boards work-item create epic --title "Mobile application development"</code></pre>
+azdocli boards work-item create epic --title "Mobile application development"
+
+# Create a task under an existing work item, such as a product backlog item
+azdocli boards work-item create task --title "Write integration tests" --parent 1234</code></pre>
             <p>Supported types: bug, task, user-story, feature, epic</p>
           </div>
 

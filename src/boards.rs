@@ -1,13 +1,13 @@
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
-use crate::auth::url::web_work_item_url;
+use crate::auth::url::{api_work_item_url, web_work_item_url};
 use crate::project::get_project_or_default;
 use crate::text::escape_control_characters;
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::wit::models::json_patch_operation::Op;
 use azure_devops_rust_api::wit::models::JsonPatchOperation;
 use azure_devops_rust_api::wit::{self, models};
-use clap::Subcommand;
+use clap::{Subcommand, ValueEnum};
 use colored::Colorize;
 use serde_json::json;
 
@@ -32,14 +32,13 @@ pub enum BoardsSubCommands {
     },
 }
 
-#[derive(Subcommand, Clone, Debug)]
+#[derive(ValueEnum, Clone, Debug)]
 pub enum WorkItemType {
     /// Bug work item type
     Bug,
     /// Task work item type
     Task,
     /// User Story work item type
-    #[clap(name = "user-story")]
     UserStory,
     /// Feature work item type
     Feature,
@@ -80,7 +79,7 @@ pub enum WorkItemSubCommands {
     /// Create a new work item
     Create {
         /// Work item type
-        #[clap(subcommand)]
+        #[clap(value_enum)]
         work_item_type: WorkItemType,
         /// Work item title
         #[clap(short, long)]
@@ -88,6 +87,9 @@ pub enum WorkItemSubCommands {
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
+        /// ID of the parent work item, e.g. the product backlog item a task belongs to
+        #[clap(long, value_parser = clap::value_parser!(i32).range(1..))]
+        parent: Option<i32>,
     },
     /// Delete a work item
     Delete {
@@ -307,24 +309,47 @@ async fn get_work_item(project: &str, id: &str) -> Result<models::WorkItem> {
     }
 }
 
+/// Builds the patch that creates a work item, optionally as a child of the
+/// work item at `parent_url`.
+fn create_work_item_patch(title: &str, parent_url: Option<&str>) -> Vec<JsonPatchOperation> {
+    let mut patch = vec![JsonPatchOperation {
+        from: None,
+        op: Some(Op::Add),
+        path: Some("/fields/System.Title".to_owned()),
+        value: Some(json!(title)),
+    }];
+
+    if let Some(parent_url) = parent_url {
+        patch.push(JsonPatchOperation {
+            from: None,
+            op: Some(Op::Add),
+            path: Some("/relations/-".to_owned()),
+            value: Some(json!({
+                "rel": "System.LinkTypes.Hierarchy-Reverse",
+                "url": parent_url,
+            })),
+        });
+    }
+
+    patch
+}
+
 async fn create_work_item(
     project: &str,
     work_item_type: &WorkItemType,
     title: &str,
+    parent: Option<i32>,
 ) -> Result<models::WorkItem> {
     match get_credentials() {
         Ok(creds) => {
             let client = create_wit_client()?;
+            let parent_url =
+                parent.map(|id| api_work_item_url(&creds.base_url, &creds.organization, id));
             let work_item = client
                 .work_items_client()
                 .create(
                     creds.organization.clone(),
-                    vec![JsonPatchOperation {
-                        from: None,
-                        op: Some(Op::Add),
-                        path: Some("/fields/System.Title".to_owned()),
-                        value: Some(json!(title)),
-                    }],
+                    create_work_item_patch(title, parent_url.as_deref()),
                     project.to_string(),
                     match work_item_type {
                         WorkItemType::Bug => "Bug",
@@ -751,15 +776,19 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
             work_item_type,
             title,
             project,
+            parent,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
             println!("Creating a {work_item_type:?} work item in project: {project_name}");
 
-            match create_work_item(&project_name, work_item_type, title).await {
+            match create_work_item(&project_name, work_item_type, title, *parent).await {
                 Ok(work_item) => {
                     println!("{}", "✅ Work item created successfully!".green());
                     println!("Created work item with ID: {}", work_item.id);
                     println!("Title: {title}");
+                    if let Some(parent) = parent {
+                        println!("Parent: #{parent}");
+                    }
                     if let Some(fields) = work_item.fields.as_object() {
                         if let Some(desc) =
                             fields.get("System.Description").and_then(|v| v.as_str())
@@ -930,6 +959,113 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
+
+    #[derive(Parser)]
+    struct TestCli {
+        #[clap(subcommand)]
+        command: WorkItemSubCommands,
+    }
+
+    fn parse(args: &[&str]) -> Result<WorkItemSubCommands, clap::Error> {
+        TestCli::try_parse_from(std::iter::once("work-item").chain(args.iter().copied()))
+            .map(|cli| cli.command)
+    }
+
+    #[test]
+    fn create_accepts_a_parent_work_item() {
+        let command =
+            parse(&["create", "--title", "Write tests", "--parent", "42", "task"]).unwrap();
+
+        let WorkItemSubCommands::Create {
+            work_item_type,
+            parent,
+            ..
+        } = command
+        else {
+            panic!("expected Create");
+        };
+        assert!(matches!(work_item_type, WorkItemType::Task));
+        assert_eq!(parent, Some(42));
+    }
+
+    #[test]
+    fn create_accepts_the_type_before_its_options() {
+        let command = parse(&[
+            "create",
+            "user-story",
+            "--title",
+            "Sign up",
+            "--parent",
+            "42",
+        ])
+        .unwrap();
+
+        let WorkItemSubCommands::Create {
+            work_item_type,
+            title,
+            parent,
+            ..
+        } = command
+        else {
+            panic!("expected Create");
+        };
+        assert!(matches!(work_item_type, WorkItemType::UserStory));
+        assert_eq!(title, "Sign up");
+        assert_eq!(parent, Some(42));
+    }
+
+    #[test]
+    fn create_without_a_parent_has_none() {
+        let command = parse(&["create", "--title", "Fix login", "bug"]).unwrap();
+
+        let WorkItemSubCommands::Create { parent, .. } = command else {
+            panic!("expected Create");
+        };
+        assert_eq!(parent, None);
+    }
+
+    #[test]
+    fn create_rejects_a_non_numeric_parent() {
+        assert!(parse(&[
+            "create",
+            "--title",
+            "Write tests",
+            "--parent",
+            "abc",
+            "task"
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn create_patch_sets_the_title() {
+        let patch = create_work_item_patch("Write tests", None);
+
+        assert_eq!(patch.len(), 1);
+        assert_eq!(patch[0].op, Some(Op::Add));
+        assert_eq!(patch[0].path.as_deref(), Some("/fields/System.Title"));
+        assert_eq!(patch[0].value, Some(json!("Write tests")));
+    }
+
+    #[test]
+    fn create_patch_links_the_new_work_item_to_its_parent() {
+        let patch = create_work_item_patch(
+            "Write tests",
+            Some("https://dev.azure.com/mycompany/_apis/wit/workItems/42"),
+        );
+
+        assert_eq!(patch.len(), 2);
+        assert_eq!(patch[1].op, Some(Op::Add));
+        assert_eq!(patch[1].path.as_deref(), Some("/relations/-"));
+        assert_eq!(
+            patch[1].value,
+            Some(json!({
+                "rel": "System.LinkTypes.Hierarchy-Reverse",
+                "url": "https://dev.azure.com/mycompany/_apis/wit/workItems/42",
+            }))
+        );
+    }
 
     #[test]
     fn test_sanitize_wiql_value_escapes_single_quotes() {

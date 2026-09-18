@@ -736,6 +736,9 @@ azdocli boards work-item show --id 123 --project MyProject
 # Supported types: bug, task, user-story, feature, epic
 azdocli boards work-item create bug --title "Fix login issue" --description "Users cannot login after password change"
 
+# Create a task under an existing work item, such as a product backlog item
+azdocli boards work-item create task --title "Write integration tests" --parent 1234
+
 # Update a work item (using default project)
 azdocli boards work-item update --id 123 --title "New title" --state "Active" --priority 2
 
@@ -751,6 +754,7 @@ azdocli boards work-item delete --id 123 --soft-delete
 - **Full CRUD operations**: Create, read, update, and delete work items
 - **List my work items**: View work items assigned to you with filtering options
 - **Multiple work item types**: Support for bug, task, user story, feature, and epic
+- **Parent links**: Create a work item as a child of another with `--parent <ID>`, e.g. tasks under a product backlog item
 - **Filtering**: Filter by state, work item type, and limit number of results
 - **Web integration**: Open work items directly in browser with `--web` option
 - **Soft delete**: Option to change state to "Removed" instead of permanent deletion
