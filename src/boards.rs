@@ -307,14 +307,29 @@ async fn get_work_item(project: &str, id: &str) -> Result<models::WorkItem> {
     }
 }
 
-/// Builds the patch that creates a work item.
-fn create_work_item_patch(title: &str) -> Vec<JsonPatchOperation> {
-    vec![JsonPatchOperation {
+/// Builds the patch that creates a work item, optionally as a child of the
+/// work item at `parent_url`.
+fn create_work_item_patch(title: &str, parent_url: Option<&str>) -> Vec<JsonPatchOperation> {
+    let mut patch = vec![JsonPatchOperation {
         from: None,
         op: Some(Op::Add),
         path: Some("/fields/System.Title".to_owned()),
         value: Some(json!(title)),
-    }]
+    }];
+
+    if let Some(parent_url) = parent_url {
+        patch.push(JsonPatchOperation {
+            from: None,
+            op: Some(Op::Add),
+            path: Some("/relations/-".to_owned()),
+            value: Some(json!({
+                "rel": "System.LinkTypes.Hierarchy-Reverse",
+                "url": parent_url,
+            })),
+        });
+    }
+
+    patch
 }
 
 async fn create_work_item(
@@ -329,7 +344,7 @@ async fn create_work_item(
                 .work_items_client()
                 .create(
                     creds.organization.clone(),
-                    create_work_item_patch(title),
+                    create_work_item_patch(title, None),
                     project.to_string(),
                     match work_item_type {
                         WorkItemType::Bug => "Bug",
@@ -938,12 +953,31 @@ mod tests {
 
     #[test]
     fn create_patch_sets_the_title() {
-        let patch = create_work_item_patch("Write tests");
+        let patch = create_work_item_patch("Write tests", None);
 
         assert_eq!(patch.len(), 1);
         assert_eq!(patch[0].op, Some(Op::Add));
         assert_eq!(patch[0].path.as_deref(), Some("/fields/System.Title"));
         assert_eq!(patch[0].value, Some(json!("Write tests")));
+    }
+
+    #[test]
+    fn create_patch_links_the_new_work_item_to_its_parent() {
+        let patch = create_work_item_patch(
+            "Write tests",
+            Some("https://dev.azure.com/mycompany/_apis/wit/workItems/42"),
+        );
+
+        assert_eq!(patch.len(), 2);
+        assert_eq!(patch[1].op, Some(Op::Add));
+        assert_eq!(patch[1].path.as_deref(), Some("/relations/-"));
+        assert_eq!(
+            patch[1].value,
+            Some(json!({
+                "rel": "System.LinkTypes.Hierarchy-Reverse",
+                "url": "https://dev.azure.com/mycompany/_apis/wit/workItems/42",
+            }))
+        );
     }
 
     #[test]
