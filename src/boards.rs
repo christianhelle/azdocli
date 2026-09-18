@@ -7,7 +7,7 @@ use anyhow::{anyhow, Result};
 use azure_devops_rust_api::wit::models::json_patch_operation::Op;
 use azure_devops_rust_api::wit::models::JsonPatchOperation;
 use azure_devops_rust_api::wit::{self, models};
-use clap::Subcommand;
+use clap::{Subcommand, ValueEnum};
 use colored::Colorize;
 use serde_json::json;
 
@@ -32,14 +32,13 @@ pub enum BoardsSubCommands {
     },
 }
 
-#[derive(Subcommand, Clone, Debug)]
+#[derive(ValueEnum, Clone, Debug)]
 pub enum WorkItemType {
     /// Bug work item type
     Bug,
     /// Task work item type
     Task,
     /// User Story work item type
-    #[clap(name = "user-story")]
     UserStory,
     /// Feature work item type
     Feature,
@@ -80,7 +79,7 @@ pub enum WorkItemSubCommands {
     /// Create a new work item
     Create {
         /// Work item type
-        #[clap(subcommand)]
+        #[clap(value_enum)]
         work_item_type: WorkItemType,
         /// Work item title
         #[clap(short, long)]
@@ -987,6 +986,32 @@ mod tests {
             panic!("expected Create");
         };
         assert!(matches!(work_item_type, WorkItemType::Task));
+        assert_eq!(parent, Some(42));
+    }
+
+    #[test]
+    fn create_accepts_the_type_before_its_options() {
+        let command = parse(&[
+            "create",
+            "user-story",
+            "--title",
+            "Sign up",
+            "--parent",
+            "42",
+        ])
+        .unwrap();
+
+        let WorkItemSubCommands::Create {
+            work_item_type,
+            title,
+            parent,
+            ..
+        } = command
+        else {
+            panic!("expected Create");
+        };
+        assert!(matches!(work_item_type, WorkItemType::UserStory));
+        assert_eq!(title, "Sign up");
         assert_eq!(parent, Some(42));
     }
 
