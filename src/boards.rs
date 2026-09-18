@@ -88,6 +88,9 @@ pub enum WorkItemSubCommands {
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
+        /// ID of the parent work item, e.g. the product backlog item a task belongs to
+        #[clap(long, value_parser = clap::value_parser!(i32).range(1..))]
+        parent: Option<i32>,
     },
     /// Delete a work item
     Delete {
@@ -771,6 +774,7 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
             work_item_type,
             title,
             project,
+            ..
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
             println!("Creating a {work_item_type:?} work item in project: {project_name}");
@@ -950,6 +954,58 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
+
+    #[derive(Parser)]
+    struct TestCli {
+        #[clap(subcommand)]
+        command: WorkItemSubCommands,
+    }
+
+    fn parse(args: &[&str]) -> Result<WorkItemSubCommands, clap::Error> {
+        TestCli::try_parse_from(std::iter::once("work-item").chain(args.iter().copied()))
+            .map(|cli| cli.command)
+    }
+
+    #[test]
+    fn create_accepts_a_parent_work_item() {
+        let command =
+            parse(&["create", "--title", "Write tests", "--parent", "42", "task"]).unwrap();
+
+        let WorkItemSubCommands::Create {
+            work_item_type,
+            parent,
+            ..
+        } = command
+        else {
+            panic!("expected Create");
+        };
+        assert!(matches!(work_item_type, WorkItemType::Task));
+        assert_eq!(parent, Some(42));
+    }
+
+    #[test]
+    fn create_without_a_parent_has_none() {
+        let command = parse(&["create", "--title", "Fix login", "bug"]).unwrap();
+
+        let WorkItemSubCommands::Create { parent, .. } = command else {
+            panic!("expected Create");
+        };
+        assert_eq!(parent, None);
+    }
+
+    #[test]
+    fn create_rejects_a_non_numeric_parent() {
+        assert!(parse(&[
+            "create",
+            "--title",
+            "Write tests",
+            "--parent",
+            "abc",
+            "task"
+        ])
+        .is_err());
+    }
 
     #[test]
     fn create_patch_sets_the_title() {
