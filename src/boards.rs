@@ -1,6 +1,6 @@
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
-use crate::auth::url::web_work_item_url;
+use crate::auth::url::{api_work_item_url, web_work_item_url};
 use crate::project::get_project_or_default;
 use crate::text::escape_control_characters;
 use anyhow::{anyhow, Result};
@@ -339,15 +339,18 @@ async fn create_work_item(
     project: &str,
     work_item_type: &WorkItemType,
     title: &str,
+    parent: Option<i32>,
 ) -> Result<models::WorkItem> {
     match get_credentials() {
         Ok(creds) => {
             let client = create_wit_client()?;
+            let parent_url =
+                parent.map(|id| api_work_item_url(&creds.base_url, &creds.organization, id));
             let work_item = client
                 .work_items_client()
                 .create(
                     creds.organization.clone(),
-                    create_work_item_patch(title, None),
+                    create_work_item_patch(title, parent_url.as_deref()),
                     project.to_string(),
                     match work_item_type {
                         WorkItemType::Bug => "Bug",
@@ -774,16 +777,19 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
             work_item_type,
             title,
             project,
-            ..
+            parent,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
             println!("Creating a {work_item_type:?} work item in project: {project_name}");
 
-            match create_work_item(&project_name, work_item_type, title).await {
+            match create_work_item(&project_name, work_item_type, title, *parent).await {
                 Ok(work_item) => {
                     println!("{}", "✅ Work item created successfully!".green());
                     println!("Created work item with ID: {}", work_item.id);
                     println!("Title: {title}");
+                    if let Some(parent) = parent {
+                        println!("Parent: #{parent}");
+                    }
                     if let Some(fields) = work_item.fields.as_object() {
                         if let Some(desc) =
                             fields.get("System.Description").and_then(|v| v.as_str())
