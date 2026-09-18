@@ -307,6 +307,16 @@ async fn get_work_item(project: &str, id: &str) -> Result<models::WorkItem> {
     }
 }
 
+/// Builds the patch that creates a work item.
+fn create_work_item_patch(title: &str) -> Vec<JsonPatchOperation> {
+    vec![JsonPatchOperation {
+        from: None,
+        op: Some(Op::Add),
+        path: Some("/fields/System.Title".to_owned()),
+        value: Some(json!(title)),
+    }]
+}
+
 async fn create_work_item(
     project: &str,
     work_item_type: &WorkItemType,
@@ -319,12 +329,7 @@ async fn create_work_item(
                 .work_items_client()
                 .create(
                     creds.organization.clone(),
-                    vec![JsonPatchOperation {
-                        from: None,
-                        op: Some(Op::Add),
-                        path: Some("/fields/System.Title".to_owned()),
-                        value: Some(json!(title)),
-                    }],
+                    create_work_item_patch(title),
                     project.to_string(),
                     match work_item_type {
                         WorkItemType::Bug => "Bug",
@@ -930,6 +935,16 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn create_patch_sets_the_title() {
+        let patch = create_work_item_patch("Write tests");
+
+        assert_eq!(patch.len(), 1);
+        assert_eq!(patch[0].op, Some(Op::Add));
+        assert_eq!(patch[0].path.as_deref(), Some("/fields/System.Title"));
+        assert_eq!(patch[0].value, Some(json!("Write tests")));
+    }
 
     #[test]
     fn test_sanitize_wiql_value_escapes_single_quotes() {
