@@ -737,7 +737,7 @@ azdocli boards work-item show --id 123 --project MyProject
 azdocli boards work-item create bug --title "Fix login issue" --description "Users cannot login after password change"
 
 # Create a task under an existing work item, such as a product backlog item
-azdocli boards work-item create --title "Write integration tests" --parent 1234 task
+azdocli boards work-item create task --title "Write integration tests" --parent 1234
 
 # Update a work item (using default project)
 azdocli boards work-item update --id 123 --title "New title" --state "Active" --priority 2
