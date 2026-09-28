@@ -973,6 +973,24 @@ mod tests {
     }
 
     #[test]
+    fn create_accepts_iteration_and_area_paths() {
+        assert!(parse(&[
+            "create", "task", "--title", "Write tests", "--iteration", "Project\\Sprint 1",
+            "--area", "Project\\Team A",
+        ])
+        .is_ok());
+    }
+
+    #[test]
+    fn update_accepts_iteration_and_area_paths() {
+        assert!(parse(&[
+            "update", "--id", "42", "--iteration", "Project\\Sprint 1", "--area",
+            "Project\\Team A",
+        ])
+        .is_ok());
+    }
+
+    #[test]
     fn create_accepts_a_parent_work_item() {
         let command =
             parse(&["create", "--title", "Write tests", "--parent", "42", "task"]).unwrap();
