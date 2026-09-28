@@ -739,6 +739,10 @@ azdocli boards work-item create bug --title "Fix login issue" --description "Use
 # Create a task under an existing work item, such as a product backlog item
 azdocli boards work-item create task --title "Write integration tests" --parent 1234
 
+# Set iteration and area paths on create or update
+azdocli boards work-item create task --title "Write tests" --iteration "MyProject\Sprint 1" --area "MyProject\Team A"
+azdocli boards work-item update --id 123 --iteration "MyProject\Sprint 1" --area "MyProject\Team A"
+
 # Update a work item (using default project)
 azdocli boards work-item update --id 123 --title "New title" --state "Active" --priority 2
 
@@ -758,6 +762,7 @@ azdocli boards work-item delete --id 123 --soft-delete
 - **Filtering**: Filter by state, work item type, and limit number of results
 - **Web integration**: Open work items directly in browser with `--web` option
 - **Soft delete**: Option to change state to "Removed" instead of permanent deletion
+- **Iteration and area paths**: Set `System.IterationPath` and `System.AreaPath` on create or update with `--iteration` and `--area`
 - **Field updates**: Update title, description, state, and priority
 - **Default project support**: Use with default project or specify --project explicitly
 - **Error handling**: Clear feedback when work item not found or access denied
