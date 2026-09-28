@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased Changes]
+
+### Features
+- Add support for --area and --iteration on create/update work-item ([#133](https://github.com/christianhelle/azdocli/pull/133)) ([@christianhelle](https://github.com/christianhelle/))
+
+
 ## [0.6.3](https://github.com/christianhelle/azdocli/releases/tag/0.6.3) (2026-09-22)
 
 ### Features
