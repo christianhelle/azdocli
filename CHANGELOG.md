@@ -3,6 +3,7 @@
 ## [Unreleased Changes]
 
 ### Merged Pull Requests
+- Publish the up-to-date root README to crates.io ([#135](https://github.com/christianhelle/azdocli/pull/135)) ([@christianhelle](https://github.com/christianhelle/))
 - Reconcile documented terminal icon set with actual usage ([#134](https://github.com/christianhelle/azdocli/pull/134)) ([@christianhelle](https://github.com/christianhelle/))
 
 ### Features
