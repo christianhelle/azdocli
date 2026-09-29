@@ -73,7 +73,7 @@ pub(super) async fn update_pull_request(
                 .await
             {
                 Ok(updated_pr) => {
-                    println!("{}", "✓ Pull request updated successfully!".green());
+                    println!("{}", "✅ Pull request updated successfully!".green());
                     println!("  ID: {}", updated_pr.pull_request_id);
                     println!("  Title: {}", updated_pr.title.unwrap_or_default());
                     println!("  URL: {}", updated_pr.url);
