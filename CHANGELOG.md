@@ -2,6 +2,9 @@
 
 ## [Unreleased Changes]
 
+### Merged Pull Requests
+- Reconcile documented terminal icon set with actual usage ([#134](https://github.com/christianhelle/azdocli/pull/134)) ([@christianhelle](https://github.com/christianhelle/))
+
 ### Features
 - Add support for --area and --iteration on create/update work-item ([#133](https://github.com/christianhelle/azdocli/pull/133)) ([@christianhelle](https://github.com/christianhelle/))
 
