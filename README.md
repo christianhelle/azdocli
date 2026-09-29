@@ -181,6 +181,7 @@ SUBCOMMANDS:
 - **Project Management**: Create, delete, list, and show Azure DevOps team projects, their teams, team members and process templates
 - **Migration**: Cross-tenant team-project migration with `azdocli migrate` (see [docs/migrate.md](docs/migrate.md) for the full guide)
 - **Board Management**: Manage Azure DevOps boards
+- **User Management**: Add, list, show, remove, and update organization users
 - **Authentication**: Secure login using Personal Access Tokens (PAT)
 - **Default Project**: Set a default project to avoid specifying --project for every command
 
