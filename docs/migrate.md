@@ -70,21 +70,21 @@ Batch runs also support `--dry-run`, `--fail-fast`, `--resume`, and `--yes`.
 | Area paths | Full | Recreates the area path tree and records path mappings. |
 | Iteration paths | Full | Recreates the iteration path tree with attributes, including dates when returned by Azure DevOps. |
 | Teams | Partial | Creates teams and maps IDs; members are not migrated because identities do not map cross-tenant. |
-| Team board config | Out-of-scope | `teams_configure` is currently a stub that logs "not yet implemented; skipping". |
+| Team board config | Partial | Copies team field values, team iterations, team settings, and board columns/rows to the migrated teams. Iterations that could not be mapped to a target iteration id are skipped with a warning. |
 | Repos (git) | Full | Uses `git clone --mirror` and `git push --mirror`; target repositories must be empty and Git LFS is not handled. |
 | Wiki | Full | Mirrors the project wiki backing repository; target wiki backing repo must be empty. |
-| Work items | Out-of-scope | `work_items` is currently a stub; planned fidelity is single revision plus history snapshot and annotations. |
-| Work item links | Out-of-scope | `wi_links` is currently a stub; planned cross-project links are dropped. |
-| Work item attachments | Out-of-scope | `wi_attachments` is currently a stub. |
-| Work item comments | Out-of-scope | `wi_comments` is currently a stub; planned comments are re-posted with original author/date text. |
-| Pull requests (active) | Out-of-scope | `prs` is currently a stub; planned active PR recreation is lossy. |
-| Pull requests (closed/abandoned/completed) | Out-of-scope | `prs` is currently a stub; planned behavior is JSON archive only. |
+| Work items | Partial | Recreates the latest revision of each work item (standard and `Custom.*`/`MyCustom.*` fields) with area and iteration paths remapped, identities as plain text, and bypass-rules writes. Revision history is not replayed; a summary of the last 50 updates is appended to the description. |
+| Work item links | Partial | Recreates links between migrated work items; cross-project and external links are skipped with a warning. |
+| Work item attachments | Full | Downloads each attachment from the source and re-uploads it to the target work item, rewriting inline attachment references. |
+| Work item comments | Partial | Re-posts non-deleted comments in order, annotated with the original author and date. |
+| Pull requests (active) | Partial | Recreates active PRs with the original title, draft state and a migrated-from description. The source and target branches must already exist on the target. Reviewers, comments, labels, linked work items and completion options are not carried over. |
+| Pull requests (closed/abandoned/completed) | Export-only | Archived to `prs-closed-archive.json` (including commit lists); not recreated on the target. |
 | Variable groups (non-secret) | Partial | Exports each group to JSON and recreates variable groups; secret values are blanked with warnings. |
 | Service connections | Export-only | Exports service connection JSON only; manual reconfiguration is required on the target. |
 | YAML pipelines | Partial | Recreates YAML pipelines (non-YAML pipelines are skipped) against the migrated repositories and restores variable group references; supports `--dry-run`. Requires the pipeline's repository to be migrated first, and service connection references are not remapped (a warning is logged). |
-| Classic pipelines | Out-of-scope | `pipelines_classic` is currently a stub. |
-| Test plans | Out-of-scope | `test_plans` is currently a stub. |
-| Dashboards | Out-of-scope | `dashboards` is currently a stub. |
+| Classic pipelines | Partial | Exports classic build and release definitions to JSON and recreates them on the target. Agent pools/queues, service connections and task/extension references are not remapped; warnings are logged so they can be verified on the target. |
+| Test plans | Export-only | Exports test plans to JSON under the output directory; manual import is required. |
+| Dashboards | Export-only | Exports team dashboards to JSON under the output directory; manual import is required. |
 
 ## Resumability
 
