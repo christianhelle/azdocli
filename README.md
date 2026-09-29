@@ -707,6 +707,38 @@ azdocli pipelines service-connection show --id 00000000-0000-0000-0000-000000000
 - **Service connection inventory**: List connections with their type and readiness, filtered by type
 - **Default project support**: Use with default project or specify --project explicitly
 
+### User Management Features
+
+The `user` commands allow you to manage users and licenses in your Azure DevOps organization:
+
+```sh
+# Add a user with a license
+azdocli user add --email user@contoso.com --license express
+
+# List users (excluding users added via AAD groups)
+azdocli user list
+
+# Show user details by ID or email
+azdocli user show --id 00000000-0000-0000-0000-000000000000
+azdocli user show --email user@contoso.com
+
+# Remove a user by ID or email
+azdocli user remove --id 00000000-0000-0000-0000-000000000000
+azdocli user remove --email user@contoso.com
+
+# Update a user's license type
+azdocli user update --email user@contoso.com --license stakeholder
+```
+
+**User Features:**
+
+- **Organization-wide management**: Manage user access at the organization level
+- **Flexible user targeting**: Use either user ID or email for show, remove, and update
+- **License updates**: Set raw Azure DevOps account license types (`none`, `earlyAdopter`, `express`, `professional`, `advanced`, `stakeholder`)
+- **AAD-group filtering**: User list excludes accounts whose entitlement is inherited from AAD group rules
+- **Error handling**: Clear guidance for missing users and ambiguous email matches
+
+
 ### Board Management Features
 
 #### Work Item Management
