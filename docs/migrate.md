@@ -10,7 +10,7 @@ azdocli login --profile source
 azdocli login --profile target
 ```
 
-Use PATs with the scopes needed for the assets you migrate: **Code** read & write, **Build** read & execute, **Work Items** read & write, and **Project and Team** read. The target account also needs permission to create target projects when using `--create-target`; work item migration phases require the Azure DevOps **Bypass rules on work item updates** permission when those phases are implemented.
+Use PATs with the scopes needed for the assets you migrate: **Code** read & write, **Build** read & execute, **Work Items** read & write, and **Project and Team** read. The target account also needs permission to create target projects when using `--create-target`; work item migration requires the Azure DevOps **Bypass rules on work item updates** permission.
 
 ## Single-project usage
 
@@ -97,6 +97,6 @@ The migration does not migrate permissions/security groups, repo permissions, br
 ## Known limitations
 
 - `git push --mirror` is destructive, so the implementation refuses to push when the target repository or wiki backing repository is not empty.
-- Work item migration requires the Azure DevOps **Bypass rules on work item updates** permission when those phases are implemented.
+- Work item migration requires the Azure DevOps **Bypass rules on work item updates** permission.
 - Secrets are not migrated. Variable group secrets are blanked, and service connections are exported for documentation/manual recreation only.
 
