@@ -81,7 +81,7 @@ Batch runs also support `--dry-run`, `--fail-fast`, `--resume`, and `--yes`.
 | Pull requests (closed/abandoned/completed) | Out-of-scope | `prs` is currently a stub; planned behavior is JSON archive only. |
 | Variable groups (non-secret) | Partial | Exports each group to JSON and recreates variable groups; secret values are blanked with warnings. |
 | Service connections | Export-only | Exports service connection JSON only; manual reconfiguration is required on the target. |
-| YAML pipelines | Out-of-scope | `pipelines_yaml` is currently a stub. |
+| YAML pipelines | Partial | Recreates YAML pipelines (non-YAML pipelines are skipped) against the migrated repositories and restores variable group references; supports `--dry-run`. Requires the pipeline's repository to be migrated first, and service connection references are not remapped (a warning is logged). |
 | Classic pipelines | Out-of-scope | `pipelines_classic` is currently a stub. |
 | Test plans | Out-of-scope | `test_plans` is currently a stub. |
 | Dashboards | Out-of-scope | `dashboards` is currently a stub. |
