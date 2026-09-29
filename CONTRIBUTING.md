@@ -76,10 +76,10 @@ This project follows standard Rust conventions and established patterns. Please 
 **Output Formatting:**
 - Use the `colored` crate for terminal output formatting
 - Use emoji icons consistently for different types of output:
-  - ✓ for success messages
-  - ❌ for error messages  
+  - ✅ for success messages
+  - ❌ for error messages
+  - ⚠ for warnings (non-fatal issues)
   - 📋 for lists
-  - 🚀 for actions
   - 🔑 for authentication
 - Provide clear, user-friendly messages
 
