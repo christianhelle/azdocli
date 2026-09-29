@@ -7,7 +7,7 @@ description = "CLI tool for interacting with Azure DevOps"
 license = "MIT"
 homepage = "https://christianhelle.com/azdocli"
 repository = "https://github.com/christianhelle/azdocli"
-readme = "src/README.md"
+readme = "README.md"
 
 [package.metadata.bundle]
 name = "Azure DevOps CLI"
