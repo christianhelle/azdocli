@@ -12,12 +12,22 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Credentials {
     pub organization: String,
     pub pat: String,
     #[serde(default = "default_base_url")]
     pub base_url: String,
+}
+
+impl std::fmt::Debug for Credentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Credentials")
+            .field("organization", &self.organization)
+            .field("pat", &"<redacted>")
+            .field("base_url", &self.base_url)
+            .finish()
+    }
 }
 
 fn profiles_dir() -> Result<PathBuf> {
@@ -341,6 +351,13 @@ mod tests {
         let (creds, was_plaintext) = decode_credentials(&json).unwrap();
         assert_eq!(creds.pat, "my-secret-pat");
         assert!(was_plaintext);
+    }
+
+    #[test]
+    fn debug_output_redacts_the_pat() {
+        let debug = format!("{:?}", sample());
+        assert!(!debug.contains("my-secret-pat"));
+        assert!(debug.contains("contoso"));
     }
 
     #[test]
