@@ -115,6 +115,17 @@ Before using the CLI, you need to create a Personal Access Token (PAT) in Azure 
 - Regularly rotate your tokens
 - Use the minimum required permissions
 
+**How azdocli stores your PAT**:
+
+`azdocli login` never writes the PAT to disk in plaintext. The `pat` field in `~/.azdocli/credentials.json` and `~/.azdocli/profiles/*.json` holds an encrypted value (`enc:v1:...`) that only azdocli can decrypt, and only on the machine where you logged in:
+
+- **Windows**: encrypted with DPAPI for your user account, bound to this machine's id
+- **macOS / Linux**: encrypted with AES-256-GCM using a key derived from this machine's id and your home directory; the file is also restricted to your user (`0600`)
+
+Copying the file to another machine, or copying the value out of it, does not give a usable token. On another machine, run `azdocli login` again. Credentials saved by older versions in plaintext are encrypted automatically the next time azdocli reads them.
+
+This protects against the PAT being copied out of the config file. It does not protect against malicious software already running as your user on the same machine.
+
 ### Enterprise Azure DevOps Installations
 
 By default `azdocli` targets the Azure DevOps cloud (`https://dev.azure.com`). You can log in to an enterprise or on-premises Azure DevOps installation by providing the server URL instead of a cloud organization name.
