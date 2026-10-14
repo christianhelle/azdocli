@@ -1,4 +1,5 @@
 pub mod factory;
+mod secret;
 pub mod url;
 
 use crate::auth::url::{default_base_url, normalize_base_url, parse_organization_or_url};
