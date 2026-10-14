@@ -57,6 +57,9 @@ fn encode_credentials(creds: &Credentials) -> Result<String> {
 /// file held a legacy plaintext PAT that should be re-saved encrypted.
 fn decode_credentials(json: &str) -> Result<(Credentials, bool)> {
     let mut creds: Credentials = serde_json::from_str(json)?;
+    if !secret::is_protected(&creds.pat) {
+        return Ok((creds, true));
+    }
     creds.pat = secret::unprotect(&creds.pat)?;
     Ok((creds, false))
 }
@@ -335,5 +338,13 @@ mod tests {
         assert_eq!(creds.pat, "my-secret-pat");
         assert_eq!(creds.organization, "contoso");
         assert!(!was_plaintext);
+    }
+
+    #[test]
+    fn legacy_plaintext_credentials_decode_and_are_flagged() {
+        let json = serde_json::to_string(&sample()).unwrap();
+        let (creds, was_plaintext) = decode_credentials(&json).unwrap();
+        assert_eq!(creds.pat, "my-secret-pat");
+        assert!(was_plaintext);
     }
 }
