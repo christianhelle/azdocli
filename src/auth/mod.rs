@@ -104,8 +104,7 @@ fn load_profile(name: &str) -> Result<Credentials> {
             name
         ));
     }
-    let s = fs::read_to_string(&path)?;
-    Ok(serde_json::from_str(&s)?)
+    read_credentials_file(&path)
 }
 
 /// List known profile names (excluding the legacy default).
@@ -297,10 +296,7 @@ fn get_stored_credentials() -> Result<Credentials> {
         ));
     }
 
-    let credentials_json = fs::read_to_string(creds_path)?;
-    let credentials: Credentials = serde_json::from_str(&credentials_json)?;
-
-    Ok(credentials)
+    read_credentials_file(&creds_path)
 }
 
 /// Load credentials for a specific named profile, or the default if `None`.
