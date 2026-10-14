@@ -194,6 +194,17 @@ mod aead {
             let sealed = seal("machine-a", b"my-secret-pat").unwrap();
             assert_eq!(open("machine-a", &sealed).unwrap(), b"my-secret-pat");
         }
+
+        #[test]
+        fn aead_rejects_another_machine() {
+            let sealed = seal("machine-a", b"my-secret-pat").unwrap();
+            assert!(open("machine-b", &sealed).is_err());
+        }
+
+        #[test]
+        fn aead_rejects_truncated_input() {
+            assert!(open("machine-a", &[0u8; 4]).is_err());
+        }
     }
 }
 
@@ -214,6 +225,30 @@ mod tests {
         let stored = protect_for(MACHINE_A, "my-secret-pat").unwrap();
         assert!(is_protected(&stored));
         assert!(!stored.contains("my-secret-pat"));
+    }
+
+    #[test]
+    fn pat_protected_on_another_machine_cannot_be_read() {
+        let stored = protect_for(MACHINE_A, "my-secret-pat").unwrap();
+        let err = unprotect_for("machine-b", &stored).unwrap_err();
+        assert!(err.to_string().contains("azdocli login"));
+    }
+
+    #[test]
+    fn tampered_value_cannot_be_read() {
+        let stored = protect_for(MACHINE_A, "my-secret-pat").unwrap();
+        let mut sealed = BASE64.decode(&stored[PREFIX.len()..]).unwrap();
+        let last = sealed.len() - 1;
+        sealed[last] ^= 0xff;
+        let tampered = format!("{}{}", PREFIX, BASE64.encode(sealed));
+        assert!(unprotect_for(MACHINE_A, &tampered).is_err());
+    }
+
+    #[test]
+    fn protecting_twice_gives_different_values() {
+        let first = protect_for(MACHINE_A, "my-secret-pat").unwrap();
+        let second = protect_for(MACHINE_A, "my-secret-pat").unwrap();
+        assert_ne!(first, second);
     }
 
     #[test]
