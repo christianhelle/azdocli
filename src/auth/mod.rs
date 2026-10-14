@@ -76,18 +76,42 @@ fn decode_credentials(json: &str) -> Result<(Credentials, bool)> {
 
 /// Writes credentials to `path` with the PAT encrypted and, on Unix, the file
 /// readable by the owner only.
+///
+/// The file is written to a temporary sibling and then renamed over `path`,
+/// so readers never see a partial file and a failed write keeps the old one.
 fn write_credentials_file(path: &Path, creds: &Credentials) -> Result<()> {
     let json = encode_credentials(creds)?;
-    let mut file = fs::File::create(path)?;
-    file.write_all(json.as_bytes())?;
+    let temp_path = credentials_temp_path(path);
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(path)?.permissions();
-        perms.set_mode(0o600);
-        fs::set_permissions(path, perms)?;
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
     }
-    Ok(())
+    let result = (|| -> Result<()> {
+        let mut file = options.open(&temp_path)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            file.set_permissions(fs::Permissions::from_mode(0o600))?;
+        }
+        file.write_all(json.as_bytes())?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&temp_path, path)?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temp_path);
+    }
+    result
+}
+
+fn credentials_temp_path(path: &Path) -> PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".tmp");
+    path.with_file_name(name)
 }
 
 /// Reads credentials from `path`, re-saving a legacy plaintext PAT encrypted.
@@ -367,6 +391,30 @@ mod tests {
         write_credentials_file(&path, &sample()).unwrap();
         assert!(!fs::read_to_string(&path).unwrap().contains("my-secret-pat"));
         assert_eq!(read_credentials_file(&path).unwrap().pat, "my-secret-pat");
+    }
+
+    #[test]
+    fn rewriting_credentials_replaces_the_file_without_leftovers() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("credentials.json");
+        fs::write(&path, "old contents").unwrap();
+        write_credentials_file(&path, &sample()).unwrap();
+        assert_eq!(read_credentials_file(&path).unwrap().pat, "my-secret-pat");
+        let entries: Vec<_> = fs::read_dir(dir.path()).unwrap().collect();
+        assert_eq!(entries.len(), 1);
+        assert!(!credentials_temp_path(&path).exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn credentials_file_is_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("credentials.json");
+        fs::write(&path, "old contents").unwrap();
+        write_credentials_file(&path, &sample()).unwrap();
+        let mode = fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
     }
 
     #[test]
