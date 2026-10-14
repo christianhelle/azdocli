@@ -1,8 +1,8 @@
 //! Protection of the stored Personal Access Token.
 //!
 //! The PAT is encrypted and bound to the machine where it was entered, so
-//! copying the credentials file to another machine, or reading the PAT out of
-//! it, does not yield a usable token.
+//! copying the PAT out of the credentials file, or decrypting the file on
+//! another machine with azdocli, does not yield a usable token.
 //!
 //! On Windows the PAT is sealed with DPAPI for the current user, using an
 //! app- and machine-specific entropy. Elsewhere it is sealed with AES-256-GCM
@@ -22,7 +22,7 @@ pub fn is_protected(stored: &str) -> bool {
     stored.starts_with(PREFIX)
 }
 
-/// Encrypts a PAT so only azdocli on this machine can decrypt it.
+/// Encrypts a PAT bound to this machine. See the module docs for limits.
 pub fn protect(pat: &str) -> Result<String> {
     protect_for(&machine_binding()?, pat)
 }
