@@ -15,6 +15,11 @@ use base64::Engine;
 const PREFIX: &str = "enc:v1:";
 const APP_CONTEXT: &[u8] = b"azdocli-pat-v1";
 
+/// Returns true when a stored PAT value is encrypted rather than plaintext.
+pub fn is_protected(stored: &str) -> bool {
+    stored.starts_with(PREFIX)
+}
+
 pub(crate) fn protect_for(binding: &str, pat: &str) -> Result<String> {
     let sealed = seal(binding, pat.as_bytes())?;
     Ok(format!("{}{}", PREFIX, BASE64.encode(sealed)))
@@ -202,5 +207,17 @@ mod tests {
     fn protect_round_trips() {
         let stored = protect_for(MACHINE_A, "my-secret-pat").unwrap();
         assert_eq!(unprotect_for(MACHINE_A, &stored).unwrap(), "my-secret-pat");
+    }
+
+    #[test]
+    fn protected_value_is_marked_and_hides_the_pat() {
+        let stored = protect_for(MACHINE_A, "my-secret-pat").unwrap();
+        assert!(is_protected(&stored));
+        assert!(!stored.contains("my-secret-pat"));
+    }
+
+    #[test]
+    fn plaintext_pat_is_not_protected() {
+        assert!(!is_protected("my-secret-pat"));
     }
 }
