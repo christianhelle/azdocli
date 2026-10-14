@@ -44,6 +44,23 @@ fn sanitize_profile_name(name: &str) -> String {
         .collect()
 }
 
+/// Serializes credentials with the PAT encrypted for this machine.
+fn encode_credentials(creds: &Credentials) -> Result<String> {
+    let protected = Credentials {
+        pat: secret::protect(&creds.pat)?,
+        ..creds.clone()
+    };
+    Ok(serde_json::to_string_pretty(&protected)?)
+}
+
+/// Parses stored credentials and decrypts the PAT. The flag is true when the
+/// file held a legacy plaintext PAT that should be re-saved encrypted.
+fn decode_credentials(json: &str) -> Result<(Credentials, bool)> {
+    let mut creds: Credentials = serde_json::from_str(json)?;
+    creds.pat = secret::unprotect(&creds.pat)?;
+    Ok((creds, false))
+}
+
 /// Save credentials for a named profile.
 fn save_profile(name: &str, creds: &Credentials) -> Result<()> {
     let path = profile_file(name)?;
@@ -289,5 +306,34 @@ pub fn get_credentials_for(profile: Option<&str>) -> Result<Credentials> {
     match profile {
         Some(name) => load_profile(name),
         None => get_credentials(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample() -> Credentials {
+        Credentials {
+            organization: "contoso".to_string(),
+            pat: "my-secret-pat".to_string(),
+            base_url: "https://dev.azure.com".to_string(),
+        }
+    }
+
+    #[test]
+    fn encoded_credentials_do_not_contain_the_pat() {
+        let json = encode_credentials(&sample()).unwrap();
+        assert!(!json.contains("my-secret-pat"));
+        assert!(json.contains("contoso"));
+    }
+
+    #[test]
+    fn encoded_credentials_decode_back() {
+        let json = encode_credentials(&sample()).unwrap();
+        let (creds, was_plaintext) = decode_credentials(&json).unwrap();
+        assert_eq!(creds.pat, "my-secret-pat");
+        assert_eq!(creds.organization, "contoso");
+        assert!(!was_plaintext);
     }
 }
