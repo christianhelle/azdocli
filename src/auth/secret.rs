@@ -1,12 +1,14 @@
 //! Protection of the stored Personal Access Token.
 //!
-//! The PAT is encrypted so that it can only be decrypted by azdocli on the
-//! machine where it was entered. Copying the credentials file to another
-//! machine, or reading the PAT out of it, does not yield a usable token.
+//! The PAT is encrypted and bound to the machine where it was entered, so
+//! copying the credentials file to another machine, or reading the PAT out of
+//! it, does not yield a usable token.
 //!
 //! On Windows the PAT is sealed with DPAPI for the current user, using an
 //! app- and machine-specific entropy. Elsewhere it is sealed with AES-256-GCM
-//! using a key derived from the machine id.
+//! using a key derived from the machine id and home directory. Those inputs
+//! are not secret, so on macOS/Linux this is machine binding and the `0600`
+//! file mode is the access control.
 
 use anyhow::{anyhow, Result};
 use base64::engine::general_purpose::STANDARD as BASE64;

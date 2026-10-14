@@ -117,14 +117,14 @@ Before using the CLI, you need to create a Personal Access Token (PAT) in Azure 
 
 **How azdocli stores your PAT**:
 
-`azdocli login` never writes the PAT to disk in plaintext. The `pat` field in `~/.azdocli/credentials.json` and `~/.azdocli/profiles/*.json` holds an encrypted value (`enc:v1:...`) that only azdocli can decrypt, and only on the machine where you logged in:
+`azdocli login` never writes the PAT to disk in plaintext. The `pat` field in `~/.azdocli/credentials.json` and `~/.azdocli/profiles/*.json` holds an encrypted value (`enc:v1:...`) bound to the machine where you logged in:
 
-- **Windows**: encrypted with DPAPI for your user account, bound to this machine's id
-- **macOS / Linux**: encrypted with AES-256-GCM using a key derived from this machine's id and your home directory; the file is also restricted to your user (`0600`)
+- **Windows**: encrypted with DPAPI using your Windows account's keys, plus this machine's id. Another user account, or the same file on another machine, cannot decrypt it.
+- **macOS / Linux**: encrypted with AES-256-GCM using a key derived from this machine's id and your home directory path. These inputs are not secret, so this is machine binding, not secret-keyed encryption. The real access control is the file permission: the file is only readable by your user (`0600`).
 
-Copying the file to another machine, or copying the value out of it, does not give a usable token. On another machine, run `azdocli login` again. Credentials saved by older versions in plaintext are encrypted automatically the next time azdocli reads them.
+Copying the value out of the file, or the file to another machine, does not give you a usable token. On another machine, run `azdocli login` again. Credentials saved by older versions in plaintext are encrypted automatically the next time azdocli reads them.
 
-This protects against the PAT being copied out of the config file. It does not protect against malicious software already running as your user on the same machine.
+Limits: any program running as your user on the same machine can decrypt the PAT, just as azdocli does. On macOS/Linux, someone who has both the file and the machine's id (for example from a full-disk backup) can also decrypt it.
 
 ### Enterprise Azure DevOps Installations
 
