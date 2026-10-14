@@ -20,6 +20,24 @@ pub fn is_protected(stored: &str) -> bool {
     stored.starts_with(PREFIX)
 }
 
+/// Encrypts a PAT so only azdocli on this machine can decrypt it.
+pub fn protect(pat: &str) -> Result<String> {
+    protect_for(&machine_binding()?, pat)
+}
+
+/// Decrypts a PAT previously encrypted with [`protect`] on this machine.
+pub fn unprotect(stored: &str) -> Result<String> {
+    unprotect_for(&machine_binding()?, stored)
+}
+
+/// Identifies this machine and user profile.
+fn machine_binding() -> Result<String> {
+    let machine_id =
+        machine_uid::get().map_err(|e| anyhow!("Could not determine the machine id: {}", e))?;
+    let home = dirs::home_dir().ok_or_else(|| anyhow!("Could not find home directory"))?;
+    Ok(format!("{}|{}", machine_id.trim(), home.display()))
+}
+
 pub(crate) fn protect_for(binding: &str, pat: &str) -> Result<String> {
     let sealed = seal(binding, pat.as_bytes())?;
     Ok(format!("{}{}", PREFIX, BASE64.encode(sealed)))
@@ -249,6 +267,13 @@ mod tests {
         let first = protect_for(MACHINE_A, "my-secret-pat").unwrap();
         let second = protect_for(MACHINE_A, "my-secret-pat").unwrap();
         assert_ne!(first, second);
+    }
+
+    #[test]
+    fn protect_binds_to_this_machine() {
+        let stored = protect("my-secret-pat").unwrap();
+        assert_eq!(unprotect(&stored).unwrap(), "my-secret-pat");
+        assert!(unprotect_for("machine-b", &stored).is_err());
     }
 
     #[test]
