@@ -10,7 +10,7 @@ use dialoguer::{Input, Password};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Credentials {
@@ -62,6 +62,31 @@ fn decode_credentials(json: &str) -> Result<(Credentials, bool)> {
     }
     creds.pat = secret::unprotect(&creds.pat)?;
     Ok((creds, false))
+}
+
+/// Writes credentials to `path` with the PAT encrypted and, on Unix, the file
+/// readable by the owner only.
+fn write_credentials_file(path: &Path, creds: &Credentials) -> Result<()> {
+    let json = encode_credentials(creds)?;
+    let mut file = fs::File::create(path)?;
+    file.write_all(json.as_bytes())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(path)?.permissions();
+        perms.set_mode(0o600);
+        fs::set_permissions(path, perms)?;
+    }
+    Ok(())
+}
+
+/// Reads credentials from `path`, re-saving a legacy plaintext PAT encrypted.
+fn read_credentials_file(path: &Path) -> Result<Credentials> {
+    let (creds, was_plaintext) = decode_credentials(&fs::read_to_string(path)?)?;
+    if was_plaintext {
+        write_credentials_file(path, &creds)?;
+    }
+    Ok(creds)
 }
 
 /// Save credentials for a named profile.
@@ -346,5 +371,23 @@ mod tests {
         let (creds, was_plaintext) = decode_credentials(&json).unwrap();
         assert_eq!(creds.pat, "my-secret-pat");
         assert!(was_plaintext);
+    }
+
+    #[test]
+    fn credentials_file_never_holds_the_pat_in_plaintext() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("credentials.json");
+        write_credentials_file(&path, &sample()).unwrap();
+        assert!(!fs::read_to_string(&path).unwrap().contains("my-secret-pat"));
+        assert_eq!(read_credentials_file(&path).unwrap().pat, "my-secret-pat");
+    }
+
+    #[test]
+    fn reading_a_plaintext_credentials_file_encrypts_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("credentials.json");
+        fs::write(&path, serde_json::to_string(&sample()).unwrap()).unwrap();
+        assert_eq!(read_credentials_file(&path).unwrap().pat, "my-secret-pat");
+        assert!(!fs::read_to_string(&path).unwrap().contains("my-secret-pat"));
     }
 }
