@@ -1,4 +1,5 @@
 pub mod factory;
+mod secret;
 pub mod url;
 
 use crate::auth::url::{default_base_url, normalize_base_url, parse_organization_or_url};
@@ -9,14 +10,24 @@ use dialoguer::{Input, Password};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Credentials {
     pub organization: String,
     pub pat: String,
     #[serde(default = "default_base_url")]
     pub base_url: String,
+}
+
+impl std::fmt::Debug for Credentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Credentials")
+            .field("organization", &self.organization)
+            .field("pat", &"<redacted>")
+            .field("base_url", &self.base_url)
+            .finish()
+    }
 }
 
 fn profiles_dir() -> Result<PathBuf> {
@@ -43,20 +54,78 @@ fn sanitize_profile_name(name: &str) -> String {
         .collect()
 }
 
-/// Save credentials for a named profile.
-fn save_profile(name: &str, creds: &Credentials) -> Result<()> {
-    let path = profile_file(name)?;
-    let json = serde_json::to_string_pretty(creds)?;
-    let mut file = fs::File::create(&path)?;
-    file.write_all(json.as_bytes())?;
+/// Serializes credentials with the PAT encrypted for this machine.
+fn encode_credentials(creds: &Credentials) -> Result<String> {
+    let protected = Credentials {
+        pat: secret::protect(&creds.pat)?,
+        ..creds.clone()
+    };
+    Ok(serde_json::to_string_pretty(&protected)?)
+}
+
+/// Parses stored credentials and decrypts the PAT. The flag is true when the
+/// file held a legacy plaintext PAT that should be re-saved encrypted.
+fn decode_credentials(json: &str) -> Result<(Credentials, bool)> {
+    let mut creds: Credentials = serde_json::from_str(json)?;
+    if !secret::is_protected(&creds.pat) {
+        return Ok((creds, true));
+    }
+    creds.pat = secret::unprotect(&creds.pat)?;
+    Ok((creds, false))
+}
+
+/// Writes credentials to `path` with the PAT encrypted and, on Unix, the file
+/// readable by the owner only.
+///
+/// The file is written to a temporary sibling and then renamed over `path`,
+/// so readers never see a partial file and a failed write keeps the old one.
+fn write_credentials_file(path: &Path, creds: &Credentials) -> Result<()> {
+    let json = encode_credentials(creds)?;
+    let temp_path = credentials_temp_path(path);
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&path)?.permissions();
-        perms.set_mode(0o600);
-        fs::set_permissions(&path, perms)?;
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
     }
-    Ok(())
+    let result = (|| -> Result<()> {
+        let mut file = options.open(&temp_path)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            file.set_permissions(fs::Permissions::from_mode(0o600))?;
+        }
+        file.write_all(json.as_bytes())?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&temp_path, path)?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temp_path);
+    }
+    result
+}
+
+fn credentials_temp_path(path: &Path) -> PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".tmp");
+    path.with_file_name(name)
+}
+
+/// Reads credentials from `path`, re-saving a legacy plaintext PAT encrypted.
+fn read_credentials_file(path: &Path) -> Result<Credentials> {
+    let (creds, was_plaintext) = decode_credentials(&fs::read_to_string(path)?)?;
+    if was_plaintext {
+        write_credentials_file(path, &creds)?;
+    }
+    Ok(creds)
+}
+
+/// Save credentials for a named profile.
+fn save_profile(name: &str, creds: &Credentials) -> Result<()> {
+    write_credentials_file(&profile_file(name)?, creds)
 }
 
 /// Load credentials for a named profile.
@@ -69,8 +138,7 @@ fn load_profile(name: &str) -> Result<Credentials> {
             name
         ));
     }
-    let s = fs::read_to_string(&path)?;
-    Ok(serde_json::from_str(&s)?)
+    read_credentials_file(&path)
 }
 
 /// List known profile names (excluding the legacy default).
@@ -149,22 +217,7 @@ fn save_pat(pat: &str, base_url: &str) -> Result<()> {
         base_url: normalize_base_url(base_url),
     };
 
-    let creds_path = get_credentials_file_path()?;
-    let credentials_json = serde_json::to_string_pretty(&credentials)?;
-
-    let mut file = fs::File::create(&creds_path)?;
-    file.write_all(credentials_json.as_bytes())?;
-
-    // Set restrictive permissions on the file
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&creds_path)?.permissions();
-        perms.set_mode(0o600); // Read/write for owner only
-        fs::set_permissions(&creds_path, perms)?;
-    }
-
-    Ok(())
+    write_credentials_file(&get_credentials_file_path()?, &credentials)
 }
 
 fn show_pat_instructions() {
@@ -277,10 +330,7 @@ fn get_stored_credentials() -> Result<Credentials> {
         ));
     }
 
-    let credentials_json = fs::read_to_string(creds_path)?;
-    let credentials: Credentials = serde_json::from_str(&credentials_json)?;
-
-    Ok(credentials)
+    read_credentials_file(&creds_path)
 }
 
 /// Load credentials for a specific named profile, or the default if `None`.
@@ -288,5 +338,91 @@ pub fn get_credentials_for(profile: Option<&str>) -> Result<Credentials> {
     match profile {
         Some(name) => load_profile(name),
         None => get_credentials(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample() -> Credentials {
+        Credentials {
+            organization: "contoso".to_string(),
+            pat: "my-secret-pat".to_string(),
+            base_url: "https://dev.azure.com".to_string(),
+        }
+    }
+
+    #[test]
+    fn encoded_credentials_do_not_contain_the_pat() {
+        let json = encode_credentials(&sample()).unwrap();
+        assert!(!json.contains("my-secret-pat"));
+        assert!(json.contains("contoso"));
+    }
+
+    #[test]
+    fn encoded_credentials_decode_back() {
+        let json = encode_credentials(&sample()).unwrap();
+        let (creds, was_plaintext) = decode_credentials(&json).unwrap();
+        assert_eq!(creds.pat, "my-secret-pat");
+        assert_eq!(creds.organization, "contoso");
+        assert!(!was_plaintext);
+    }
+
+    #[test]
+    fn legacy_plaintext_credentials_decode_and_are_flagged() {
+        let json = serde_json::to_string(&sample()).unwrap();
+        let (creds, was_plaintext) = decode_credentials(&json).unwrap();
+        assert_eq!(creds.pat, "my-secret-pat");
+        assert!(was_plaintext);
+    }
+
+    #[test]
+    fn debug_output_redacts_the_pat() {
+        let debug = format!("{:?}", sample());
+        assert!(!debug.contains("my-secret-pat"));
+        assert!(debug.contains("contoso"));
+    }
+
+    #[test]
+    fn credentials_file_never_holds_the_pat_in_plaintext() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("credentials.json");
+        write_credentials_file(&path, &sample()).unwrap();
+        assert!(!fs::read_to_string(&path).unwrap().contains("my-secret-pat"));
+        assert_eq!(read_credentials_file(&path).unwrap().pat, "my-secret-pat");
+    }
+
+    #[test]
+    fn rewriting_credentials_replaces_the_file_without_leftovers() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("credentials.json");
+        fs::write(&path, "old contents").unwrap();
+        write_credentials_file(&path, &sample()).unwrap();
+        assert_eq!(read_credentials_file(&path).unwrap().pat, "my-secret-pat");
+        let entries: Vec<_> = fs::read_dir(dir.path()).unwrap().collect();
+        assert_eq!(entries.len(), 1);
+        assert!(!credentials_temp_path(&path).exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn credentials_file_is_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("credentials.json");
+        fs::write(&path, "old contents").unwrap();
+        write_credentials_file(&path, &sample()).unwrap();
+        let mode = fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
+
+    #[test]
+    fn reading_a_plaintext_credentials_file_encrypts_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("credentials.json");
+        fs::write(&path, serde_json::to_string(&sample()).unwrap()).unwrap();
+        assert_eq!(read_credentials_file(&path).unwrap().pat, "my-secret-pat");
+        assert!(!fs::read_to_string(&path).unwrap().contains("my-secret-pat"));
     }
 }
