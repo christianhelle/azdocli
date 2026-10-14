@@ -91,18 +91,7 @@ fn read_credentials_file(path: &Path) -> Result<Credentials> {
 
 /// Save credentials for a named profile.
 fn save_profile(name: &str, creds: &Credentials) -> Result<()> {
-    let path = profile_file(name)?;
-    let json = serde_json::to_string_pretty(creds)?;
-    let mut file = fs::File::create(&path)?;
-    file.write_all(json.as_bytes())?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&path)?.permissions();
-        perms.set_mode(0o600);
-        fs::set_permissions(&path, perms)?;
-    }
-    Ok(())
+    write_credentials_file(&profile_file(name)?, creds)
 }
 
 /// Load credentials for a named profile.
@@ -195,22 +184,7 @@ fn save_pat(pat: &str, base_url: &str) -> Result<()> {
         base_url: normalize_base_url(base_url),
     };
 
-    let creds_path = get_credentials_file_path()?;
-    let credentials_json = serde_json::to_string_pretty(&credentials)?;
-
-    let mut file = fs::File::create(&creds_path)?;
-    file.write_all(credentials_json.as_bytes())?;
-
-    // Set restrictive permissions on the file
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&creds_path)?.permissions();
-        perms.set_mode(0o600); // Read/write for owner only
-        fs::set_permissions(&creds_path, perms)?;
-    }
-
-    Ok(())
+    write_credentials_file(&get_credentials_file_path()?, &credentials)
 }
 
 fn show_pat_instructions() {
