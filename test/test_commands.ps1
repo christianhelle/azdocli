@@ -118,6 +118,15 @@ foreach ($group in @("variable-group", "service-connection"))
   }
 }
 
+Write-Host "`nTesting releases help..." -ForegroundColor Yellow
+Invoke-Cli releases --help
+
+foreach ($subcommand in @("definitions", "list", "show", "create"))
+{
+  Write-Host "`nTesting releases $subcommand help..." -ForegroundColor Yellow
+  Invoke-Cli releases $subcommand --help
+}
+
 Write-Host "`nTesting boards help..." -ForegroundColor Yellow
 Invoke-Cli boards --help
 
