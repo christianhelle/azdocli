@@ -33,6 +33,15 @@ pub enum ReleasesSubCommands {
         #[clap(short, long)]
         project: Option<String>,
     },
+    /// Show a release and the status of its stages
+    Show {
+        /// ID of the release
+        #[clap(short, long)]
+        id: i32,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
     /// Create a release that deploys a specific build
     Create {
         /// ID of the release definition (release pipeline) to create the release from
@@ -149,6 +158,15 @@ async fn list_releases(
     }
 
     Ok(request.await?.value)
+}
+
+async fn get_release(project: &str, release_id: i32) -> Result<Release> {
+    let (client, organization) = create_release_client()?;
+
+    Ok(client
+        .releases_client()
+        .get_release(&organization, project, release_id)
+        .await?)
 }
 
 async fn create_release(
@@ -289,6 +307,21 @@ fn display_release(release: &Release) {
         );
     }
 
+    if !release.environments.is_empty() {
+        println!("\nStages:");
+        for environment in &release.environments {
+            println!(
+                "  {} - {}",
+                environment.name.as_deref().unwrap_or("-"),
+                environment
+                    .status
+                    .as_ref()
+                    .map(|status| format!("{status:?}"))
+                    .unwrap_or_else(|| "-".to_string())
+            );
+        }
+    }
+
     if let Some(url) = web_url(release.links.as_ref()) {
         println!("URL: {url}");
     }
@@ -317,6 +350,17 @@ pub async fn handle_command(subcommand: &ReleasesSubCommands) -> Result<()> {
                 Ok(releases) => display_releases(&releases),
                 Err(e) => {
                     eprintln!("❌ Failed to list the releases of '{project_name}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        ReleasesSubCommands::Show { id, project } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match get_release(&project_name, *id).await {
+                Ok(release) => display_release(&release),
+                Err(e) => {
+                    eprintln!("❌ Failed to retrieve release {id}");
                     eprintln!("   {e}");
                     return Err(e);
                 }
@@ -431,6 +475,18 @@ mod tests {
         assert_eq!(definition_id, Some(5));
         assert_eq!(top, Some(10));
         assert_eq!(project, None);
+    }
+
+    #[test]
+    fn show_takes_a_numeric_release_id() {
+        let ReleasesSubCommands::Show { id, project } = parse(&["show", "--id", "42"]).unwrap()
+        else {
+            panic!("expected the show command");
+        };
+        assert_eq!(id, 42);
+        assert_eq!(project, None);
+
+        assert!(parse(&["show", "--id", "abc"]).is_err());
     }
 
     #[test]
