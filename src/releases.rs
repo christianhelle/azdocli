@@ -3,6 +3,12 @@ use azure_devops_rust_api::release::models::{
     Artifact, ArtifactMetadata, BuildVersion, ReleaseStartMetadata,
 };
 
+fn parse_id(value: &str, label: &str) -> Result<i32> {
+    value
+        .parse::<i32>()
+        .map_err(|_| anyhow!("Invalid {label} ID '{value}', must be a number"))
+}
+
 fn build_artifact_aliases(artifacts: &[Artifact]) -> Vec<&str> {
     artifacts
         .iter()
@@ -140,5 +146,11 @@ mod tests {
     fn start_metadata_includes_the_description() {
         let metadata = build_release_start_metadata(7, "_app", 1234, Some("Hotfix"));
         assert_eq!(metadata.description.as_deref(), Some("Hotfix"));
+    }
+
+    #[test]
+    fn parse_id_rejects_non_numeric_input() {
+        assert_eq!(parse_id("42", "build").unwrap(), 42);
+        assert!(parse_id("abc", "build").is_err());
     }
 }
