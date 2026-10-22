@@ -1,6 +1,8 @@
+use crate::auth::factory::{ClientFactory, CredentialClientFactory};
+use crate::auth::get_credentials;
 use anyhow::{anyhow, bail, Result};
 use azure_devops_rust_api::release::models::{
-    Artifact, ArtifactMetadata, BuildVersion, ReleaseStartMetadata,
+    Artifact, ArtifactMetadata, BuildVersion, Release, ReleaseDefinition, ReleaseStartMetadata,
 };
 
 fn parse_id(value: &str, label: &str) -> Result<i32> {
@@ -67,6 +69,84 @@ fn build_release_start_metadata(
     metadata.artifacts = vec![artifact];
     metadata.description = description.map(str::to_string);
     metadata
+}
+
+async fn list_definitions(project: &str) -> Result<Vec<ReleaseDefinition>> {
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds)?;
+
+    Ok(factory
+        .build_release()
+        .definitions_client()
+        .list(creds.organization, project)
+        .expand("artifacts")
+        .await?
+        .value)
+}
+
+async fn get_definition(project: &str, definition_id: i32) -> Result<ReleaseDefinition> {
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds)?;
+
+    Ok(factory
+        .build_release()
+        .definitions_client()
+        .get(creds.organization, project, definition_id)
+        .await?)
+}
+
+async fn list_releases(
+    project: &str,
+    definition_id: Option<i32>,
+    top: Option<i32>,
+) -> Result<Vec<Release>> {
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds)?;
+
+    let mut request = factory
+        .build_release()
+        .releases_client()
+        .list(creds.organization, project);
+    if let Some(definition_id) = definition_id {
+        request = request.definition_id(definition_id);
+    }
+    if let Some(top) = top {
+        request = request.top(top);
+    }
+
+    Ok(request.await?.value)
+}
+
+async fn get_release(project: &str, release_id: i32) -> Result<Release> {
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds)?;
+
+    Ok(factory
+        .build_release()
+        .releases_client()
+        .get_release(creds.organization, project, release_id)
+        .await?)
+}
+
+async fn create_release(
+    project: &str,
+    definition_id: i32,
+    build_id: i32,
+    alias: Option<&str>,
+    description: Option<&str>,
+) -> Result<Release> {
+    let definition = get_definition(project, definition_id).await?;
+    let alias = resolve_build_artifact_alias(&definition.artifacts, alias)?;
+    let metadata = build_release_start_metadata(definition_id, &alias, build_id, description);
+
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds)?;
+
+    Ok(factory
+        .build_release()
+        .releases_client()
+        .create(creds.organization, metadata, project)
+        .await?)
 }
 
 #[cfg(test)]
