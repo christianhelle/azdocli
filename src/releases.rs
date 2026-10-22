@@ -1,8 +1,14 @@
+use crate::auth::factory::{ClientFactory, CredentialClientFactory};
+use crate::auth::get_credentials;
+use crate::project::get_project_or_default;
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::release::models::{
-    Artifact, ArtifactMetadata, BuildVersion, ReleaseStartMetadata,
+    Artifact, ArtifactMetadata, BuildVersion, Release, ReleaseStartMetadata,
 };
+use azure_devops_rust_api::release::Client;
 use clap::Subcommand;
+use colored::Colorize;
+use serde_json::Value;
 
 #[derive(Subcommand, Clone)]
 pub enum ReleasesSubCommands {
@@ -84,6 +90,122 @@ fn release_start_metadata(
     metadata.description = description.map(str::to_string);
     metadata.artifacts = vec![artifact];
     metadata
+}
+
+fn create_release_client() -> Result<(Client, String)> {
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds)?;
+    Ok((factory.build_release(), creds.organization))
+}
+
+async fn create_release(
+    project: &str,
+    definition_id: i32,
+    build_id: i32,
+    artifact_alias: Option<&str>,
+    description: Option<&str>,
+) -> Result<Release> {
+    let (client, organization) = create_release_client()?;
+
+    let definition = client
+        .definitions_client()
+        .get(&organization, project, definition_id)
+        .await?;
+    let alias = resolve_artifact_alias(&definition.artifacts, artifact_alias)?;
+
+    Ok(client
+        .releases_client()
+        .create(
+            &organization,
+            release_start_metadata(definition_id, &alias, build_id, description),
+            project,
+        )
+        .await?)
+}
+
+fn web_url(links: Option<&Value>) -> Option<&str> {
+    links?.get("web")?.get("href")?.as_str()
+}
+
+fn display_release(release: &Release) {
+    println!("🚀 Release");
+    println!("==========");
+    println!(
+        "ID: {}",
+        release
+            .id
+            .map(|id| id.to_string())
+            .unwrap_or_else(|| "-".to_string())
+    );
+    println!("Name: {}", release.name.as_deref().unwrap_or("-"));
+
+    if let Some(definition) = &release.release_definition {
+        println!("Definition: {}", definition.name.as_deref().unwrap_or("-"));
+    }
+    if let Some(status) = &release.status {
+        println!("Status: {status:?}");
+    }
+    if let Some(description) = &release.description {
+        println!("Description: {description}");
+    }
+    if let Some(created_on) = release.created_on {
+        println!("Created: {created_on}");
+    }
+
+    for artifact in &release.artifacts {
+        let version = artifact
+            .definition_reference
+            .as_ref()
+            .and_then(|reference| reference.get("version"))
+            .and_then(|version| version.get("name"))
+            .and_then(Value::as_str)
+            .unwrap_or("-");
+        println!(
+            "Artifact: {} ({version})",
+            artifact.alias.as_deref().unwrap_or("-")
+        );
+    }
+
+    if let Some(url) = web_url(release.links.as_ref()) {
+        println!("URL: {url}");
+    }
+}
+
+pub async fn handle_command(subcommand: &ReleasesSubCommands) -> Result<()> {
+    match subcommand {
+        ReleasesSubCommands::Create {
+            definition_id,
+            build_id,
+            artifact_alias,
+            description,
+            project,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match create_release(
+                &project_name,
+                *definition_id,
+                *build_id,
+                artifact_alias.as_deref(),
+                description.as_deref(),
+            )
+            .await
+            {
+                Ok(release) => {
+                    println!("{}", "✅ Release created successfully".green());
+                    display_release(&release);
+                }
+                Err(e) => {
+                    eprintln!(
+                        "{}",
+                        format!("❌ Failed to create a release of build {build_id}: {e}").red()
+                    );
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
