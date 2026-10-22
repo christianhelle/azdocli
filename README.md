@@ -181,6 +181,7 @@ SUBCOMMANDS:
     migrate      Migrate one or more team projects between organizations
     pipelines    Manage Azure DevOps pipelines
     project      Set or view the default project
+    releases     Manage Azure DevOps classic releases
     repos        Manage Azure DevOps repos
     user         Manage user entitlements
 ```
@@ -189,6 +190,7 @@ SUBCOMMANDS:
 
 - **Repository Management**: List, create, delete, clone, view, browse and manage pull requests in repositories
 - **Pipeline Management**: Manage Azure DevOps pipelines
+- **Release Management**: List, show and create classic releases, including creating a release from a specific build
 - **Project Management**: Create, delete, list, and show Azure DevOps team projects, their teams, team members and process templates
 - **Migration**: Cross-tenant team-project migration with `azdocli migrate` (see [docs/migrate.md](docs/migrate.md) for the full guide)
 - **Board Management**: Manage Azure DevOps boards
@@ -719,7 +721,39 @@ azdocli pipelines service-connection show --id 00000000-0000-0000-0000-000000000
 - **Service connection inventory**: List connections with their type and readiness, filtered by type
 - **Default project support**: Use with default project or specify --project explicitly
 
-### User Management Features
+### Release Management Features
+
+The `releases` command manages classic release pipelines. Its main use is creating a release from
+a specific build:
+
+```sh
+# List the release definitions and the aliases of their build artifacts
+azdocli releases definitions
+
+# Create a release of definition 5 from build 1234
+azdocli releases create --definition-id 5 --build-id 1234
+
+# Pick the build artifact when the definition links more than one build
+azdocli releases create --definition-id 5 --build-id 1234 --alias _MyApp --description "Hotfix"
+
+# List the latest releases of a definition
+azdocli releases list --definition-id 5 --top 10
+
+# Show a release and the status of its stages
+azdocli releases show --id 42
+
+# Or specify a project explicitly
+azdocli releases list --project MyProject
+```
+
+**Release Features:**
+
+- **Release from a build**: Pin the build artifact of a release definition to a specific build
+- **Automatic artifact selection**: The build artifact is picked automatically when the definition has only one
+- **Release inventory**: List releases, optionally filtered by definition
+- **Stage status**: See the status of every stage of a release
+
+
 
 The `user` commands allow you to manage users and licenses in your Azure DevOps organization:
 
