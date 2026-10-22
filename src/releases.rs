@@ -1,10 +1,43 @@
-use anyhow::Result;
+use anyhow::{anyhow, bail, Result};
 use azure_devops_rust_api::release::models::Artifact;
+
+fn build_artifact_aliases(artifacts: &[Artifact]) -> Vec<&str> {
+    artifacts
+        .iter()
+        .filter(|artifact| {
+            artifact
+                .type_
+                .as_deref()
+                .is_some_and(|type_| type_.eq_ignore_ascii_case("Build"))
+        })
+        .filter_map(|artifact| artifact.alias.as_deref())
+        .collect()
+}
 
 /// Picks the build artifact a release should be created from.
 fn resolve_build_artifact_alias(artifacts: &[Artifact], requested: Option<&str>) -> Result<String> {
-    let _ = (artifacts, requested);
-    todo!()
+    let aliases = build_artifact_aliases(artifacts);
+    if aliases.is_empty() {
+        bail!("The release definition has no build artifacts");
+    }
+
+    match requested {
+        Some(requested) => aliases
+            .iter()
+            .find(|alias| **alias == requested)
+            .map(|alias| alias.to_string())
+            .ok_or_else(|| {
+                anyhow!(
+                    "Build artifact '{requested}' not found, available aliases: {}",
+                    aliases.join(", ")
+                )
+            }),
+        None if aliases.len() == 1 => Ok(aliases[0].to_string()),
+        None => bail!(
+            "The release definition has several build artifacts, choose one with --alias: {}",
+            aliases.join(", ")
+        ),
+    }
 }
 
 #[cfg(test)]
