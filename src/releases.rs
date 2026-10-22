@@ -49,8 +49,18 @@ fn build_release_start_metadata(
     build_id: i32,
     description: Option<&str>,
 ) -> ReleaseStartMetadata {
-    let _ = (definition_id, alias, build_id, description);
-    todo!()
+    let mut build = BuildVersion::new();
+    build.id = Some(build_id.to_string());
+
+    let mut artifact = ArtifactMetadata::new();
+    artifact.alias = Some(alias.to_string());
+    artifact.instance_reference = Some(build);
+
+    let mut metadata = ReleaseStartMetadata::new();
+    metadata.definition_id = Some(definition_id);
+    metadata.artifacts = vec![artifact];
+    metadata.description = description.map(str::to_string);
+    metadata
 }
 
 #[cfg(test)]
