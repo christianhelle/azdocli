@@ -11,6 +11,7 @@ mod pipelines;
 mod pr;
 mod project;
 mod projects;
+mod releases;
 mod repos;
 mod text;
 mod user;
