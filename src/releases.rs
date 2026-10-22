@@ -25,7 +25,13 @@ fn resolve_artifact_alias(artifacts: &[Artifact], alias: Option<&str>) -> Result
         return Ok(alias.to_string());
     }
 
-    todo!()
+    artifacts
+        .iter()
+        .find(|artifact| {
+            artifact.is_primary == Some(true) && artifact.type_.as_deref() == Some("Build")
+        })
+        .and_then(|artifact| artifact.alias.clone())
+        .ok_or_else(|| todo!())
 }
 
 #[cfg(test)]
@@ -61,5 +67,15 @@ mod tests {
 
         assert!(error.to_string().contains("_missing"));
         assert!(error.to_string().contains("_app"));
+    }
+
+    #[test]
+    fn resolve_artifact_alias_defaults_to_the_primary_build_artifact() {
+        let artifacts = [
+            artifact("_infra", "Build", false),
+            artifact("_app", "Build", true),
+        ];
+
+        assert_eq!(resolve_artifact_alias(&artifacts, None).unwrap(), "_app");
     }
 }
