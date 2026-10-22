@@ -1,5 +1,7 @@
 use anyhow::{anyhow, Result};
-use azure_devops_rust_api::release::models::Artifact;
+use azure_devops_rust_api::release::models::{
+    Artifact, ArtifactMetadata, BuildVersion, ReleaseStartMetadata,
+};
 
 fn artifact_aliases(artifacts: &[Artifact]) -> String {
     artifacts
@@ -37,6 +39,28 @@ fn resolve_artifact_alias(artifacts: &[Artifact], alias: Option<&str>) -> Result
                 artifact_aliases(artifacts)
             )
         })
+}
+
+/// Pinning the artifact's instance reference to the build id is what makes the
+/// release deploy that build instead of the artifact's default version.
+fn release_start_metadata(
+    definition_id: i32,
+    alias: &str,
+    build_id: i32,
+    description: Option<&str>,
+) -> ReleaseStartMetadata {
+    let mut instance_reference = BuildVersion::new();
+    instance_reference.id = Some(build_id.to_string());
+
+    let mut artifact = ArtifactMetadata::new();
+    artifact.alias = Some(alias.to_string());
+    artifact.instance_reference = Some(instance_reference);
+
+    let mut metadata = ReleaseStartMetadata::new();
+    metadata.definition_id = Some(definition_id);
+    metadata.description = description.map(str::to_string);
+    metadata.artifacts = vec![artifact];
+    metadata
 }
 
 #[cfg(test)]
@@ -95,5 +119,21 @@ mod tests {
 
         assert!(error.to_string().contains("--artifact-alias"));
         assert!(error.to_string().contains("_repo, _app"));
+    }
+
+    #[test]
+    fn release_start_metadata_pins_the_artifact_to_the_build() {
+        let metadata = release_start_metadata(5, "_app", 123, Some("Hotfix"));
+
+        assert_eq!(
+            serde_json::to_value(&metadata).unwrap(),
+            serde_json::json!({
+                "definitionId": 5,
+                "description": "Hotfix",
+                "artifacts": [
+                    { "alias": "_app", "instanceReference": { "id": "123" } }
+                ]
+            })
+        );
     }
 }
