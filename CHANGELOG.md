@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased Changes]
+## [0.6.4](https://github.com/christianhelle/azdocli/releases/tag/0.6.4) (2026-10-19)
 
 ### Merged Pull Requests
 - Encrypt the stored PAT and bind it to the machine it was entered on ([#136](https://github.com/christianhelle/azdocli/pull/136)) ([@christianhelle](https://github.com/christianhelle/))
