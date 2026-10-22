@@ -45,6 +45,11 @@ enum Commands {
         #[clap(subcommand)]
         subcommand: pipelines::PipelinesSubCommands,
     },
+    /// Manage Azure DevOps classic releases
+    Releases {
+        #[clap(subcommand)]
+        subcommand: releases::ReleasesSubCommands,
+    },
     /// Manage Azure DevOps boards
     Boards {
         #[clap(subcommand)]
@@ -99,6 +104,9 @@ async fn main() -> anyhow::Result<()> {
         },
         Some(Commands::Pipelines { subcommand }) => {
             pipelines::handle_command(subcommand).await?;
+        }
+        Some(Commands::Releases { subcommand }) => {
+            releases::handle_command(subcommand).await?;
         }
         Some(Commands::Boards { subcommand }) => {
             boards::handle_command(subcommand).await?;
