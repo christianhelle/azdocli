@@ -2,6 +2,29 @@ use anyhow::{anyhow, Result};
 use azure_devops_rust_api::release::models::{
     Artifact, ArtifactMetadata, BuildVersion, ReleaseStartMetadata,
 };
+use clap::Subcommand;
+
+#[derive(Subcommand, Clone)]
+pub enum ReleasesSubCommands {
+    /// Create a release that deploys a specific build
+    Create {
+        /// ID of the release definition (release pipeline) to create the release from
+        #[clap(short, long)]
+        definition_id: i32,
+        /// ID of the build to release
+        #[clap(short, long)]
+        build_id: i32,
+        /// Alias of the definition artifact the build belongs to (defaults to the primary build artifact)
+        #[clap(short, long)]
+        artifact_alias: Option<String>,
+        /// Description of the release
+        #[clap(long)]
+        description: Option<String>,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
+}
 
 fn artifact_aliases(artifacts: &[Artifact]) -> String {
     artifacts
@@ -66,6 +89,60 @@ fn release_start_metadata(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
+
+    #[derive(Parser)]
+    struct TestCli {
+        #[clap(subcommand)]
+        command: ReleasesSubCommands,
+    }
+
+    fn parse(args: &[&str]) -> Result<ReleasesSubCommands, clap::Error> {
+        TestCli::try_parse_from(std::iter::once("releases").chain(args.iter().copied()))
+            .map(|cli| cli.command)
+    }
+
+    #[test]
+    fn create_takes_the_definition_and_the_build_to_release() {
+        let command = parse(&[
+            "create",
+            "--definition-id",
+            "5",
+            "--build-id",
+            "123",
+            "--artifact-alias",
+            "_app",
+            "--description",
+            "Hotfix",
+        ])
+        .unwrap();
+
+        let ReleasesSubCommands::Create {
+            definition_id,
+            build_id,
+            artifact_alias,
+            description,
+            project,
+        } = command
+        else {
+            panic!("expected the create command");
+        };
+        assert_eq!(definition_id, 5);
+        assert_eq!(build_id, 123);
+        assert_eq!(artifact_alias.as_deref(), Some("_app"));
+        assert_eq!(description.as_deref(), Some("Hotfix"));
+        assert_eq!(project, None);
+    }
+
+    #[test]
+    fn create_requires_a_build_id() {
+        assert!(parse(&["create", "--definition-id", "5"]).is_err());
+    }
+
+    #[test]
+    fn create_rejects_a_non_numeric_build_id() {
+        assert!(parse(&["create", "--definition-id", "5", "--build-id", "latest"]).is_err());
+    }
 
     fn artifact(alias: &str, type_: &str, is_primary: bool) -> Artifact {
         let mut artifact = Artifact::new();
