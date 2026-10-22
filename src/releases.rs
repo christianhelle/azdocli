@@ -1,10 +1,27 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use azure_devops_rust_api::release::models::Artifact;
+
+fn artifact_aliases(artifacts: &[Artifact]) -> String {
+    artifacts
+        .iter()
+        .filter_map(|artifact| artifact.alias.as_deref())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
 
 /// A release definition can link several artifacts, so the build has to be
 /// attached to one of them by its alias.
 fn resolve_artifact_alias(artifacts: &[Artifact], alias: Option<&str>) -> Result<String> {
     if let Some(alias) = alias {
+        if !artifacts
+            .iter()
+            .any(|artifact| artifact.alias.as_deref() == Some(alias))
+        {
+            return Err(anyhow!(
+                "The release definition has no artifact with alias '{alias}'. Available aliases: {}",
+                artifact_aliases(artifacts)
+            ));
+        }
         return Ok(alias.to_string());
     }
 
@@ -34,5 +51,15 @@ mod tests {
             resolve_artifact_alias(&artifacts, Some("_infra")).unwrap(),
             "_infra"
         );
+    }
+
+    #[test]
+    fn resolve_artifact_alias_rejects_an_alias_the_definition_does_not_link() {
+        let artifacts = [artifact("_app", "Build", true)];
+
+        let error = resolve_artifact_alias(&artifacts, Some("_missing")).unwrap_err();
+
+        assert!(error.to_string().contains("_missing"));
+        assert!(error.to_string().contains("_app"));
     }
 }
