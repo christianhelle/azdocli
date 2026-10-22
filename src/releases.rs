@@ -31,7 +31,12 @@ fn resolve_artifact_alias(artifacts: &[Artifact], alias: Option<&str>) -> Result
             artifact.is_primary == Some(true) && artifact.type_.as_deref() == Some("Build")
         })
         .and_then(|artifact| artifact.alias.clone())
-        .ok_or_else(|| todo!())
+        .ok_or_else(|| {
+            anyhow!(
+                "The release definition has no primary build artifact. Pass --artifact-alias with one of: {}",
+                artifact_aliases(artifacts)
+            )
+        })
 }
 
 #[cfg(test)]
@@ -77,5 +82,18 @@ mod tests {
         ];
 
         assert_eq!(resolve_artifact_alias(&artifacts, None).unwrap(), "_app");
+    }
+
+    #[test]
+    fn resolve_artifact_alias_asks_for_an_alias_when_the_primary_is_not_a_build() {
+        let artifacts = [
+            artifact("_repo", "Git", true),
+            artifact("_app", "Build", false),
+        ];
+
+        let error = resolve_artifact_alias(&artifacts, None).unwrap_err();
+
+        assert!(error.to_string().contains("--artifact-alias"));
+        assert!(error.to_string().contains("_repo, _app"));
     }
 }
