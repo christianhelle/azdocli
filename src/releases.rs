@@ -21,6 +21,18 @@ pub enum ReleasesSubCommands {
         #[clap(short, long)]
         project: Option<String>,
     },
+    /// List the releases of a project
+    List {
+        /// Only list releases of this release definition
+        #[clap(short, long)]
+        definition_id: Option<i32>,
+        /// Maximum number of releases to return
+        #[clap(long)]
+        top: Option<i32>,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
     /// Create a release that deploys a specific build
     Create {
         /// ID of the release definition (release pipeline) to create the release from
@@ -121,6 +133,24 @@ async fn list_release_definitions(
     Ok(request.await?.value)
 }
 
+async fn list_releases(
+    project: &str,
+    definition_id: Option<i32>,
+    top: Option<i32>,
+) -> Result<Vec<Release>> {
+    let (client, organization) = create_release_client()?;
+
+    let mut request = client.releases_client().list(&organization, project);
+    if let Some(definition_id) = definition_id {
+        request = request.definition_id(definition_id);
+    }
+    if let Some(top) = top {
+        request = request.top(top);
+    }
+
+    Ok(request.await?.value)
+}
+
 async fn create_release(
     project: &str,
     definition_id: i32,
@@ -170,6 +200,48 @@ fn display_release_definitions(definitions: &[ReleaseDefinition]) {
                 .unwrap_or_else(|| "-".to_string()),
             reference.name.as_deref().unwrap_or("-"),
             reference.path.as_deref().unwrap_or("-")
+        );
+    }
+}
+
+fn display_releases(releases: &[Release]) {
+    if releases.is_empty() {
+        println!("No releases found.");
+        return;
+    }
+
+    println!(
+        "{:<10} {:<24} {:<12} {:<30} {}",
+        "ID".bold(),
+        "Name".bold(),
+        "Status".bold(),
+        "Definition".bold(),
+        "Created".bold()
+    );
+    println!("{}", "-".repeat(90));
+
+    for release in releases {
+        println!(
+            "{:<10} {:<24} {:<12} {:<30} {}",
+            release
+                .id
+                .map(|id| id.to_string())
+                .unwrap_or_else(|| "-".to_string()),
+            release.name.as_deref().unwrap_or("-"),
+            release
+                .status
+                .as_ref()
+                .map(|status| format!("{status:?}"))
+                .unwrap_or_else(|| "-".to_string()),
+            release
+                .release_definition
+                .as_ref()
+                .and_then(|definition| definition.name.as_deref())
+                .unwrap_or("-"),
+            release
+                .created_on
+                .map(|created| created.date().to_string())
+                .unwrap_or_else(|| "-".to_string())
         );
     }
 }
@@ -230,6 +302,21 @@ pub async fn handle_command(subcommand: &ReleasesSubCommands) -> Result<()> {
                 Ok(definitions) => display_release_definitions(&definitions),
                 Err(e) => {
                     eprintln!("❌ Failed to list the release definitions of '{project_name}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        ReleasesSubCommands::List {
+            definition_id,
+            top,
+            project,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match list_releases(&project_name, *definition_id, *top).await {
+                Ok(releases) => display_releases(&releases),
+                Err(e) => {
+                    eprintln!("❌ Failed to list the releases of '{project_name}'");
                     eprintln!("   {e}");
                     return Err(e);
                 }
@@ -327,6 +414,23 @@ mod tests {
         };
         assert_eq!(name.as_deref(), Some("web"));
         assert_eq!(project.as_deref(), Some("Shop"));
+    }
+
+    #[test]
+    fn list_filters_by_definition_and_caps_the_results() {
+        let command = parse(&["list", "--definition-id", "5", "--top", "10"]).unwrap();
+
+        let ReleasesSubCommands::List {
+            definition_id,
+            top,
+            project,
+        } = command
+        else {
+            panic!("expected the list command");
+        };
+        assert_eq!(definition_id, Some(5));
+        assert_eq!(top, Some(10));
+        assert_eq!(project, None);
     }
 
     #[test]
