@@ -1,5 +1,7 @@
 use anyhow::{anyhow, bail, Result};
-use azure_devops_rust_api::release::models::Artifact;
+use azure_devops_rust_api::release::models::{
+    Artifact, ArtifactMetadata, BuildVersion, ReleaseStartMetadata,
+};
 
 fn build_artifact_aliases(artifacts: &[Artifact]) -> Vec<&str> {
     artifacts
@@ -38,6 +40,17 @@ fn resolve_build_artifact_alias(artifacts: &[Artifact], requested: Option<&str>)
             aliases.join(", ")
         ),
     }
+}
+
+/// Builds the request that starts a release of `definition_id` from `build_id`.
+fn build_release_start_metadata(
+    definition_id: i32,
+    alias: &str,
+    build_id: i32,
+    description: Option<&str>,
+) -> ReleaseStartMetadata {
+    let _ = (definition_id, alias, build_id, description);
+    todo!()
 }
 
 #[cfg(test)]
@@ -95,5 +108,27 @@ mod tests {
     fn resolve_alias_fails_without_build_artifacts() {
         let artifacts = vec![artifact("_repo", "Git")];
         assert!(resolve_build_artifact_alias(&artifacts, None).is_err());
+    }
+
+    #[test]
+    fn start_metadata_pins_the_artifact_to_the_build() {
+        let metadata = build_release_start_metadata(7, "_app", 1234, None);
+        let body = serde_json::to_value(&metadata).unwrap();
+
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "definitionId": 7,
+                "artifacts": [
+                    { "alias": "_app", "instanceReference": { "id": "1234" } }
+                ]
+            })
+        );
+    }
+
+    #[test]
+    fn start_metadata_includes_the_description() {
+        let metadata = build_release_start_metadata(7, "_app", 1234, Some("Hotfix"));
+        assert_eq!(metadata.description.as_deref(), Some("Hotfix"));
     }
 }
