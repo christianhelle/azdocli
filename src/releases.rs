@@ -4,6 +4,7 @@ use anyhow::{anyhow, bail, Result};
 use azure_devops_rust_api::release::models::{
     Artifact, ArtifactMetadata, BuildVersion, Release, ReleaseDefinition, ReleaseStartMetadata,
 };
+use colored::Colorize;
 
 fn parse_id(value: &str, label: &str) -> Result<i32> {
     value
@@ -147,6 +148,135 @@ async fn create_release(
         .releases_client()
         .create(creds.organization, metadata, project)
         .await?)
+}
+
+fn display_definitions(definitions: &[ReleaseDefinition]) {
+    if definitions.is_empty() {
+        println!("No release definitions found.");
+        return;
+    }
+
+    println!(
+        "{:<10} {:<40} {}",
+        "ID".bold(),
+        "Name".bold(),
+        "Build artifacts".bold()
+    );
+    println!("{}", "-".repeat(80));
+
+    for definition in definitions {
+        let reference = &definition.release_definition_shallow_reference;
+        let aliases = build_artifact_aliases(&definition.artifacts).join(", ");
+        println!(
+            "{:<10} {:<40} {}",
+            reference.id.map(|id| id.to_string()).unwrap_or_default(),
+            reference.name.as_deref().unwrap_or("-"),
+            if aliases.is_empty() { "-" } else { &aliases }
+        );
+    }
+}
+
+fn display_releases(releases: &[Release]) {
+    if releases.is_empty() {
+        println!("No releases found.");
+        return;
+    }
+
+    println!(
+        "{:<10} {:<24} {:<30} {:<12} {}",
+        "ID".bold(),
+        "Name".bold(),
+        "Definition".bold(),
+        "Status".bold(),
+        "Created".bold()
+    );
+    println!("{}", "-".repeat(90));
+
+    for release in releases {
+        println!(
+            "{:<10} {:<24} {:<30} {:<12} {}",
+            release.id.map(|id| id.to_string()).unwrap_or_default(),
+            release.name.as_deref().unwrap_or("-"),
+            release
+                .release_definition
+                .as_ref()
+                .and_then(|definition| definition.name.as_deref())
+                .unwrap_or("-"),
+            release
+                .status
+                .as_ref()
+                .map(|status| format!("{status:?}"))
+                .unwrap_or_else(|| "-".to_string()),
+            release
+                .created_on
+                .map(|created_on| created_on.date().to_string())
+                .unwrap_or_else(|| "-".to_string())
+        );
+    }
+}
+
+fn display_release(release: &Release) {
+    println!("📋 Release Details");
+    println!("==================");
+    println!(
+        "🆔 Release: #{} ({})",
+        release.id.map(|id| id.to_string()).unwrap_or_default(),
+        release.name.as_deref().unwrap_or("-")
+    );
+
+    if let Some(definition) = &release.release_definition {
+        println!(
+            "📛 Definition: {}",
+            definition.name.as_deref().unwrap_or("-")
+        );
+    }
+    if let Some(status) = &release.status {
+        println!("🚦 Status: {status:?}");
+    }
+    if let Some(description) = release.description.as_deref().filter(|d| !d.is_empty()) {
+        println!("📝 Description: {description}");
+    }
+    if let Some(created_on) = release.created_on {
+        println!("🕐 Created: {created_on}");
+    }
+    if let Some(created_by) = release
+        .created_by
+        .as_ref()
+        .and_then(|identity| identity.graph_subject_base.display_name.as_deref())
+    {
+        println!("👤 Created by: {created_by}");
+    }
+
+    for artifact in &release.artifacts {
+        println!(
+            "📦 Artifact: {} ({})",
+            artifact.alias.as_deref().unwrap_or("-"),
+            artifact.type_.as_deref().unwrap_or("-")
+        );
+    }
+
+    if !release.environments.is_empty() {
+        println!("🌍 Stages:");
+        for environment in &release.environments {
+            println!(
+                "   {}: {}",
+                environment.name.as_deref().unwrap_or("-"),
+                environment
+                    .status
+                    .as_ref()
+                    .map(|status| format!("{status:?}"))
+                    .unwrap_or_else(|| "-".to_string())
+            );
+        }
+    }
+
+    if let Some(web) = release
+        .links
+        .as_ref()
+        .and_then(|links| links["web"]["href"].as_str())
+    {
+        println!("🌐 URL: {web}");
+    }
 }
 
 #[cfg(test)]
