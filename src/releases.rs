@@ -1,10 +1,62 @@
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
+use crate::project::get_project_or_default;
 use anyhow::{anyhow, bail, Result};
 use azure_devops_rust_api::release::models::{
     Artifact, ArtifactMetadata, BuildVersion, Release, ReleaseDefinition, ReleaseStartMetadata,
 };
+use clap::Subcommand;
 use colored::Colorize;
+
+#[derive(Subcommand, Clone)]
+pub enum ReleasesSubCommands {
+    /// List the release definitions of a project and their build artifacts
+    Definitions {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
+    /// List releases
+    List {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Only list releases of this release definition
+        #[clap(short, long)]
+        definition_id: Option<String>,
+        /// Maximum number of releases to return
+        #[clap(long)]
+        top: Option<i32>,
+    },
+    /// Show details of a release and the status of its stages
+    Show {
+        /// ID of the release
+        #[clap(short, long)]
+        id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
+    /// Create a release from a specific build
+    Create {
+        /// ID of the release definition to create the release from
+        #[clap(short, long)]
+        definition_id: String,
+        /// ID of the build to release
+        #[clap(short, long)]
+        build_id: String,
+        /// Alias of the build artifact to pin to the build
+        /// (only needed when the definition has several build artifacts)
+        #[clap(short, long)]
+        alias: Option<String>,
+        /// Description of the release
+        #[clap(long)]
+        description: Option<String>,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
+}
 
 fn parse_id(value: &str, label: &str) -> Result<i32> {
     value
@@ -277,6 +329,87 @@ fn display_release(release: &Release) {
     {
         println!("🌐 URL: {web}");
     }
+}
+
+pub async fn handle_command(subcommand: &ReleasesSubCommands) -> Result<()> {
+    match subcommand {
+        ReleasesSubCommands::Definitions { project } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match list_definitions(&project_name).await {
+                Ok(definitions) => display_definitions(&definitions),
+                Err(e) => {
+                    eprintln!("❌ Failed to list the release definitions of '{project_name}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        ReleasesSubCommands::List {
+            project,
+            definition_id,
+            top,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            let definition_id = definition_id
+                .as_deref()
+                .map(|id| parse_id(id, "release definition"))
+                .transpose()?;
+            match list_releases(&project_name, definition_id, *top).await {
+                Ok(releases) => display_releases(&releases),
+                Err(e) => {
+                    eprintln!("❌ Failed to list the releases of '{project_name}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        ReleasesSubCommands::Show { id, project } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            let release_id = parse_id(id, "release")?;
+            match get_release(&project_name, release_id).await {
+                Ok(release) => display_release(&release),
+                Err(e) => {
+                    eprintln!("❌ Failed to retrieve release {id}");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        ReleasesSubCommands::Create {
+            definition_id,
+            build_id,
+            alias,
+            description,
+            project,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            let definition_id_int = parse_id(definition_id, "release definition")?;
+            let build_id_int = parse_id(build_id, "build")?;
+            println!(
+                "Creating release of definition {definition_id} from build {build_id} in project: {project_name}"
+            );
+            match create_release(
+                &project_name,
+                definition_id_int,
+                build_id_int,
+                alias.as_deref(),
+                description.as_deref(),
+            )
+            .await
+            {
+                Ok(release) => {
+                    println!("{}", "✅ Release created successfully".green());
+                    display_release(&release);
+                }
+                Err(e) => {
+                    eprintln!("{}", format!("❌ Failed to create release: {e}").red());
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
