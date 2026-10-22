@@ -3,7 +3,7 @@ use crate::auth::get_credentials;
 use crate::project::get_project_or_default;
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::release::models::{
-    Artifact, ArtifactMetadata, BuildVersion, Release, ReleaseStartMetadata,
+    Artifact, ArtifactMetadata, BuildVersion, Release, ReleaseDefinition, ReleaseStartMetadata,
 };
 use azure_devops_rust_api::release::Client;
 use clap::Subcommand;
@@ -12,6 +12,15 @@ use serde_json::Value;
 
 #[derive(Subcommand, Clone)]
 pub enum ReleasesSubCommands {
+    /// List the release definitions (release pipelines) of a project
+    Definitions {
+        /// Only list definitions whose name contains this text
+        #[clap(long)]
+        name: Option<String>,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
     /// Create a release that deploys a specific build
     Create {
         /// ID of the release definition (release pipeline) to create the release from
@@ -98,6 +107,20 @@ fn create_release_client() -> Result<(Client, String)> {
     Ok((factory.build_release(), creds.organization))
 }
 
+async fn list_release_definitions(
+    project: &str,
+    name: Option<&str>,
+) -> Result<Vec<ReleaseDefinition>> {
+    let (client, organization) = create_release_client()?;
+
+    let mut request = client.definitions_client().list(&organization, project);
+    if let Some(name) = name {
+        request = request.search_text(name);
+    }
+
+    Ok(request.await?.value)
+}
+
 async fn create_release(
     project: &str,
     definition_id: i32,
@@ -121,6 +144,34 @@ async fn create_release(
             project,
         )
         .await?)
+}
+
+fn display_release_definitions(definitions: &[ReleaseDefinition]) {
+    if definitions.is_empty() {
+        println!("No release definitions found.");
+        return;
+    }
+
+    println!(
+        "{:<10} {:<40} {}",
+        "ID".bold(),
+        "Name".bold(),
+        "Path".bold()
+    );
+    println!("{}", "-".repeat(70));
+
+    for definition in definitions {
+        let reference = &definition.release_definition_shallow_reference;
+        println!(
+            "{:<10} {:<40} {}",
+            reference
+                .id
+                .map(|id| id.to_string())
+                .unwrap_or_else(|| "-".to_string()),
+            reference.name.as_deref().unwrap_or("-"),
+            reference.path.as_deref().unwrap_or("-")
+        );
+    }
 }
 
 fn web_url(links: Option<&Value>) -> Option<&str> {
@@ -173,6 +224,17 @@ fn display_release(release: &Release) {
 
 pub async fn handle_command(subcommand: &ReleasesSubCommands) -> Result<()> {
     match subcommand {
+        ReleasesSubCommands::Definitions { name, project } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match list_release_definitions(&project_name, name.as_deref()).await {
+                Ok(definitions) => display_release_definitions(&definitions),
+                Err(e) => {
+                    eprintln!("❌ Failed to list the release definitions of '{project_name}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
         ReleasesSubCommands::Create {
             definition_id,
             build_id,
@@ -254,6 +316,17 @@ mod tests {
         assert_eq!(artifact_alias.as_deref(), Some("_app"));
         assert_eq!(description.as_deref(), Some("Hotfix"));
         assert_eq!(project, None);
+    }
+
+    #[test]
+    fn definitions_accepts_a_name_filter() {
+        let command = parse(&["definitions", "--name", "web", "-p", "Shop"]).unwrap();
+
+        let ReleasesSubCommands::Definitions { name, project } = command else {
+            panic!("expected the definitions command");
+        };
+        assert_eq!(name.as_deref(), Some("web"));
+        assert_eq!(project.as_deref(), Some("Shop"));
     }
 
     #[test]
