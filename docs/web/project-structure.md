@@ -28,6 +28,7 @@ azdocli/
 │   │   ├── identity.rs    # Resolving email/GUID/@me to an identity
 │   │   └── http.rs        # Raw REST calls the SDK models cannot express
 │   ├── pipelines.rs       # Pipelines, runs, logs, artifacts, variable groups, service connections
+│   ├── releases.rs        # Classic release definitions and releases, releasing a build
 │   ├── boards.rs          # Work item CRUD, comments, types, WIQL queries
 │   ├── text.rs            # Shared rendering helpers for remote text
 │   ├── wiki.rs            # Wiki and wiki page operations

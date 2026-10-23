@@ -181,6 +181,7 @@ SUBCOMMANDS:
     migrate      Migrate one or more team projects between organizations
     pipelines    Manage Azure DevOps pipelines
     project      Set or view the default project
+    releases     Manage Azure DevOps classic releases
     repos        Manage Azure DevOps repos
     user         Manage user entitlements
 ```
@@ -189,6 +190,7 @@ SUBCOMMANDS:
 
 - **Repository Management**: List, create, delete, clone, view, browse and manage pull requests in repositories
 - **Pipeline Management**: Manage Azure DevOps pipelines
+- **Release Management**: List release definitions and releases, show a release, and create a release from a specific build
 - **Project Management**: Create, delete, list, and show Azure DevOps team projects, their teams, team members and process templates
 - **Migration**: Cross-tenant team-project migration with `azdocli migrate` (see [docs/migrate.md](docs/migrate.md) for the full guide)
 - **Board Management**: Manage Azure DevOps boards
@@ -717,6 +719,40 @@ azdocli pipelines service-connection show --id 00000000-0000-0000-0000-000000000
 - **Variable discovery**: See which variable groups exist and what they define
 - **Secret safety**: Secret variables are shown as `<secret>`; the API never returns their values
 - **Service connection inventory**: List connections with their type and readiness, filtered by type
+- **Default project support**: Use with default project or specify --project explicitly
+
+### Release Management Features
+
+The `releases` command works with classic release pipelines. Its main use is creating a release that
+deploys a specific build, rather than the latest build of the linked artifact:
+
+```sh
+# Find the ID of the release definition (release pipeline)
+azdocli releases definitions
+azdocli releases definitions --name "web"
+
+# Find the build to release, e.g. from the runs of its build pipeline
+azdocli pipelines runs --id 42
+
+# Create a release of build 1234 from release definition 5
+azdocli releases create --definition-id 5 --build-id 1234
+
+# When the definition links several build artifacts, name the one the build belongs to
+azdocli releases create --definition-id 5 --build-id 1234 --artifact-alias _web-ci --description "Hotfix for #321"
+
+# List releases, optionally for one definition
+azdocli releases list
+azdocli releases list --definition-id 5 --top 10
+
+# Show a release and the status of each of its stages
+azdocli releases show --id 87
+```
+
+**Release Features:**
+
+- **Release a specific build**: The build is pinned to the definition's primary build artifact, or to the artifact named with `--artifact-alias`
+- **Helpful errors**: An unknown alias, or a definition without a primary build artifact, reports the aliases you can choose from
+- **Stage overview**: `releases show` lists every stage with its deployment status
 - **Default project support**: Use with default project or specify --project explicitly
 
 ### User Management Features
