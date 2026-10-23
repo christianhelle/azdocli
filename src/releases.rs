@@ -1,9 +1,13 @@
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::project::get_project_or_default;
+use crate::text::escape_control_characters;
 use anyhow::{anyhow, Result};
+use azure_core::http::headers::HeaderName;
+use azure_core::http::RawResponse;
 use azure_devops_rust_api::release::models::{
-    Artifact, ArtifactMetadata, BuildVersion, Release, ReleaseDefinition, ReleaseStartMetadata,
+    Artifact, ArtifactMetadata, BuildVersion, Release, ReleaseDefinition, ReleaseDefinitionList,
+    ReleaseList, ReleaseStartMetadata,
 };
 use azure_devops_rust_api::release::Client;
 use clap::Subcommand;
@@ -62,9 +66,12 @@ pub enum ReleasesSubCommands {
     },
 }
 
-fn artifact_aliases(artifacts: &[Artifact]) -> String {
+fn is_build(artifact: &Artifact) -> bool {
+    artifact.type_.as_deref() == Some("Build")
+}
+
+fn artifact_aliases<'a>(artifacts: impl Iterator<Item = &'a Artifact>) -> String {
     artifacts
-        .iter()
         .filter_map(|artifact| artifact.alias.as_deref())
         .collect::<Vec<_>>()
         .join(", ")
@@ -74,13 +81,15 @@ fn artifact_aliases(artifacts: &[Artifact]) -> String {
 /// attached to one of them by its alias.
 fn resolve_artifact_alias(artifacts: &[Artifact], alias: Option<&str>) -> Result<String> {
     if let Some(alias) = alias {
+        // The build id only means something to a Build artifact, so pinning it
+        // to a Git or other artifact would leave the build itself unpinned.
         if !artifacts
             .iter()
-            .any(|artifact| artifact.alias.as_deref() == Some(alias))
+            .any(|artifact| artifact.alias.as_deref() == Some(alias) && is_build(artifact))
         {
             return Err(anyhow!(
-                "The release definition has no artifact with alias '{alias}'. Available aliases: {}",
-                artifact_aliases(artifacts)
+                "The release definition has no build artifact with alias '{alias}'. Available build aliases: {}",
+                artifact_aliases(artifacts.iter().filter(|artifact| is_build(artifact)))
             ));
         }
         return Ok(alias.to_string());
@@ -88,14 +97,12 @@ fn resolve_artifact_alias(artifacts: &[Artifact], alias: Option<&str>) -> Result
 
     artifacts
         .iter()
-        .find(|artifact| {
-            artifact.is_primary == Some(true) && artifact.type_.as_deref() == Some("Build")
-        })
+        .find(|artifact| artifact.is_primary == Some(true) && is_build(artifact))
         .and_then(|artifact| artifact.alias.clone())
         .ok_or_else(|| {
             anyhow!(
                 "The release definition has no primary build artifact. Pass --artifact-alias with one of: {}",
-                artifact_aliases(artifacts)
+                artifact_aliases(artifacts.iter().filter(|artifact| is_build(artifact)))
             )
         })
 }
@@ -128,18 +135,43 @@ fn create_release_client() -> Result<(Client, String)> {
     Ok((factory.build_release(), creds.organization))
 }
 
+/// The release API returns one page at a time and only signals that more
+/// pages exist through this response header.
+fn continuation_token(response: &RawResponse) -> Option<String> {
+    response
+        .headers()
+        .get_optional_string(&HeaderName::from_static("x-ms-continuationtoken"))
+        .filter(|token| !token.is_empty())
+}
+
 async fn list_release_definitions(
     project: &str,
     name: Option<&str>,
 ) -> Result<Vec<ReleaseDefinition>> {
     let (client, organization) = create_release_client()?;
+    let mut definitions = Vec::new();
+    let mut token = None::<String>;
 
-    let mut request = client.definitions_client().list(&organization, project);
-    if let Some(name) = name {
-        request = request.search_text(name);
+    loop {
+        let mut request = client.definitions_client().list(&organization, project);
+        if let Some(name) = name {
+            request = request.search_text(name);
+        }
+        if let Some(token) = token.take() {
+            request = request.continuation_token(token);
+        }
+
+        let response = request.send().await?.into_raw_response();
+        token = continuation_token(&response);
+        let page: ReleaseDefinitionList = response.into_body().json()?;
+        definitions.extend(page.value);
+
+        if token.is_none() {
+            break;
+        }
     }
 
-    Ok(request.await?.value)
+    Ok(definitions)
 }
 
 async fn list_releases(
@@ -148,16 +180,38 @@ async fn list_releases(
     top: Option<i32>,
 ) -> Result<Vec<Release>> {
     let (client, organization) = create_release_client()?;
+    let mut releases = Vec::new();
+    let mut token = None::<i32>;
 
-    let mut request = client.releases_client().list(&organization, project);
-    if let Some(definition_id) = definition_id {
-        request = request.definition_id(definition_id);
-    }
-    if let Some(top) = top {
-        request = request.top(top);
+    loop {
+        let mut request = client.releases_client().list(&organization, project);
+        if let Some(definition_id) = definition_id {
+            request = request.definition_id(definition_id);
+        }
+        if let Some(top) = top {
+            request = request.top(top - releases.len() as i32);
+        }
+        if let Some(token) = token.take() {
+            request = request.continuation_token(token);
+        }
+
+        let response = request.send().await?.into_raw_response();
+        token = continuation_token(&response).and_then(|token| token.parse().ok());
+        let page: ReleaseList = response.into_body().json()?;
+        releases.extend(page.value);
+
+        if let Some(top) = top {
+            if releases.len() >= top.max(0) as usize {
+                releases.truncate(top.max(0) as usize);
+                break;
+            }
+        }
+        if token.is_none() {
+            break;
+        }
     }
 
-    Ok(request.await?.value)
+    Ok(releases)
 }
 
 async fn get_release(project: &str, release_id: i32) -> Result<Release> {
@@ -264,6 +318,16 @@ fn display_releases(releases: &[Release]) {
     }
 }
 
+/// A freshly created release can report an empty version name, so the
+/// version id is the only way to see which build it pinned.
+fn artifact_version(definition_reference: &Value) -> Option<&str> {
+    let version = definition_reference.get("version")?;
+    ["name", "id"]
+        .iter()
+        .filter_map(|field| version.get(field)?.as_str())
+        .find(|value| !value.is_empty())
+}
+
 fn web_url(links: Option<&Value>) -> Option<&str> {
     links?.get("web")?.get("href")?.as_str()
 }
@@ -287,7 +351,7 @@ fn display_release(release: &Release) {
         println!("Status: {status:?}");
     }
     if let Some(description) = &release.description {
-        println!("Description: {description}");
+        println!("Description: {}", escape_control_characters(description));
     }
     if let Some(created_on) = release.created_on {
         println!("Created: {created_on}");
@@ -297,9 +361,7 @@ fn display_release(release: &Release) {
         let version = artifact
             .definition_reference
             .as_ref()
-            .and_then(|reference| reference.get("version"))
-            .and_then(|version| version.get("name"))
-            .and_then(Value::as_str)
+            .and_then(|reference| artifact_version(reference))
             .unwrap_or("-");
         println!(
             "Artifact: {} ({version})",
@@ -550,7 +612,41 @@ mod tests {
         let error = resolve_artifact_alias(&artifacts, None).unwrap_err();
 
         assert!(error.to_string().contains("--artifact-alias"));
-        assert!(error.to_string().contains("_repo, _app"));
+        assert!(error.to_string().contains("one of: _app"));
+    }
+
+    #[test]
+    fn resolve_artifact_alias_rejects_an_alias_that_is_not_a_build() {
+        let artifacts = [
+            artifact("_repo", "Git", false),
+            artifact("_app", "Build", true),
+        ];
+
+        let error = resolve_artifact_alias(&artifacts, Some("_repo")).unwrap_err();
+
+        assert!(error.to_string().contains("'_repo'"));
+        assert!(error.to_string().contains("Available build aliases: _app"));
+    }
+
+    #[test]
+    fn artifact_version_prefers_the_version_name() {
+        let reference = serde_json::json!({ "version": { "id": "123", "name": "20261022.1" } });
+
+        assert_eq!(artifact_version(&reference), Some("20261022.1"));
+    }
+
+    #[test]
+    fn artifact_version_falls_back_to_the_id_when_the_name_is_empty() {
+        let reference = serde_json::json!({ "version": { "id": "123", "name": "" } });
+
+        assert_eq!(artifact_version(&reference), Some("123"));
+    }
+
+    #[test]
+    fn artifact_version_is_missing_without_a_usable_value() {
+        let reference = serde_json::json!({ "version": { "id": "", "name": "" } });
+
+        assert_eq!(artifact_version(&reference), None);
     }
 
     #[test]
