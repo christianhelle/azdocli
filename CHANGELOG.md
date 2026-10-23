@@ -1,13 +1,19 @@
 # Changelog
 
+## [Unreleased Changes]
+
+### Features
+- Add support for managing releases ([#137](https://github.com/christianhelle/azdocli/pull/137)) ([@christianhelle](https://github.com/christianhelle/))
+
+
 ## [0.6.4](https://github.com/christianhelle/azdocli/releases/tag/0.6.4) (2026-10-19)
 
 ### Merged Pull Requests
-- Encrypt the stored PAT and bind it to the machine it was entered on ([#136](https://github.com/christianhelle/azdocli/pull/136)) ([@christianhelle](https://github.com/christianhelle/))
 - Publish the up-to-date root README to crates.io ([#135](https://github.com/christianhelle/azdocli/pull/135)) ([@christianhelle](https://github.com/christianhelle/))
-- Reconcile documented terminal icon set with actual usage ([#134](https://github.com/christianhelle/azdocli/pull/134)) ([@christianhelle](https://github.com/christianhelle/))
 
 ### Features
+- Encrypt the stored PAT and bind it to the machine it was entered on ([#136](https://github.com/christianhelle/azdocli/pull/136)) ([@christianhelle](https://github.com/christianhelle/))
+- Reconcile documented terminal icon set with actual usage ([#134](https://github.com/christianhelle/azdocli/pull/134)) ([@christianhelle](https://github.com/christianhelle/))
 - Add support for --area and --iteration on create/update work-item ([#133](https://github.com/christianhelle/azdocli/pull/133)) ([@christianhelle](https://github.com/christianhelle/))
 
 
