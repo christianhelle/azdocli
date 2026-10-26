@@ -701,6 +701,9 @@ azdocli pipelines variable-group list
 # Filter by name and cap the number of results
 azdocli pipelines variable-group list --name "release" --top 10
 
+# Use * for a pattern instead of a substring match
+azdocli pipelines variable-group list --name "release-*"
+
 # Show a variable group and its variables (secret values are never returned by Azure DevOps)
 azdocli pipelines variable-group show --id 7
 
