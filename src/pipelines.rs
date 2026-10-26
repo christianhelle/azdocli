@@ -99,7 +99,7 @@ pub enum VariableGroupSubCommands {
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
-        /// Only list groups whose name matches this text
+        /// Only list groups whose name contains this text (or matches it, when it holds a * wildcard)
         #[clap(long)]
         name: Option<String>,
         /// Maximum number of variable groups to return
@@ -448,7 +448,7 @@ async fn list_variable_groups(
         .get_variable_groups(&creds.organization, project);
 
     if let Some(name) = name {
-        request = request.group_name(name);
+        request = request.group_name(group_name_pattern(name));
     }
     if let Some(top) = top {
         request = request.top(top);
@@ -457,19 +457,34 @@ async fn list_variable_groups(
     Ok(request.await?.value)
 }
 
+/// The groupName filter only matches whole names, with `*` as a wildcard.
+/// Plain text is wrapped in wildcards so it matches anywhere in the name;
+/// text that already holds a wildcard is passed through as a pattern.
+fn group_name_pattern(name: &str) -> String {
+    if name.contains('*') {
+        name.to_string()
+    } else {
+        format!("*{name}*")
+    }
+}
+
+/// Azure DevOps answers a request for an unknown group with `null` rather
+/// than a 404, so the group is fetched through the list endpoint's id filter,
+/// where a missing group is simply an empty list.
 async fn get_variable_group(project: &str, group_id: &str) -> Result<VariableGroup> {
     let creds = get_credentials()?;
     let factory = CredentialClientFactory::new(&creds)?;
+    let id = parse_id(group_id, "variable group")?;
 
-    Ok(factory
+    factory
         .build_distributed_task()
         .variablegroups_client()
-        .get(
-            &creds.organization,
-            project,
-            parse_id(group_id, "variable group")?,
-        )
-        .await?)
+        .get_variable_groups_by_id(&creds.organization, project, id.to_string())
+        .await?
+        .value
+        .into_iter()
+        .next()
+        .ok_or_else(|| anyhow!("Variable group '{id}' not found in project '{project}'"))
 }
 
 /// Variables arrive as a free-form JSON map. Azure DevOps never returns the
@@ -923,6 +938,16 @@ mod tests {
     #[test]
     fn format_variable_value_handles_missing_values() {
         assert_eq!(format_variable_value(&serde_json::json!({})), "");
+    }
+
+    #[test]
+    fn group_name_pattern_matches_plain_text_anywhere_in_the_name() {
+        assert_eq!(group_name_pattern("release"), "*release*");
+    }
+
+    #[test]
+    fn group_name_pattern_keeps_explicit_wildcards() {
+        assert_eq!(group_name_pattern("release-*"), "release-*");
     }
 
     #[test]
