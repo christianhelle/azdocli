@@ -940,9 +940,15 @@ azdocli pipelines artifacts --build-id 123 --project MyProject</code></pre>
           </p>
 
           <div class="command-example">
-            <h4>List My Work Items</h4>
+            <h4>List Work Items</h4>
             <pre><code># List work items assigned to me
 azdocli boards work-item list
+
+# List work items assigned to someone else, by display name or email
+azdocli boards work-item list --assigned-to "jane@contoso.com"
+
+# List all work items in the project, whoever they are assigned to
+azdocli boards work-item list --all
 
 # List work items with filters
 azdocli boards work-item list --state "Active" --work-item-type "Bug" --limit 20
@@ -954,9 +960,9 @@ azdocli boards work-item list --project MyProject
 azdocli boards work-item list --state "New" --limit 10
 azdocli boards work-item list --work-item-type "User Story" --state "Active"</code></pre>
             <p>
-              <strong>Features</strong>: View work items assigned to you with
-              filtering by state, work item type, and configurable result
-              limits.
+              <strong>Features</strong>: View work items assigned to you, to
+              someone else, or to anyone, with filtering by state, work item
+              type, and configurable result limits.
             </p>
           </div>
 
