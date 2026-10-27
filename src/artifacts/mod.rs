@@ -9,6 +9,7 @@ use azure_devops_rust_api::artifacts::models::{Feed, Package, PackageVersion};
 use azure_devops_rust_api::artifacts::Client;
 use clap::{Args, Subcommand, ValueEnum};
 use colored::Colorize;
+use std::path::PathBuf;
 
 #[derive(Subcommand, Clone)]
 pub enum ArtifactsSubCommands {
@@ -21,6 +22,35 @@ pub enum ArtifactsSubCommands {
     Packages {
         #[clap(subcommand)]
         subcommand: PackagesSubCommands,
+    },
+    /// Manage Universal Packages
+    Universal {
+        #[clap(subcommand)]
+        subcommand: UniversalSubCommands,
+    },
+}
+
+#[derive(Subcommand, Clone)]
+pub enum UniversalSubCommands {
+    /// Download a Universal Package
+    Download {
+        /// Name or ID of the feed
+        #[clap(long)]
+        feed: String,
+        /// Name of the package, e.g. 'foo-package'
+        #[clap(short, long)]
+        name: String,
+        /// Version of the package, e.g. '1.0.0'
+        #[clap(short, long)]
+        version: String,
+        /// Directory to place the package contents
+        #[clap(long)]
+        path: PathBuf,
+        /// Only download files whose path matches this wildcard ('*' and '?'), e.g. '*.dll'
+        #[clap(long)]
+        file_filter: Option<String>,
+        #[clap(flatten)]
+        scope: ScopeArgs,
     },
 }
 
@@ -381,6 +411,36 @@ pub async fn handle_command(subcommand: &ArtifactsSubCommands) -> Result<()> {
                     eprintln!(
                         "❌ Failed to list the versions of package '{name}' in feed '{feed}'"
                     );
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        ArtifactsSubCommands::Universal {
+            subcommand:
+                UniversalSubCommands::Download {
+                    feed,
+                    name,
+                    version,
+                    path,
+                    file_filter,
+                    scope,
+                },
+        } => {
+            let project = scope.resolve_project()?;
+            let request = download::DownloadRequest {
+                project: project.as_deref(),
+                feed,
+                name,
+                version,
+                path,
+                file_filter: file_filter.as_deref(),
+            };
+            println!("⬇️  Downloading {name} {version} from feed '{feed}'...");
+            match download::download_universal_package(&get_credentials()?, &request).await {
+                Ok(files) => println!("✅ Downloaded {files} file(s) to {}", path.display()),
+                Err(e) => {
+                    eprintln!("❌ Failed to download {name} {version} from feed '{feed}'");
                     eprintln!("   {e}");
                     return Err(e);
                 }
