@@ -2,11 +2,14 @@ use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::project::get_project_or_default;
 use anyhow::{anyhow, Context, Result};
-use azure_devops_rust_api::build::models::BuildArtifact;
+use azure_core::time::OffsetDateTime;
+use azure_devops_rust_api::build::models::{
+    BuildArtifact, BuildDefinition, BuildDefinitionReference,
+};
 use azure_devops_rust_api::distributed_task::models::VariableGroup;
 use azure_devops_rust_api::pipelines::{self, models};
 use azure_devops_rust_api::service_endpoint::models::ServiceEndpoint;
-use clap::Subcommand;
+use clap::{Args, Subcommand, ValueEnum};
 use colored::Colorize;
 use serde_json::{json, Value};
 use std::io::Write;
@@ -14,11 +17,63 @@ use std::time::Duration;
 
 #[derive(Subcommand, Clone)]
 pub enum PipelinesSubCommands {
-    /// List all pipelines in a project
+    /// List pipelines
     List {
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
+        /// Limit results to pipelines with this name, or matching it when it holds a * wildcard
+        #[clap(long)]
+        name: Option<String>,
+        /// Only list pipelines under this folder
+        #[clap(long)]
+        folder_path: Option<String>,
+        /// Maximum number of pipelines to list
+        #[clap(long)]
+        top: Option<i32>,
+        /// Order of the results
+        #[clap(long)]
+        query_order: Option<PipelineQueryOrder>,
+        /// Limit results to pipelines associated with this repository
+        #[clap(long)]
+        repository: Option<String>,
+        /// Type of the repository given with --repository (defaults to tfsgit)
+        #[clap(long, requires = "repository")]
+        repository_type: Option<RepositoryType>,
+    },
+    /// Get the details of a pipeline
+    Show {
+        #[clap(flatten)]
+        pipeline: PipelineSelector,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Open the pipeline summary page in your web browser
+        #[clap(long, alias = "web")]
+        open: bool,
+    },
+    /// Queue (run) a pipeline
+    Run {
+        #[clap(flatten)]
+        pipeline: PipelineSelector,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Branch to run the pipeline from, such as main, refs/heads/main or refs/tags/v1
+        #[clap(short, long)]
+        branch: Option<String>,
+        /// Commit to run the pipeline on
+        #[clap(long)]
+        commit_id: Option<String>,
+        /// Space separated NAME=VALUE pairs for the variables to set
+        #[clap(long, value_name = "NAME=VALUE", num_args = 1..)]
+        variables: Vec<String>,
+        /// Space separated NAME=VALUE pairs for the template parameters to set
+        #[clap(long, value_name = "NAME=VALUE", num_args = 1..)]
+        parameters: Vec<String>,
+        /// Open the pipeline results page in your web browser
+        #[clap(long, alias = "web")]
+        open: bool,
     },
     /// Show builds of a pipeline
     Runs {
@@ -28,18 +83,6 @@ pub enum PipelinesSubCommands {
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
-    },
-    /// Show details of a pipeline build
-    Show {
-        /// ID of the pipeline to show
-        #[clap(short, long)]
-        id: String,
-        /// Team project name (optional if default project is set)
-        #[clap(short, long)]
-        project: Option<String>,
-        /// Build ID to show details for
-        #[clap(short = 'b', long)]
-        build_id: String,
     },
     /// List the logs of a pipeline run, or print one of them
     Logs {
@@ -75,21 +118,82 @@ pub enum PipelinesSubCommands {
         #[clap(subcommand)]
         subcommand: ServiceConnectionSubCommands,
     },
-    /// Run a pipeline
-    Run {
-        /// ID of the pipeline to start
-        #[clap(short, long)]
-        id: String,
-        /// Team project name (optional if default project is set)
-        #[clap(short, long)]
-        project: Option<String>,
-        /// Branch to run the pipeline from (defaults to the pipeline default branch)
-        #[clap(short, long)]
-        branch: Option<String>,
-        /// Pipeline variable to set, in NAME=VALUE form (repeatable)
-        #[clap(long = "variable", value_name = "NAME=VALUE")]
-        variables: Vec<String>,
-    },
+}
+
+/// Picks a pipeline by id, or by name when no id is given.
+#[derive(Args, Clone, Debug)]
+pub struct PipelineSelector {
+    /// ID of the pipeline
+    #[clap(short, long, required_unless_present = "name")]
+    id: Option<i32>,
+    /// Name of the pipeline. Ignored if --id is supplied
+    #[clap(long)]
+    name: Option<String>,
+    /// Folder path of the pipeline, to tell apart pipelines with the same --name
+    #[clap(long)]
+    folder_path: Option<String>,
+}
+
+/// The orders `pipelines list` can return pipelines in.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+pub enum PipelineQueryOrder {
+    #[value(name = "ModifiedAsc")]
+    ModifiedAsc,
+    #[value(name = "ModifiedDesc")]
+    ModifiedDesc,
+    #[value(name = "NameAsc")]
+    NameAsc,
+    #[value(name = "NameDesc")]
+    NameDesc,
+    #[value(name = "None")]
+    None,
+}
+
+impl PipelineQueryOrder {
+    /// The value Azure DevOps expects in the definitions `queryOrder`.
+    fn as_api_value(self) -> &'static str {
+        match self {
+            PipelineQueryOrder::ModifiedAsc => "lastModifiedAscending",
+            PipelineQueryOrder::ModifiedDesc => "lastModifiedDescending",
+            PipelineQueryOrder::NameAsc => "definitionNameAscending",
+            PipelineQueryOrder::NameDesc => "definitionNameDescending",
+            PipelineQueryOrder::None => "none",
+        }
+    }
+}
+
+/// The repository types `pipelines list --repository-type` accepts.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+pub enum RepositoryType {
+    #[value(name = "bitbucket")]
+    Bitbucket,
+    #[value(name = "git")]
+    Git,
+    #[value(name = "github")]
+    GitHub,
+    #[value(name = "githubenterprise")]
+    GitHubEnterprise,
+    #[value(name = "svn")]
+    Svn,
+    #[value(name = "tfsgit")]
+    TfsGit,
+    #[value(name = "tfsversioncontrol")]
+    TfsVersionControl,
+}
+
+impl RepositoryType {
+    /// The value Azure DevOps expects in the definitions `repositoryType`.
+    fn as_api_value(self) -> &'static str {
+        match self {
+            RepositoryType::Bitbucket => "Bitbucket",
+            RepositoryType::Git => "Git",
+            RepositoryType::GitHub => "GitHub",
+            RepositoryType::GitHubEnterprise => "GitHubEnterprise",
+            RepositoryType::Svn => "Svn",
+            RepositoryType::TfsGit => "TfsGit",
+            RepositoryType::TfsVersionControl => "TfsVersionControl",
+        }
+    }
 }
 
 #[derive(Subcommand, Clone)]
@@ -152,21 +256,147 @@ fn create_pipelines_client() -> Result<pipelines::Client> {
     Ok(factory.build_pipelines())
 }
 
-async fn list_pipelines(project: &str) -> Result<Vec<models::Pipeline>> {
-    match get_credentials() {
-        Ok(creds) => {
-            let client = create_pipelines_client()?;
-            Ok(client
-                .pipelines_client()
-                .list(creds.organization, project)
-                .await?
-                .value)
-        }
-        Err(e) => {
-            eprintln!("Unable to retrieve pipelines");
-            Err(e)
+/// Filters for listing pipelines, mirroring the `az pipelines list` arguments.
+#[derive(Default)]
+struct PipelineFilters<'a> {
+    name: Option<&'a str>,
+    folder_path: Option<&'a str>,
+    top: Option<i32>,
+    query_order: Option<PipelineQueryOrder>,
+    repository: Option<&'a str>,
+    repository_type: Option<RepositoryType>,
+}
+
+/// Azure DevOps stores folders as backslash separated paths from the root,
+/// but users tend to write them like file paths.
+fn api_folder_path(path: &str) -> String {
+    let path = path.replace('/', "\\");
+    if path.starts_with('\\') {
+        path
+    } else {
+        format!("\\{path}")
+    }
+}
+
+/// Pipelines are listed through the build definitions API, because the
+/// pipelines API offers no way to filter or order them.
+async fn list_pipelines(
+    project: &str,
+    filters: &PipelineFilters<'_>,
+) -> Result<Vec<BuildDefinitionReference>> {
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds)?;
+
+    let mut request = factory
+        .build_build()
+        .definitions_client()
+        .list(&creds.organization, project);
+
+    if let Some(name) = filters.name {
+        request = request.name(name);
+    }
+    if let Some(folder_path) = filters.folder_path {
+        request = request.path(api_folder_path(folder_path));
+    }
+    if let Some(top) = filters.top {
+        request = request.top(top);
+    }
+    if let Some(query_order) = filters.query_order {
+        request = request.query_order(query_order.as_api_value());
+    }
+    if let Some(repository) = filters.repository {
+        let repository_type = filters.repository_type.unwrap_or(RepositoryType::TfsGit);
+        // Azure Repos are filtered by id, while users know them by name.
+        let repository_id = if repository_type == RepositoryType::TfsGit {
+            factory
+                .build_git()
+                .repositories_client()
+                .get_repository(&creds.organization, repository, project)
+                .await
+                .with_context(|| format!("Repository '{repository}' not found"))?
+                .id
+        } else {
+            repository.to_string()
+        };
+        request = request
+            .repository_id(repository_id)
+            .repository_type(repository_type.as_api_value());
+    }
+
+    Ok(request.await?.value)
+}
+
+/// Of the pipelines carrying the requested name, picks the only one, as
+/// `(id, folder)` pairs. Names are only unique within a folder.
+fn single_pipeline_match(name: &str, candidates: &[(i32, String)]) -> Result<i32> {
+    match candidates {
+        [] => Err(anyhow!("Pipeline '{name}' not found")),
+        [(id, _)] => Ok(*id),
+        _ => {
+            let folders = candidates
+                .iter()
+                .map(|(_, folder)| folder.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            Err(anyhow!(
+                "More than one pipeline is named '{name}' (in folders {folders}), use --folder-path or --id"
+            ))
         }
     }
+}
+
+/// Resolves a pipeline id from either an id or a name, as `az pipelines`
+/// does, where the name is ignored when an id is supplied.
+async fn resolve_pipeline_id(
+    project: &str,
+    id: Option<i32>,
+    name: Option<&str>,
+    folder_path: Option<&str>,
+) -> Result<i32> {
+    if let Some(id) = id {
+        return Ok(id);
+    }
+    let name = name.ok_or_else(|| anyhow!("Either --id or --name is required"))?;
+
+    let filters = PipelineFilters {
+        name: Some(name),
+        folder_path,
+        ..Default::default()
+    };
+    let wanted_folder = folder_path.map(api_folder_path);
+    let candidates = list_pipelines(project, &filters)
+        .await?
+        .into_iter()
+        .map(|pipeline| pipeline.definition_reference)
+        .filter(|definition| {
+            definition
+                .name
+                .as_deref()
+                .is_some_and(|candidate| candidate.eq_ignore_ascii_case(name))
+        })
+        // The path filter also matches subfolders, so pin it to the folder.
+        .filter(|definition| match &wanted_folder {
+            Some(folder) => definition
+                .path
+                .as_deref()
+                .is_some_and(|path| path.eq_ignore_ascii_case(folder)),
+            None => true,
+        })
+        .map(|definition| (definition.id, definition.path.unwrap_or_default()))
+        .collect::<Vec<_>>();
+
+    single_pipeline_match(name, &candidates)
+}
+
+async fn get_pipeline(project: &str, pipeline_id: i32) -> Result<BuildDefinition> {
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds)?;
+
+    Ok(factory
+        .build_build()
+        .definitions_client()
+        .get(&creds.organization, project, pipeline_id)
+        .await?)
 }
 
 async fn get_pipeline_runs(project: &str, pipeline_id: &str) -> Result<Vec<models::Run>> {
@@ -188,27 +418,6 @@ async fn get_pipeline_runs(project: &str, pipeline_id: &str) -> Result<Vec<model
     }
 }
 
-async fn get_build(project: &str, pipeline_id: &str, build_id: &str) -> Result<models::Run> {
-    match get_credentials() {
-        Ok(creds) => {
-            let client = create_pipelines_client()?;
-            let pipeline_id_int = parse_id(pipeline_id, "pipeline")?;
-            let build_id_int = parse_id(build_id, "build")?;
-
-            let run = client
-                .runs_client()
-                .get(creds.organization, project, pipeline_id_int, build_id_int)
-                .await?;
-
-            Ok(run)
-        }
-        Err(e) => {
-            eprintln!("Unable to retrieve build details");
-            Err(e)
-        }
-    }
-}
-
 /// Azure DevOps expects a full ref, but users think in branch names.
 fn full_ref_name(branch: &str) -> String {
     if branch.starts_with("refs/") {
@@ -225,26 +434,49 @@ fn parse_variable(variable: &str) -> Result<(&str, &str)> {
         .ok_or_else(|| anyhow!("Invalid variable '{variable}', expected NAME=VALUE"))
 }
 
-/// Builds the run request body from the branch and variable arguments.
-fn build_run_parameters(
-    branch: Option<&str>,
-    variables: &[String],
-) -> Result<models::RunPipelineParameters> {
+/// What to queue a pipeline run with, mirroring the `az pipelines run` arguments.
+#[derive(Default)]
+struct RunOptions<'a> {
+    branch: Option<&'a str>,
+    commit_id: Option<&'a str>,
+    variables: &'a [String],
+    parameters: &'a [String],
+}
+
+/// Builds the run request body from the branch, commit, variable and
+/// template parameter arguments.
+fn build_run_parameters(options: &RunOptions) -> Result<models::RunPipelineParameters> {
     let mut parameters = models::RunPipelineParameters::new();
 
-    if let Some(branch) = branch {
+    if options.branch.is_some() || options.commit_id.is_some() {
+        let mut repository = serde_json::Map::new();
+        if let Some(branch) = options.branch {
+            repository.insert("refName".to_string(), json!(full_ref_name(branch)));
+        }
+        if let Some(commit_id) = options.commit_id {
+            repository.insert("version".to_string(), json!(commit_id));
+        }
         let mut resources = models::RunResourcesParameters::new();
-        resources.repositories = Some(json!({ "self": { "refName": full_ref_name(branch) } }));
+        resources.repositories = Some(json!({ "self": repository }));
         parameters.resources = Some(resources);
     }
 
-    if !variables.is_empty() {
+    if !options.variables.is_empty() {
         let mut values = serde_json::Map::new();
-        for variable in variables {
+        for variable in options.variables {
             let (name, value) = parse_variable(variable)?;
             values.insert(name.to_string(), json!({ "value": value }));
         }
         parameters.variables = Some(Value::Object(values));
+    }
+
+    if !options.parameters.is_empty() {
+        let mut values = serde_json::Map::new();
+        for parameter in options.parameters {
+            let (name, value) = parse_variable(parameter)?;
+            values.insert(name.to_string(), json!(value));
+        }
+        parameters.template_parameters = Some(Value::Object(values));
     }
 
     Ok(parameters)
@@ -252,18 +484,16 @@ fn build_run_parameters(
 
 async fn run_pipeline(
     project: &str,
-    pipeline_id: &str,
-    branch: Option<&str>,
-    variables: &[String],
+    pipeline_id: i32,
+    options: &RunOptions<'_>,
 ) -> Result<models::Run> {
     let creds = get_credentials()?;
     let client = create_pipelines_client()?;
-    let pipeline_id_int = parse_id(pipeline_id, "pipeline")?;
-    let parameters = build_run_parameters(branch, variables)?;
+    let parameters = build_run_parameters(options)?;
 
     Ok(client
         .runs_client()
-        .run_pipeline(creds.organization, parameters, project, pipeline_id_int)
+        .run_pipeline(creds.organization, parameters, project, pipeline_id)
         .await?)
 }
 
@@ -381,18 +611,7 @@ fn display_run_logs(logs: &[models::Log]) {
                 .map(|lines| lines.to_string())
                 .unwrap_or_else(|| "-".to_string()),
             log.created_on
-                .map(|created| {
-                    // Logs within one run are often seconds apart, so the date
-                    // alone is not enough to order or correlate them.
-                    let time = created.time();
-                    format!(
-                        "{} {:02}:{:02}:{:02}",
-                        created.date(),
-                        time.hour(),
-                        time.minute(),
-                        time.second()
-                    )
-                })
+                .map(format_timestamp)
                 .unwrap_or_else(|| "-".to_string())
         );
     }
@@ -643,7 +862,7 @@ fn display_service_connection(connection: &ServiceEndpoint) {
     }
 }
 
-fn display_pipelines(pipelines: &[models::Pipeline]) {
+fn display_pipelines(pipelines: &[BuildDefinitionReference]) {
     if pipelines.is_empty() {
         println!("No pipelines found.");
         return;
@@ -658,11 +877,79 @@ fn display_pipelines(pipelines: &[models::Pipeline]) {
     println!("{}", "-".repeat(70));
 
     for pipeline in pipelines {
+        let definition = &pipeline.definition_reference;
         println!(
             "{:<10} {:<40} {}",
-            pipeline.id, pipeline.name, pipeline.folder
+            definition.id,
+            definition.name.as_deref().unwrap_or("-"),
+            definition.path.as_deref().unwrap_or("-")
         );
     }
+}
+
+fn pipeline_web_url(pipeline: &BuildDefinition) -> Option<&str> {
+    pipeline
+        .build_definition_reference
+        .links
+        .as_ref()
+        .and_then(|links| links.web.as_ref())
+        .map(|web| web.href.as_str())
+}
+
+fn display_pipeline(pipeline: &BuildDefinition) {
+    let reference = &pipeline.build_definition_reference;
+    let definition = &reference.definition_reference;
+
+    println!("🔧 Pipeline");
+    println!("===========");
+    println!("ID: {}", definition.id);
+    println!("Name: {}", definition.name.as_deref().unwrap_or("-"));
+    println!("Folder: {}", definition.path.as_deref().unwrap_or("-"));
+    println!("Revision: {}", definition.revision);
+    println!("Queue status: {:?}", definition.queue_status);
+
+    if let Some(description) = &pipeline.description {
+        println!("Description: {description}");
+    }
+    if let Some(queue) = reference.queue.as_ref().and_then(|q| q.name.as_deref()) {
+        println!("Agent queue: {queue}");
+    }
+    if let Some(repository) = &pipeline.repository {
+        println!(
+            "Repository: {} ({})",
+            repository.name.as_deref().unwrap_or(&repository.id),
+            repository.type_.as_deref().unwrap_or("-")
+        );
+        if let Some(default_branch) = &repository.default_branch {
+            println!("Default branch: {default_branch}");
+        }
+    }
+    if let Some(author) = reference
+        .authored_by
+        .as_ref()
+        .and_then(|identity| identity.graph_subject_base.display_name.as_deref())
+    {
+        println!("Authored by: {author}");
+    }
+    if let Some(created) = definition.created_date {
+        println!("Created: {}", format_timestamp(created));
+    }
+    if let Some(url) = pipeline_web_url(pipeline) {
+        println!("URL: {url}");
+    }
+}
+
+/// Runs and logs are often seconds apart, so the date alone is not enough to
+/// order or correlate them.
+fn format_timestamp(timestamp: OffsetDateTime) -> String {
+    let time = timestamp.time();
+    format!(
+        "{} {:02}:{:02}:{:02}",
+        timestamp.date(),
+        time.hour(),
+        time.minute(),
+        time.second()
+    )
 }
 
 fn display_pipeline_runs(runs: &[models::Run]) {
@@ -786,10 +1073,64 @@ async fn handle_service_connection_command(
 
 pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
     match subcommand {
-        PipelinesSubCommands::List { project } => {
+        PipelinesSubCommands::List {
+            project,
+            name,
+            folder_path,
+            top,
+            query_order,
+            repository,
+            repository_type,
+        } => {
             let project_name = get_project_or_default(project.as_deref())?;
-            let pipelines = list_pipelines(&project_name).await?;
-            display_pipelines(&pipelines);
+            let filters = PipelineFilters {
+                name: name.as_deref(),
+                folder_path: folder_path.as_deref(),
+                top: *top,
+                query_order: *query_order,
+                repository: repository.as_deref(),
+                repository_type: *repository_type,
+            };
+            match list_pipelines(&project_name, &filters).await {
+                Ok(pipelines) => display_pipelines(&pipelines),
+                Err(e) => {
+                    eprintln!("❌ Failed to list the pipelines of '{project_name}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        PipelinesSubCommands::Show {
+            pipeline,
+            project,
+            open,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            let result = async {
+                let id = resolve_pipeline_id(
+                    &project_name,
+                    pipeline.id,
+                    pipeline.name.as_deref(),
+                    pipeline.folder_path.as_deref(),
+                )
+                .await?;
+                get_pipeline(&project_name, id).await
+            }
+            .await;
+            match result {
+                Ok(definition) => match pipeline_web_url(&definition) {
+                    Some(url) if *open => {
+                        println!("Opening pipeline in browser: {url}");
+                        crate::browser::open_url(url)?;
+                    }
+                    _ => display_pipeline(&definition),
+                },
+                Err(e) => {
+                    eprintln!("❌ Failed to retrieve the pipeline");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
         }
         PipelinesSubCommands::Runs { id, project } => {
             let project_name = get_project_or_default(project.as_deref())?;
@@ -839,39 +1180,45 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
             return handle_service_connection_command(subcommand).await;
         }
         PipelinesSubCommands::Run {
-            id,
+            pipeline,
             project,
             branch,
+            commit_id,
             variables,
+            parameters,
+            open,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
-            println!("Starting pipeline with ID: {id} in project: {project_name}");
-            match run_pipeline(&project_name, id, branch.as_deref(), variables).await {
+            let options = RunOptions {
+                branch: branch.as_deref(),
+                commit_id: commit_id.as_deref(),
+                variables,
+                parameters,
+            };
+            let result = async {
+                let id = resolve_pipeline_id(
+                    &project_name,
+                    pipeline.id,
+                    pipeline.name.as_deref(),
+                    pipeline.folder_path.as_deref(),
+                )
+                .await?;
+                println!("Starting pipeline with ID: {id} in project: {project_name}");
+                run_pipeline(&project_name, id, &options).await
+            }
+            .await;
+            match result {
                 Ok(run) => {
                     println!("{}", "✅ Pipeline started successfully".green());
                     display_build_details(&run);
+                    if *open {
+                        if let Some(web) = &run.links.web {
+                            crate::browser::open_url(&web.href)?;
+                        }
+                    }
                 }
                 Err(e) => {
                     eprintln!("{}", format!("❌ Failed to start pipeline: {e}").red());
-                    return Err(e);
-                }
-            }
-        }
-        PipelinesSubCommands::Show {
-            id,
-            project,
-            build_id,
-        } => {
-            let project_name = get_project_or_default(project.as_deref())?;
-            println!(
-                "Showing details for build {build_id} of pipeline {id} in project {project_name}"
-            );
-            match get_build(&project_name, id, build_id).await {
-                Ok(build) => {
-                    display_build_details(&build);
-                }
-                Err(e) => {
-                    eprintln!("❌ Failed to retrieve build details: {e}");
                     return Err(e);
                 }
             }
@@ -908,19 +1255,126 @@ mod tests {
 
     #[test]
     fn build_run_parameters_sets_the_branch_and_variables() {
-        let parameters = build_run_parameters(Some("develop"), &["env=prod".to_string()]).unwrap();
+        let variables = ["env=prod".to_string()];
+        let parameters = build_run_parameters(&RunOptions {
+            branch: Some("develop"),
+            variables: &variables,
+            ..Default::default()
+        })
+        .unwrap();
 
         let repositories = parameters.resources.unwrap().repositories.unwrap();
         assert_eq!(repositories["self"]["refName"], "refs/heads/develop");
+        assert!(repositories["self"].get("version").is_none());
         assert_eq!(parameters.variables.unwrap()["env"]["value"], "prod");
     }
 
     #[test]
+    fn build_run_parameters_sets_the_commit_and_template_parameters() {
+        let template_parameters = ["image=ubuntu".to_string()];
+        let parameters = build_run_parameters(&RunOptions {
+            commit_id: Some("abc123"),
+            parameters: &template_parameters,
+            ..Default::default()
+        })
+        .unwrap();
+
+        let repositories = parameters.resources.unwrap().repositories.unwrap();
+        assert_eq!(repositories["self"]["version"], "abc123");
+        assert!(repositories["self"].get("refName").is_none());
+        assert_eq!(parameters.template_parameters.unwrap()["image"], "ubuntu");
+    }
+
+    #[test]
     fn build_run_parameters_leaves_unset_fields_empty() {
-        let parameters = build_run_parameters(None, &[]).unwrap();
+        let parameters = build_run_parameters(&RunOptions::default()).unwrap();
 
         assert!(parameters.resources.is_none());
         assert!(parameters.variables.is_none());
+        assert!(parameters.template_parameters.is_none());
+    }
+
+    #[test]
+    fn api_folder_path_uses_rooted_backslash_paths() {
+        assert_eq!(api_folder_path("user1/test"), "\\user1\\test");
+        assert_eq!(api_folder_path("\\user1\\test"), "\\user1\\test");
+        assert_eq!(api_folder_path("/"), "\\");
+    }
+
+    #[test]
+    fn single_pipeline_match_needs_exactly_one_candidate() {
+        assert!(single_pipeline_match("ci", &[]).is_err());
+        assert_eq!(
+            single_pipeline_match("ci", &[(4, "\\".to_string())]).unwrap(),
+            4
+        );
+        let error =
+            single_pipeline_match("ci", &[(4, "\\".to_string()), (9, "\\team".to_string())])
+                .unwrap_err();
+        assert!(error.to_string().contains("--folder-path"));
+    }
+
+    #[derive(clap::Parser)]
+    struct TestCli {
+        #[clap(subcommand)]
+        command: PipelinesSubCommands,
+    }
+
+    fn parse(args: &[&str]) -> Result<PipelinesSubCommands, clap::Error> {
+        use clap::Parser;
+        TestCli::try_parse_from(std::iter::once("pipelines").chain(args.iter().copied()))
+            .map(|cli| cli.command)
+    }
+
+    #[test]
+    fn run_takes_space_separated_variables_and_parameters() {
+        let command = parse(&[
+            "run",
+            "--name",
+            "ci",
+            "--variables",
+            "a=1",
+            "b=2",
+            "--parameters",
+            "image=ubuntu",
+        ])
+        .unwrap();
+
+        match command {
+            PipelinesSubCommands::Run {
+                pipeline,
+                variables,
+                parameters,
+                ..
+            } => {
+                assert_eq!(pipeline.name.as_deref(), Some("ci"));
+                assert_eq!(variables, ["a=1", "b=2"]);
+                assert_eq!(parameters, ["image=ubuntu"]);
+            }
+            _ => panic!("expected run"),
+        }
+    }
+
+    #[test]
+    fn show_needs_an_id_or_a_name() {
+        assert!(parse(&["show"]).is_err());
+        assert!(parse(&["show", "--id", "4"]).is_ok());
+        assert!(parse(&["show", "--name", "ci", "--folder-path", "team"]).is_ok());
+    }
+
+    #[test]
+    fn list_repository_type_requires_a_repository() {
+        assert!(parse(&["list", "--repository-type", "github"]).is_err());
+        assert!(parse(&[
+            "list",
+            "--repository",
+            "owner/repo",
+            "--repository-type",
+            "github",
+            "--query-order",
+            "NameAsc"
+        ])
+        .is_ok());
     }
 
     #[test]
