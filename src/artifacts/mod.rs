@@ -2,8 +2,8 @@ use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::project::get_project_or_default;
 use crate::text::escape_control_characters;
-use anyhow::Result;
-use azure_devops_rust_api::artifacts::models::Feed;
+use anyhow::{anyhow, Result};
+use azure_devops_rust_api::artifacts::models::{Feed, Package, PackageVersion};
 use azure_devops_rust_api::artifacts::Client;
 use clap::{Args, Subcommand, ValueEnum};
 use colored::Colorize;
@@ -15,12 +15,49 @@ pub enum ArtifactsSubCommands {
         #[clap(subcommand)]
         subcommand: FeedsSubCommands,
     },
+    /// Browse the packages of a feed
+    Packages {
+        #[clap(subcommand)]
+        subcommand: PackagesSubCommands,
+    },
 }
 
 #[derive(Subcommand, Clone)]
 pub enum FeedsSubCommands {
     /// List the feeds visible in the organization, or only those of a project
     List {
+        #[clap(flatten)]
+        scope: ScopeArgs,
+    },
+}
+
+#[derive(Subcommand, Clone)]
+pub enum PackagesSubCommands {
+    /// List the packages of a feed
+    List {
+        /// Name or ID of the feed
+        #[clap(long)]
+        feed: String,
+        /// Only list packages of this protocol (e.g. upack, nuget, npm, maven, pypi, cargo)
+        #[clap(long)]
+        protocol: Option<String>,
+        /// Only list packages whose name contains this text
+        #[clap(long)]
+        name: Option<String>,
+        #[clap(flatten)]
+        scope: ScopeArgs,
+    },
+    /// List the versions of a package
+    Versions {
+        /// Name or ID of the feed
+        #[clap(long)]
+        feed: String,
+        /// Name of the package
+        #[clap(short, long)]
+        name: String,
+        /// Protocol of the package, needed when packages of different protocols share the name
+        #[clap(long)]
+        protocol: Option<String>,
         #[clap(flatten)]
         scope: ScopeArgs,
     },
@@ -84,6 +121,89 @@ async fn list_feeds(project: Option<&str>) -> Result<Vec<Feed>> {
         .value)
 }
 
+async fn list_packages(
+    project: Option<&str>,
+    feed: &str,
+    protocol: Option<&str>,
+    name: Option<&str>,
+) -> Result<Vec<Package>> {
+    let (client, organization) = create_artifacts_client()?;
+    let (organization, project) = scoped_path(&organization, project);
+
+    let mut request = client
+        .artifact_details_client()
+        .get_packages(organization, feed, project);
+    if let Some(protocol) = protocol {
+        request = request.protocol_type(protocol);
+    }
+    if let Some(name) = name {
+        request = request.package_name_query(name);
+    }
+
+    Ok(request.await?.value)
+}
+
+/// The versions API addresses a package by its id, so the name is looked up
+/// first. A name search matches substrings, hence the exact comparison.
+fn find_package<'a>(
+    packages: &'a [Package],
+    name: &str,
+    protocol: Option<&str>,
+) -> Result<&'a Package> {
+    let matches: Vec<&Package> = packages
+        .iter()
+        .filter(|package| {
+            package
+                .name
+                .as_deref()
+                .is_some_and(|candidate| candidate.eq_ignore_ascii_case(name))
+        })
+        .filter(|package| {
+            protocol.is_none_or(|protocol| {
+                package
+                    .protocol_type
+                    .as_deref()
+                    .is_some_and(|candidate| candidate.eq_ignore_ascii_case(protocol))
+            })
+        })
+        .collect();
+
+    match matches.as_slice() {
+        [package] => Ok(package),
+        [] => Err(anyhow!("No package named '{name}' was found in the feed")),
+        _ => Err(anyhow!(
+            "Several packages are named '{name}' ({}). Pass --protocol to pick one",
+            matches
+                .iter()
+                .filter_map(|package| package.protocol_type.as_deref())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+    }
+}
+
+async fn list_package_versions(
+    project: Option<&str>,
+    feed: &str,
+    name: &str,
+    protocol: Option<&str>,
+) -> Result<Vec<PackageVersion>> {
+    let packages = list_packages(project, feed, protocol, Some(name)).await?;
+    let package_id = find_package(&packages, name, protocol)?
+        .id
+        .clone()
+        .ok_or_else(|| anyhow!("The package '{name}' has no id"))?;
+
+    let (client, organization) = create_artifacts_client()?;
+    let (organization, project) = scoped_path(&organization, project);
+
+    Ok(client
+        .artifact_details_client()
+        .get_package_versions(organization, feed, package_id, project)
+        .await?
+        .value)
+}
+
 fn display_feeds(feeds: &[Feed]) {
     if feeds.is_empty() {
         println!("No feeds found.");
@@ -117,6 +237,78 @@ fn display_feeds(feeds: &[Feed]) {
     }
 }
 
+fn latest_version(package: &Package) -> &str {
+    package
+        .versions
+        .iter()
+        .find(|version| version.is_latest == Some(true))
+        .or_else(|| package.versions.first())
+        .and_then(|version| version.version.as_deref())
+        .unwrap_or("-")
+}
+
+fn display_packages(packages: &[Package]) {
+    if packages.is_empty() {
+        println!("No packages found.");
+        return;
+    }
+
+    println!(
+        "{:<50} {:<10} {}",
+        "Name".bold(),
+        "Protocol".bold(),
+        "Latest version".bold()
+    );
+    println!("{}", "-".repeat(80));
+
+    for package in packages {
+        println!(
+            "{:<50} {:<10} {}",
+            package.name.as_deref().unwrap_or("-"),
+            package.protocol_type.as_deref().unwrap_or("-"),
+            latest_version(package)
+        );
+    }
+}
+
+fn display_package_versions(versions: &[PackageVersion]) {
+    if versions.is_empty() {
+        println!("No versions found.");
+        return;
+    }
+
+    println!(
+        "{:<24} {:<12} {:<8} {}",
+        "Version".bold(),
+        "Published".bold(),
+        "Latest".bold(),
+        "Description".bold()
+    );
+    println!("{}", "-".repeat(80));
+
+    for version in versions {
+        let version = &version.minimal_package_version;
+        println!(
+            "{:<24} {:<12} {:<8} {}",
+            version.version.as_deref().unwrap_or("-"),
+            version
+                .publish_date
+                .map(|published| published.date().to_string())
+                .unwrap_or_else(|| "-".to_string()),
+            if version.is_latest == Some(true) {
+                "yes"
+            } else {
+                ""
+            },
+            version
+                .package_description
+                .as_deref()
+                .map(escape_control_characters)
+                .unwrap_or_else(|| "-".to_string())
+        );
+    }
+}
+
 fn scope_label(project: Option<&str>) -> String {
     match project {
         Some(project) => format!("project '{project}'"),
@@ -136,6 +328,56 @@ pub async fn handle_command(subcommand: &ArtifactsSubCommands) -> Result<()> {
                     eprintln!(
                         "❌ Failed to list the feeds of {}",
                         scope_label(project.as_deref())
+                    );
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        ArtifactsSubCommands::Packages {
+            subcommand:
+                PackagesSubCommands::List {
+                    feed,
+                    protocol,
+                    name,
+                    scope,
+                },
+        } => {
+            let project = scope.resolve_project()?;
+            match list_packages(
+                project.as_deref(),
+                feed,
+                protocol.as_deref(),
+                name.as_deref(),
+            )
+            .await
+            {
+                Ok(packages) => display_packages(&packages),
+                Err(e) => {
+                    eprintln!(
+                        "❌ Failed to list the packages of feed '{feed}' in {}",
+                        scope_label(project.as_deref())
+                    );
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        ArtifactsSubCommands::Packages {
+            subcommand:
+                PackagesSubCommands::Versions {
+                    feed,
+                    name,
+                    protocol,
+                    scope,
+                },
+        } => {
+            let project = scope.resolve_project()?;
+            match list_package_versions(project.as_deref(), feed, name, protocol.as_deref()).await {
+                Ok(versions) => display_package_versions(&versions),
+                Err(e) => {
+                    eprintln!(
+                        "❌ Failed to list the versions of package '{name}' in feed '{feed}'"
                     );
                     eprintln!("   {e}");
                     return Err(e);
@@ -180,5 +422,35 @@ mod tests {
             project: Some("web".to_string()),
         };
         assert_eq!(scope.resolve_project().unwrap(), Some("web".to_string()));
+    }
+
+    fn package(name: &str, protocol: &str) -> Package {
+        let mut package = Package::new();
+        package.name = Some(name.to_string());
+        package.protocol_type = Some(protocol.to_string());
+        package
+    }
+
+    #[test]
+    fn find_package_matches_whole_name_ignoring_case() {
+        let packages = [package("tool-extras", "upack"), package("Tool", "upack")];
+        let found = find_package(&packages, "tool", None).unwrap();
+        assert_eq!(found.name.as_deref(), Some("Tool"));
+    }
+
+    #[test]
+    fn find_package_reports_missing_package() {
+        let packages = [package("tool-extras", "upack")];
+        assert!(find_package(&packages, "tool", None).is_err());
+    }
+
+    #[test]
+    fn find_package_needs_protocol_when_names_collide() {
+        let packages = [package("tool", "upack"), package("tool", "NuGet")];
+        let error = find_package(&packages, "tool", None).unwrap_err();
+        assert!(error.to_string().contains("--protocol"));
+
+        let found = find_package(&packages, "tool", Some("nuget")).unwrap();
+        assert_eq!(found.protocol_type.as_deref(), Some("NuGet"));
     }
 }
