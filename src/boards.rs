@@ -11,12 +11,26 @@ use clap::{Subcommand, ValueEnum};
 use colored::Colorize;
 use serde_json::json;
 
+mod area;
+mod classification;
+mod iteration;
+
 #[derive(Subcommand, Clone)]
 pub enum BoardsSubCommands {
     /// Manage work items
     WorkItem {
         #[clap(subcommand)]
         subcommand: WorkItemSubCommands,
+    },
+    /// Manage area paths of a project and its teams
+    Area {
+        #[clap(subcommand)]
+        subcommand: area::AreaSubCommands,
+    },
+    /// Manage iterations of a project and its teams
+    Iteration {
+        #[clap(subcommand)]
+        subcommand: iteration::IterationSubCommands,
     },
     /// Run a WIQL query and list the work items it returns
     Query {
@@ -305,6 +319,12 @@ fn create_wit_client() -> Result<wit::Client> {
     let creds = get_credentials()?;
     let factory = CredentialClientFactory::new(&creds)?;
     Ok(factory.build_wit())
+}
+
+fn create_work_client() -> Result<azure_devops_rust_api::work::Client> {
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds)?;
+    Ok(factory.build_work())
 }
 
 async fn get_work_item(project: &str, id: &str) -> Result<models::WorkItem> {
@@ -804,6 +824,8 @@ pub async fn handle_command(subcommand: &BoardsSubCommands) -> Result<()> {
     let _credentials = get_credentials()?;
     match subcommand {
         BoardsSubCommands::WorkItem { subcommand } => handle_work_item_command(subcommand).await,
+        BoardsSubCommands::Area { subcommand } => area::handle_command(subcommand).await,
+        BoardsSubCommands::Iteration { subcommand } => iteration::handle_command(subcommand).await,
         BoardsSubCommands::Query {
             wiql,
             project,
