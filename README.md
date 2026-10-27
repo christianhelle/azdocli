@@ -582,121 +582,94 @@ Valid thread statuses are `fixed`, `wont-fix`, `closed`, `by-design`, `active` a
 
 ### Pipeline Management Features
 
-#### Pipeline List Feature
+The `pipelines` commands follow the shape of the official Azure DevOps CLI (`az pipelines`), so the
+command names and arguments you know from `az pipelines` work the same way here.
 
-The `pipelines list` command allows you to list all pipelines in an Azure DevOps project:
+> **Breaking change:** earlier versions used their own command shape. The old forms map to the new
+> ones like this:
+>
+> | Before | Now |
+> | --- | --- |
+> | `pipelines runs --id 42` | `pipelines runs list --pipeline-ids 42` |
+> | `pipelines show --id 42 --build-id 123` | `pipelines runs show --id 123` |
+> | `pipelines logs --id 42 --build-id 123` | `pipelines runs logs --run-id 123` |
+> | `pipelines artifacts --build-id 123` | `pipelines runs artifact list --run-id 123` |
+> | `pipelines run --id 42 --variable a=1 --variable b=2` | `pipelines run --id 42 --variables a=1 b=2` |
+> | `pipelines variable-group list --name x` | `pipelines variable-group list --group-name x` (`--name` still works) |
+>
+> `pipelines show` now shows the pipeline itself rather than one of its runs.
+
+#### Pipelines
 
 ```sh
-# List all pipelines in the default project
+# List the pipelines of the default project (or pass --project MyProject)
 azdocli pipelines list
 
-# Or specify a project explicitly
-azdocli pipelines list --project MyProject
-```
+# Filter by name (use * as a wildcard), folder or repository, and order or cap the results
+azdocli pipelines list --name "web*" --folder-path team/web --top 10 --query-order NameAsc
+azdocli pipelines list --repository MyRepo
+azdocli pipelines list --repository owner/repo --repository-type github
 
-**List Features:**
+# Show a pipeline by ID, or by name (add --folder-path when names repeat across folders)
+azdocli pipelines show --id 42
+azdocli pipelines show --name web-ci --folder-path team/web
 
-- **Comprehensive listing**: View all pipelines in a project with IDs and names
-- **User-friendly formatting**: Easy-to-read table format
-- **Error handling**: Helpful error messages when project not found or access denied
+# Open the pipeline in the browser
+azdocli pipelines show --id 42 --open
 
-#### Pipeline Runs Feature
-
-The `pipelines runs` command shows all builds (runs) of a specified pipeline:
-
-```sh
-# Show all runs for a pipeline (using default project)
-azdocli pipelines runs --id 42
-
-# Or specify a project explicitly
-azdocli pipelines runs --id 42 --project MyProject
-```
-
-**Runs Features:**
-
-- **Run history**: View all runs for a specific pipeline
-- **Status visibility**: See current state and result of each pipeline run
-- **User-friendly formatting**: Clear display of run information
-
-#### Pipeline Show Feature
-
-The `pipelines show` command displays detailed information about a specific pipeline build:
-
-```sh
-# Show details of a specific pipeline build (using default project)
-azdocli pipelines show --id 42 --build-id 123
-
-# Or specify a project explicitly
-azdocli pipelines show --id 42 --project MyProject --build-id 123
-```
-
-**Show Features:**
-
-- **Detailed information**: Run number, pipeline, state, result and timestamps
-- **Web link**: The URL of the run in the Azure DevOps web interface
-- **Error handling**: Helpful error messages when build not found
-
-#### Pipeline Run Feature
-
-The `pipelines run` command queues a new pipeline run:
-
-```sh
-# Run a pipeline (using default project)
+# Queue a run, by ID or by name
 azdocli pipelines run --id 42
+azdocli pipelines run --name web-ci --branch develop
+azdocli pipelines run --id 42 --commit-id 1a2b3c4d
 
-# Or specify a project explicitly
-azdocli pipelines run --id 42 --project MyProject
+# Set variables and template parameters (space separated NAME=VALUE pairs)
+azdocli pipelines run --id 42 --variables environment=staging verbose=true --parameters image=ubuntu-latest
 
-# Run a specific branch
-azdocli pipelines run --id 42 --branch develop
+# Open the new run in the browser
+azdocli pipelines run --id 42 --open
 
-# Pass pipeline variables (repeat --variable for more than one)
-azdocli pipelines run --id 42 --variable environment=staging --variable verbose=true
+# List the folders pipelines are organized in
+azdocli pipelines folder list
+azdocli pipelines folder list --path team --query-order Asc
+
+# List the variables defined in a pipeline (secret values are never returned by Azure DevOps)
+azdocli pipelines variable list --pipeline-id 42
+azdocli pipelines variable list --pipeline-name web-ci
 ```
 
-**Run Features:**
-
-- **Pipeline execution**: Start a pipeline with a single command
-- **Branch selection**: Queue the run against any branch with `--branch`
-- **Runtime variables**: Set pipeline variables with repeatable `--variable NAME=VALUE` arguments
-- **Run summary**: Prints the new run number, state and web URL
-- **Error handling**: Clear feedback when pipeline cannot be started
-
-#### Pipeline Logs Feature
-
-The `pipelines logs` command lists the logs of a run, or prints one of them:
+#### Pipeline Runs
 
 ```sh
-# List the logs produced by a run
-azdocli pipelines logs --id 42 --build-id 123
+# List the runs of the project, or of one or more pipelines
+azdocli pipelines runs list
+azdocli pipelines runs list --pipeline-ids 42 43 --top 10
 
-# Print the contents of a single log
-azdocli pipelines logs --id 42 --build-id 123 --log-id 7
+# Filter by branch, status, result, reason, requester or tags, and choose the order
+azdocli pipelines runs list --branch main --result failed --query-order QueueTimeDesc
+azdocli pipelines runs list --status inProgress --reason pullRequest
+azdocli pipelines runs list --requested-for "someone@example.com" --tags nightly release
+
+# Show a run, or open it in the browser
+azdocli pipelines runs show --id 123
+azdocli pipelines runs show --id 123 --open
+
+# List the artifacts and tags of a run
+azdocli pipelines runs artifact list --run-id 123
+azdocli pipelines runs tag list --run-id 123
+
+# List the logs of a run, or print one of them (not part of az pipelines)
+azdocli pipelines runs logs --run-id 123
+azdocli pipelines runs logs --run-id 123 --log-id 7
 ```
 
-**Logs Features:**
+**Pipeline Features:**
 
-- **Log inventory**: See every log a run produced, with line counts and timestamps
+- **Same shape as `az pipelines`**: `list`, `show`, `run`, `runs list/show`, `runs artifact list`, `runs tag list`, `folder list`, `variable list` and `variable-group list/show` take the same arguments
+- **Pipelines by name**: `show`, `run` and `variable list` accept a pipeline name instead of an ID
+- **Run filters**: Filter runs across the project by pipeline, branch, status, result, reason, requester and tags
 - **Full log text**: Print a log to stdout so it can be piped, searched or saved
-- **Error handling**: Clear feedback when the run or log does not exist
-
-#### Pipeline Artifacts Feature
-
-The `pipelines artifacts` command lists the artifacts a run published:
-
-```sh
-# List the artifacts of a run
-azdocli pipelines artifacts --build-id 123
-
-# Or specify a project explicitly
-azdocli pipelines artifacts --build-id 123 --project MyProject
-```
-
-**Artifacts Features:**
-
-- **Artifact inventory**: See every artifact published by a run
-- **Download URLs**: Print the download URL of each artifact
-- **Error handling**: Clear feedback when the run does not exist
+- **Browser integration**: `--open` (or `--web`) opens a pipeline or run in the Azure DevOps web interface
+- **Default project support**: Use with default project or specify --project explicitly
 
 #### Variable Groups and Service Connections
 
@@ -707,14 +680,17 @@ pipeline consumes:
 # List the variable groups of the default project
 azdocli pipelines variable-group list
 
-# Filter by name and cap the number of results
-azdocli pipelines variable-group list --name "release" --top 10
+# Filter by name, order by ID and cap the number of results
+azdocli pipelines variable-group list --group-name "release" --query-order Asc --top 10
 
 # Use * for a pattern instead of a substring match
-azdocli pipelines variable-group list --name "release-*"
+azdocli pipelines variable-group list --group-name "release-*"
+
+# Only groups you can use (or manage) in a pipeline
+azdocli pipelines variable-group list --action use
 
 # Show a variable group and its variables (secret values are never returned by Azure DevOps)
-azdocli pipelines variable-group show --id 7
+azdocli pipelines variable-group show --group-id 7
 
 # List the service connections of the default project
 azdocli pipelines service-connection list
@@ -744,7 +720,7 @@ azdocli releases definitions
 azdocli releases definitions --name "web"
 
 # Find the build to release, e.g. from the runs of its build pipeline
-azdocli pipelines runs --id 42
+azdocli pipelines runs list --pipeline-ids 42
 
 # Create a release of build 1234 from release definition 5
 azdocli releases create --definition-id 5 --build-id 1234
