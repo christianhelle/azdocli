@@ -10,6 +10,7 @@ use azure_devops_rust_api::git;
 use azure_devops_rust_api::git::models::GitPullRequest;
 use clap::ValueEnum;
 use colored::Colorize;
+use std::future::Future;
 
 /// The pull request states `repos pr list` can filter on.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
@@ -92,13 +93,15 @@ impl ListContext {
         })
     }
 
-    /// Fetches the pull requests matching the filters, narrowed to an
-    /// optional creator and reviewer identity ID.
+    /// Fetches up to `top` pull requests matching the filters, narrowed to an
+    /// optional creator and reviewer identity ID, after skipping `skip`.
     async fn query(
         &self,
         filters: &ListFilters<'_>,
         creator_id: Option<String>,
         reviewer_id: Option<String>,
+        top: Option<i32>,
+        skip: i32,
     ) -> Result<Vec<GitPullRequest>> {
         let mut request = self
             .client
@@ -121,8 +124,11 @@ impl ListContext {
         if let Some(target) = filters.target {
             request = request.search_criteria_target_ref_name(branch_ref(target));
         }
-        if let Some(top) = filters.effective_top() {
+        if let Some(top) = top {
             request = request.top(top);
+        }
+        if skip > 0 {
+            request = request.skip(skip);
         }
 
         Ok(request.await?.value)
@@ -154,7 +160,9 @@ pub(super) async fn list_pull_requests(
         Some(reviewer) => Some(identity::resolve_identity(&ctx.creds, reviewer).await?),
         None => None,
     };
-    let pull_requests = ctx.query(filters, creator_id, reviewer_id).await?;
+    let pull_requests = ctx
+        .query(filters, creator_id, reviewer_id, filters.effective_top(), 0)
+        .await?;
 
     if pull_requests.is_empty() {
         match repo {
@@ -180,9 +188,9 @@ async fn list_my_pull_requests(
 ) -> Result<()> {
     let me = http::authenticated_user_id(&ctx.creds).await?;
 
-    let created = ctx.query(filters, Some(me.clone()), None).await?;
-    let assigned =
-        without_pull_requests_in(ctx.query(filters, None, Some(me.clone())).await?, &created);
+    let top = filters.effective_top();
+    let created = ctx.query(filters, Some(me.clone()), None, top, 0).await?;
+    let assigned = assigned_to(ctx, filters, &me, top).await?;
 
     display_section("Created by me", &created, &columns);
     println!();
@@ -197,19 +205,62 @@ async fn list_my_pull_requests(
     Ok(())
 }
 
-/// Drops the pull requests that already appear in `seen`, so a pull request
-/// the user both created and reviews is only listed once.
-fn without_pull_requests_in(
-    pull_requests: Vec<GitPullRequest>,
-    seen: &[GitPullRequest],
-) -> Vec<GitPullRequest> {
+/// Fetches up to `top` pull requests `me` is reviewing but did not create.
+///
+/// Azure DevOps cannot exclude a creator server-side, so this pages through
+/// the reviewer results until enough remain after dropping the user's own.
+async fn assigned_to(
+    ctx: &ListContext,
+    filters: &ListFilters<'_>,
+    me: &str,
+    top: Option<i32>,
+) -> Result<Vec<GitPullRequest>> {
+    let Some(top) = top else {
+        let reviewing = ctx
+            .query(filters, None, Some(me.to_string()), None, 0)
+            .await?;
+        return Ok(not_created_by(reviewing, me));
+    };
+
+    fill_not_created_by(me, top, |skip| {
+        ctx.query(filters, None, Some(me.to_string()), Some(top), skip)
+    })
+    .await
+}
+
+/// Requests pages of `top` pull requests, skipping ahead each time, until `top`
+/// of them were not created by `me` or the results run out.
+async fn fill_not_created_by<F, Fut>(
+    me: &str,
+    top: i32,
+    mut fetch_page: F,
+) -> Result<Vec<GitPullRequest>>
+where
+    F: FnMut(i32) -> Fut,
+    Fut: Future<Output = Result<Vec<GitPullRequest>>>,
+{
+    let limit = top.max(0) as usize;
+    let mut kept = Vec::new();
+    let mut skip = 0;
+    while kept.len() < limit {
+        let page = fetch_page(skip).await?;
+        let fetched = page.len();
+        kept.extend(not_created_by(page, me));
+        if fetched < limit {
+            break;
+        }
+        skip += fetched as i32;
+    }
+    kept.truncate(limit);
+    Ok(kept)
+}
+
+/// Drops the pull requests `identity_id` created, so a pull request the user
+/// both created and reviews is only listed under "Created by me".
+fn not_created_by(pull_requests: Vec<GitPullRequest>, identity_id: &str) -> Vec<GitPullRequest> {
     pull_requests
         .into_iter()
-        .filter(|pr| {
-            !seen
-                .iter()
-                .any(|other| other.pull_request_id == pr.pull_request_id)
-        })
+        .filter(|pr| !pr.created_by.id.eq_ignore_ascii_case(identity_id))
         .collect()
 }
 
@@ -453,16 +504,57 @@ mod tests {
         );
     }
 
-    #[test]
-    fn pull_requests_already_seen_are_dropped() {
-        let created = vec![pull_request(1), pull_request(2)];
-        let assigned = vec![pull_request(2), pull_request(3)];
+    fn created_by(id: i32, creator_id: &str) -> GitPullRequest {
+        let mut pr = pull_request(id);
+        pr.created_by.id = creator_id.to_string();
+        pr
+    }
 
-        let ids: Vec<i32> = without_pull_requests_in(assigned, &created)
-            .iter()
-            .map(|pr| pr.pull_request_id)
-            .collect();
-        assert_eq!(ids, vec![3]);
+    fn ids(pull_requests: &[GitPullRequest]) -> Vec<i32> {
+        pull_requests.iter().map(|pr| pr.pull_request_id).collect()
+    }
+
+    /// Serves `top` pull requests at a time from `all`, like the API's
+    /// `$top` and `$skip` paging.
+    async fn fill_from(all: &[GitPullRequest], top: i32) -> Vec<GitPullRequest> {
+        fill_not_created_by("me", top, |skip| {
+            let page = all
+                .iter()
+                .skip(skip as usize)
+                .take(top as usize)
+                .cloned()
+                .collect();
+            std::future::ready(Ok(page))
+        })
+        .await
+        .unwrap()
+    }
+
+    #[test]
+    fn pull_requests_the_user_created_are_dropped_ignoring_case() {
+        let reviewing = vec![created_by(1, "ME"), created_by(2, "someone-else")];
+        assert_eq!(ids(&not_created_by(reviewing, "me")), vec![2]);
+    }
+
+    #[tokio::test]
+    async fn the_limit_applies_after_dropping_the_users_own_pull_requests() {
+        // With --top 1, a first result the user created must not leave the
+        // section empty when later pages hold pull requests they review.
+        let all = vec![
+            created_by(1, "me"),
+            created_by(2, "me"),
+            created_by(3, "someone-else"),
+            created_by(4, "someone-else"),
+        ];
+        assert_eq!(ids(&fill_from(&all, 1).await), vec![3]);
+        assert_eq!(ids(&fill_from(&all, 3).await), vec![3, 4]);
+    }
+
+    #[tokio::test]
+    async fn filling_stops_when_the_results_run_out() {
+        let all = vec![created_by(1, "me"), created_by(2, "someone-else")];
+        assert_eq!(ids(&fill_from(&all, 5).await), vec![2]);
+        assert!(fill_from(&all, 0).await.is_empty());
     }
 
     #[test]
