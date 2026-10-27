@@ -1,3 +1,4 @@
+mod artifact_tool;
 mod download;
 
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
