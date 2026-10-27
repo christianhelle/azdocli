@@ -2,6 +2,7 @@ use crate::auth::{login, logout};
 use crate::project::{get_default_project, save_default_project};
 use clap::{CommandFactory, Parser, Subcommand};
 
+mod artifacts;
 mod auth;
 mod boards;
 mod browser;
@@ -49,6 +50,11 @@ enum Commands {
     Boards {
         #[clap(subcommand)]
         subcommand: boards::BoardsSubCommands,
+    },
+    /// Manage Azure Artifacts feeds and Universal Packages
+    Artifacts {
+        #[clap(subcommand)]
+        subcommand: artifacts::ArtifactsSubCommands,
     },
     /// Manage Azure DevOps classic releases
     Releases {
@@ -107,6 +113,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Boards { subcommand }) => {
             boards::handle_command(subcommand).await?;
+        }
+        Some(Commands::Artifacts { subcommand }) => {
+            artifacts::handle_command(subcommand).await?;
         }
         Some(Commands::Releases { subcommand }) => {
             releases::handle_command(subcommand).await?;

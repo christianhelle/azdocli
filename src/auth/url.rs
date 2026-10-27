@@ -9,6 +9,8 @@ use anyhow::{anyhow, Result};
 const DEFAULT_BASE_URL: &str = "https://dev.azure.com";
 const DEFAULT_VSAEX_BASE_URL: &str = "https://vsaex.dev.azure.com";
 const DEFAULT_VSRM_BASE_URL: &str = "https://vsrm.dev.azure.com";
+const DEFAULT_FEEDS_BASE_URL: &str = "https://feeds.dev.azure.com";
+const DEFAULT_VSBLOB_BASE_URL: &str = "https://vsblob.dev.azure.com";
 
 /// Returns the default Azure DevOps cloud base URL.
 pub fn default_base_url() -> String {
@@ -160,6 +162,28 @@ pub fn user_entitlements_url(base_url: &str, organization: &str, user_id: &str) 
 pub fn release_base_url(base_url: &str) -> String {
     if is_default_cloud_host(base_url) {
         DEFAULT_VSRM_BASE_URL.to_string()
+    } else {
+        normalize_base_url(base_url)
+    }
+}
+
+/// Base URL for Azure Artifacts feed APIs. On the cloud host this lives on
+/// `https://feeds.dev.azure.com`; otherwise it is assumed to share the same
+/// custom base URL.
+pub fn feeds_base_url(base_url: &str) -> String {
+    if is_default_cloud_host(base_url) {
+        DEFAULT_FEEDS_BASE_URL.to_string()
+    } else {
+        normalize_base_url(base_url)
+    }
+}
+
+/// Base URL for the blob store, which also serves client tools such as
+/// ArtifactTool. On the cloud host this lives on `https://vsblob.dev.azure.com`;
+/// otherwise it is assumed to share the same custom base URL.
+pub fn vsblob_base_url(base_url: &str) -> String {
+    if is_default_cloud_host(base_url) {
+        DEFAULT_VSBLOB_BASE_URL.to_string()
     } else {
         normalize_base_url(base_url)
     }
@@ -368,6 +392,38 @@ mod tests {
     fn release_base_url_uses_custom_host_for_enterprise() {
         assert_eq!(
             release_base_url("https://devops.mycompany.com"),
+            "https://devops.mycompany.com"
+        );
+    }
+
+    #[test]
+    fn feeds_base_url_uses_feeds_host_for_cloud() {
+        assert_eq!(
+            feeds_base_url("https://dev.azure.com/"),
+            "https://feeds.dev.azure.com"
+        );
+    }
+
+    #[test]
+    fn feeds_base_url_uses_custom_host_for_enterprise() {
+        assert_eq!(
+            feeds_base_url("https://devops.mycompany.com"),
+            "https://devops.mycompany.com"
+        );
+    }
+
+    #[test]
+    fn vsblob_base_url_uses_vsblob_host_for_cloud() {
+        assert_eq!(
+            vsblob_base_url("https://dev.azure.com"),
+            "https://vsblob.dev.azure.com"
+        );
+    }
+
+    #[test]
+    fn vsblob_base_url_uses_custom_host_for_enterprise() {
+        assert_eq!(
+            vsblob_base_url("https://devops.mycompany.com/"),
             "https://devops.mycompany.com"
         );
     }

@@ -6,7 +6,9 @@
 //! logic behind a single **seam** so callers know nothing about
 //! credential resolution.
 
-use crate::auth::url::{normalize_base_url, release_base_url, user_entitlements_base_url};
+use crate::auth::url::{
+    feeds_base_url, normalize_base_url, release_base_url, user_entitlements_base_url,
+};
 use crate::auth::Credentials;
 use anyhow::{Context, Result};
 
@@ -50,6 +52,9 @@ pub trait ClientFactory {
 
     /// Build a Service Endpoint client.
     fn build_service_endpoint(&self) -> azure_devops_rust_api::service_endpoint::Client;
+
+    /// Build an Artifacts (feeds and packages) client.
+    fn build_artifacts(&self) -> azure_devops_rust_api::artifacts::Client;
 }
 
 /// A concrete factory backed by a `Credentials` object.
@@ -58,6 +63,7 @@ pub struct CredentialClientFactory {
     endpoint: azure_core::http::Url,
     entitlements_endpoint: azure_core::http::Url,
     release_endpoint: azure_core::http::Url,
+    feeds_endpoint: azure_core::http::Url,
 }
 
 impl CredentialClientFactory {
@@ -75,12 +81,17 @@ impl CredentialClientFactory {
             &normalize_base_url(&release_base_url(&creds.base_url)),
             "Invalid release base URL derived from credentials",
         )?;
+        let feeds_endpoint = parse_url(
+            &normalize_base_url(&feeds_base_url(&creds.base_url)),
+            "Invalid feeds base URL derived from credentials",
+        )?;
 
         Ok(Self {
             credential: azure_devops_rust_api::Credential::Pat(creds.pat.clone()),
             endpoint,
             entitlements_endpoint,
             release_endpoint,
+            feeds_endpoint,
         })
     }
 }
@@ -161,6 +172,12 @@ impl ClientFactory for CredentialClientFactory {
     fn build_service_endpoint(&self) -> azure_devops_rust_api::service_endpoint::Client {
         azure_devops_rust_api::service_endpoint::ClientBuilder::new(self.credential.clone())
             .endpoint(self.endpoint.clone())
+            .build()
+    }
+
+    fn build_artifacts(&self) -> azure_devops_rust_api::artifacts::Client {
+        azure_devops_rust_api::artifacts::ClientBuilder::new(self.credential.clone())
+            .endpoint(self.feeds_endpoint.clone())
             .build()
     }
 }

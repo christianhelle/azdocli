@@ -29,6 +29,10 @@ azdocli/
 │   │   └── http.rs        # Raw REST calls the SDK models cannot express
 │   ├── pipelines.rs       # Pipelines, runs, logs, artifacts, tags, folders, variables, variable groups, service connections (mirrors az pipelines)
 │   ├── releases.rs        # Classic release definitions and releases, releasing a build
+│   ├── artifacts/         # Azure Artifacts feeds and Universal Packages
+│   │   ├── mod.rs         # Subcommand enum, routing, feed and package listing
+│   │   ├── download.rs    # Native Universal Package download (dedup protocol)
+│   │   └── artifact_tool.rs # Fetching and running ArtifactTool to publish
 │   ├── boards.rs          # Work item CRUD, comments, types, WIQL queries
 │   ├── text.rs            # Shared rendering helpers for remote text
 │   ├── wiki.rs            # Wiki and wiki page operations

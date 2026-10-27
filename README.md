@@ -175,6 +175,7 @@ azdocli pipelines list
 azdocli [SUBCOMMAND]
 
 SUBCOMMANDS:
+    artifacts    Manage Azure Artifacts feeds and Universal Packages
     boards       Manage Azure DevOps boards
     login        Login to Azure DevOps with a Personal Access Token (PAT)
     logout       Logout from Azure DevOps
@@ -191,6 +192,7 @@ SUBCOMMANDS:
 - **Repository Management**: List, create, delete, clone, view, browse and manage pull requests in repositories
 - **Pipeline Management**: Manage Azure DevOps pipelines
 - **Release Management**: List release definitions and releases, show a release, and create a release from a specific build
+- **Artifacts**: Browse Azure Artifacts feeds and packages, and download or publish Universal Packages
 - **Project Management**: Create, delete, list, and show Azure DevOps team projects, their teams, team members and process templates
 - **Migration**: Cross-tenant team-project migration with `azdocli migrate` (see [docs/migrate.md](docs/migrate.md) for the full guide)
 - **Board Management**: Manage Azure DevOps boards
@@ -747,6 +749,36 @@ azdocli releases show --id 87
 - **Helpful errors**: An unknown alias, or a definition without a primary build artifact, reports the aliases you can choose from
 - **Stage overview**: `releases show` lists every stage with its deployment status
 - **Default project support**: Use with default project or specify --project explicitly
+
+### Artifacts Features
+
+The `artifacts` command browses Azure Artifacts feeds and transfers Universal Packages, mirroring
+`az artifacts universal`:
+
+```sh
+# List every feed in the organization, or only the feeds of a project
+azdocli artifacts feeds list
+azdocli artifacts feeds list --project MyProject
+
+# List the packages of a feed and the versions of one package
+azdocli artifacts packages list --feed tools
+azdocli artifacts packages list --feed tools --protocol upack --name cli
+azdocli artifacts packages versions --feed tools --name cli
+
+# Download a Universal Package, optionally only some of its files
+azdocli artifacts universal download --feed tools --name cli --version 1.2.3 --path ./cli
+azdocli artifacts universal download --feed tools --name cli --version 1.2.3 --path ./cli --file-filter "*.dll"
+
+# Publish a directory as a Universal Package
+azdocli artifacts universal publish --feed tools --name cli --version 1.2.4 --path ./dist --description "CLI tools"
+```
+
+**Artifacts Features:**
+
+- **Feed scope**: Feeds are organization-scoped by default, like in `az`; pass `--scope project` or `--project` for a feed created in a project (`--scope project` alone uses the default project)
+- **Native download**: Universal Packages are downloaded directly over the Azure Artifacts dedup protocol, without any extra tools. Package paths that would escape `--path` are refused
+- **Publish via ArtifactTool**: Publishing uses Microsoft's ArtifactTool, just like `az artifacts universal publish`. The tool is downloaded from your organization on first use and cached in `~/.azdocli/tools/ArtifactTool/<version>`; the PAT is handed to it through an environment variable, never on the command line
+- **Azure DevOps Services only**: Universal Packages are not available on Azure DevOps Server, so `universal download` and `universal publish` require the `https://dev.azure.com` host
 
 ### User Management Features
 
