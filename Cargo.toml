@@ -26,6 +26,8 @@ dialoguer = "0.12"
 colored = "3.0"
 azure_core = "0.34"
 azure_devops_rust_api = { version = "0.36.0", features = [
+  "artifacts",
+  "artifacts_download",
   "git",
   "pipelines",
   "wit",
