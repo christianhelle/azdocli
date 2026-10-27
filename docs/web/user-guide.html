@@ -806,76 +806,119 @@ azdocli repos pr comment resolve --repo MyRepository --id 123 --thread 7 --statu
         <div class="command-section">
           <h3>Pipeline Commands</h3>
 
+          <p>
+            The pipelines commands follow the shape of the official Azure
+            DevOps CLI (<code>az pipelines</code>) for the read commands and
+            <code>run</code>: the commands below take the same names and
+            arguments as their <code>az pipelines</code> counterparts.
+            Commands that change pipelines (such as <code>create</code>,
+            <code>update</code> and <code>delete</code>), the
+            <code>build</code>, <code>release</code>, <code>pool</code>,
+            <code>agent</code> and <code>queue</code> groups, and global
+            arguments such as <code>--output</code> are not supported.
+          </p>
+
           <div class="command-example">
             <h4>List Pipelines</h4>
             <pre><code># List all pipelines in default project
 azdocli pipelines list
 
 # List pipelines in specific project
-azdocli pipelines list --project MyProject</code></pre>
+azdocli pipelines list --project MyProject
+
+# Filter by name, folder or repository, and order or cap the results
+azdocli pipelines list --name "web*" --folder-path team/web --top 10 --query-order NameAsc
+azdocli pipelines list --repository MyRepo</code></pre>
             <p>
-              <strong>Features</strong>: Comprehensive listing with IDs and
-              names in user-friendly table format.
+              <strong>Features</strong>: List pipelines with their IDs, names
+              and folders, filtered the same way as
+              <code>az pipelines list</code>.
             </p>
           </div>
 
           <div class="command-example">
-            <h4>Show Pipeline Runs</h4>
-            <pre><code># Show all runs for a pipeline
-azdocli pipelines runs --id 42
+            <h4>Show Pipeline</h4>
+            <pre><code># Show a pipeline by ID or by name
+azdocli pipelines show --id 42
+azdocli pipelines show --name web-ci --folder-path team/web
 
-# With specific project
-azdocli pipelines runs --id 42 --project MyProject</code></pre>
+# Open the pipeline in the browser
+azdocli pipelines show --id 42 --open</code></pre>
             <p>
-              <strong>Features</strong>: View run history, status visibility,
-              and clear display of run information.
-            </p>
-          </div>
-
-          <div class="command-example">
-            <h4>Show Pipeline Build Details</h4>
-            <pre><code># Show details of a specific pipeline build
-azdocli pipelines show --id 42 --build-id 123
-
-# With specific project
-azdocli pipelines show --id 42 --project MyProject --build-id 123</code></pre>
-            <p>
-              <strong>Features</strong>: Detailed information about builds,
-              debug information for troubleshooting.
+              <strong>Features</strong>: Folder, repository, default branch,
+              agent queue and web URL of a pipeline.
             </p>
           </div>
 
           <div class="command-example">
             <h4>Run Pipeline</h4>
-            <pre><code># Start a new pipeline run
+            <pre><code># Start a new pipeline run, by ID or by name
 azdocli pipelines run --id 42
+azdocli pipelines run --name web-ci
 
-# With specific project
-azdocli pipelines run --id 42 --project MyProject
-
-# Run a specific branch
+# Run a specific branch or commit
 azdocli pipelines run --id 42 --branch develop
+azdocli pipelines run --id 42 --commit-id 1a2b3c4d
 
-# Pass pipeline variables (repeat --variable for more than one)
-azdocli pipelines run --id 42 --variable environment=staging --variable verbose=true</code></pre>
+# Set variables and template parameters (space separated NAME=VALUE pairs)
+azdocli pipelines run --id 42 --variables environment=staging verbose=true --parameters image=ubuntu-latest</code></pre>
             <p>
-              <strong>Features</strong>: Queue a run against any branch, set
-              runtime variables, and print the new run number, state and web
-              URL.
+              <strong>Features</strong>: Queue a run against any branch or
+              commit, set runtime variables and template parameters, and print
+              the new run number, state and web URL. Add <code>--open</code> to
+              open the run in the browser.
             </p>
           </div>
 
           <div class="command-example">
-            <h4>Pipeline Logs</h4>
-            <pre><code># List the logs produced by a run
-azdocli pipelines logs --id 42 --build-id 123
+            <h4>Pipeline Runs</h4>
+            <pre><code># List the runs of the project, or of some pipelines
+azdocli pipelines runs list
+azdocli pipelines runs list --pipeline-ids 42 43 --top 10
 
-# Print the contents of a single log
-azdocli pipelines logs --id 42 --build-id 123 --log-id 7</code></pre>
+# Filter by branch, status, result, reason or tags
+azdocli pipelines runs list --branch main --result failed --query-order QueueTimeDesc
+azdocli pipelines runs list --status inProgress --tags nightly
+
+# Show a run
+azdocli pipelines runs show --id 123</code></pre>
             <p>
-              <strong>Features</strong>: See every log a run produced with line
-              counts and timestamps, or print one log to stdout so it can be
+              <strong>Features</strong>: View run history across the project
+              with the same filters as <code>az pipelines runs list</code>, and
+              the status, result, branch, commit and timestamps of a run.
+            </p>
+          </div>
+
+          <div class="command-example">
+            <h4>Run Artifacts, Tags and Logs</h4>
+            <pre><code># List the artifacts and tags of a run
+azdocli pipelines runs artifact list --run-id 123
+azdocli pipelines runs tag list --run-id 123
+
+# List the logs produced by a run, or print one of them
+azdocli pipelines runs logs --run-id 123
+azdocli pipelines runs logs --run-id 123 --log-id 7</code></pre>
+            <p>
+              <strong>Features</strong>: List every artifact a run published
+              with its download URL, and print logs to stdout so they can be
               piped, searched or saved.
+            </p>
+          </div>
+
+          <div class="command-example">
+            <h4>Folders and Pipeline Variables</h4>
+            <pre><code># List the folders pipelines are organized in
+azdocli pipelines folder list
+
+# List the variables defined on a pipeline in Azure DevOps
+azdocli pipelines variable list --pipeline-id 42
+azdocli pipelines variable list --pipeline-name web-ci</code></pre>
+            <p>
+              <strong>Features</strong>: See how pipelines are organized and
+              which variables can be set at queue time. Only variables
+              defined on the pipeline in Azure DevOps (the Variables button of
+              the pipeline editor) are listed, not those declared in the YAML
+              file.
             </p>
           </div>
 
@@ -884,11 +927,11 @@ azdocli pipelines logs --id 42 --build-id 123 --log-id 7</code></pre>
             <pre><code># List the variable groups of the default project
 azdocli pipelines variable-group list
 
-# Filter by name and cap the number of results
-azdocli pipelines variable-group list --name "release" --top 10
+# Filter by name, order by ID and cap the number of results
+azdocli pipelines variable-group list --group-name "release" --query-order Asc --top 10
 
 # Show a variable group and its variables
-azdocli pipelines variable-group show --id 7</code></pre>
+azdocli pipelines variable-group show --group-id 7</code></pre>
             <p>
               <strong>Features</strong>: See which variable groups exist and
               what they define. Secret variables are shown as
@@ -910,19 +953,6 @@ azdocli pipelines service-connection show --id 00000000-0000-0000-0000-000000000
             <p>
               <strong>Features</strong>: List connections with their type and
               readiness, filtered by type, or show one in full.
-            </p>
-          </div>
-
-          <div class="command-example">
-            <h4>Pipeline Artifacts</h4>
-            <pre><code># List the artifacts of a run
-azdocli pipelines artifacts --build-id 123
-
-# With specific project
-azdocli pipelines artifacts --build-id 123 --project MyProject</code></pre>
-            <p>
-              <strong>Features</strong>: List every artifact a run published,
-              with its type and download URL.
             </p>
           </div>
         </div>
