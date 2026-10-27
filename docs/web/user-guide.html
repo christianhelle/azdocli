@@ -1145,6 +1145,76 @@ azdocli boards query --wiql "SELECT [System.Id] FROM WorkItems" --limit 10</code
             </p>
           </div>
         </div>
+
+        <div class="command-section">
+          <h3>Areas</h3>
+          <p>
+            The boards area commands manage the area paths of a project and the
+            areas each team owns. Paths can be given as Azure DevOps shows them
+            (<code>\MyProject\Area\Team A</code>), as work items use them
+            (<code>MyProject\Team A</code>), or relative to the project's root
+            (<code>Team A</code>).
+          </p>
+
+          <div class="command-example">
+            <h4>Project Areas</h4>
+            <pre><code># List the area tree, three levels deep
+azdocli boards area project list --depth 3
+
+# Show, create, rename and delete area paths
+azdocli boards area project show --path "\MyProject\Area\Team A"
+azdocli boards area project create --name "Backend" --path "MyProject\Team A"
+azdocli boards area project update --path "MyProject\Team A\Backend" --name "Services"
+azdocli boards area project delete --path "MyProject\Team A\Services" --reclassify-id 12
+
+# Move the area with ID 15 under Team A
+azdocli boards area project update --path "MyProject\Team A" --child-id 15</code></pre>
+          </div>
+
+          <div class="command-example">
+            <h4>Team Areas</h4>
+            <pre><code>azdocli boards area team list --team "Team A"
+azdocli boards area team add --team "Team A" --path "MyProject\Team A" --include-sub-areas --set-as-default
+azdocli boards area team update --team "Team A" --path "MyProject\Team A" --include-sub-areas false
+azdocli boards area team remove --team "Team A" --path "MyProject\Shared"</code></pre>
+          </div>
+        </div>
+
+        <div class="command-section">
+          <h3>Iterations</h3>
+          <p>
+            The boards iteration commands manage the iterations of a project and
+            the iterations each team works in. Team commands take an iteration
+            by its identifier (<code>--id</code>) or its path
+            (<code>--path</code>).
+          </p>
+
+          <div class="command-example">
+            <h4>Project Iterations</h4>
+            <pre><code># List the iteration tree, two levels deep
+azdocli boards iteration project list --depth 2
+
+# Create, reschedule, rename and delete iterations
+azdocli boards iteration project create --name "Sprint 1" --start-date 2026-06-01 --finish-date 2026-06-14
+azdocli boards iteration project update --path "MyProject\Sprint 1" --start-date 2026-06-02 --finish-date 2026-06-15
+azdocli boards iteration project update --path "MyProject\Sprint 1" --name "Sprint 01"
+azdocli boards iteration project delete --path "MyProject\Sprint 01"</code></pre>
+          </div>
+
+          <div class="command-example">
+            <h4>Team Iterations</h4>
+            <pre><code>azdocli boards iteration team list --team "Team A" --timeframe current
+azdocli boards iteration team add --team "Team A" --path "MyProject\Sprint 1"
+azdocli boards iteration team remove --team "Team A" --path "MyProject\Sprint 1"
+azdocli boards iteration team list-work-items --team "Team A" --path "MyProject\Sprint 1"
+
+# Default and backlog iterations
+azdocli boards iteration team show-default-iteration --team "Team A"
+azdocli boards iteration team set-default-iteration --team "Team A" --default-iteration-macro @CurrentIteration
+azdocli boards iteration team show-backlog-iteration --team "Team A"
+azdocli boards iteration team set-backlog-iteration --team "Team A" --path "MyProject"</code></pre>
+          </div>
+        </div>
       </section>
 
       <section id="testing">

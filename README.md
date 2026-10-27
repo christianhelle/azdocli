@@ -929,6 +929,65 @@ azdocli boards query --wiql "SELECT [System.Id] FROM WorkItems" --limit 10
 - **Full work item details**: Results are shown in the same table as `work-item list`
 - **Result limits**: Cap the number of work items fetched with `--limit`
 
+#### Areas
+
+The `boards area` commands manage the area paths of a project and the areas each team owns:
+
+```sh
+# List the area tree of the default project, three levels deep
+azdocli boards area project list --depth 3
+
+# Show, create, rename and delete area paths
+azdocli boards area project show --path "\MyProject\Area\Team A"
+azdocli boards area project create --name "Backend" --path "MyProject\Team A"
+azdocli boards area project update --path "MyProject\Team A\Backend" --name "Services"
+azdocli boards area project delete --path "MyProject\Team A\Services" --reclassify-id 12
+
+# Move the area with ID 15, and everything below it, under Team A
+azdocli boards area project update --path "MyProject\Team A" --child-id 15
+
+# Manage the areas a team owns
+azdocli boards area team list --team "Team A"
+azdocli boards area team add --team "Team A" --path "MyProject\Team A" --include-sub-areas --set-as-default
+azdocli boards area team update --team "Team A" --path "MyProject\Team A" --include-sub-areas false
+azdocli boards area team remove --team "Team A" --path "MyProject\Shared"
+```
+
+#### Iterations
+
+The `boards iteration` commands manage the iterations of a project and the iterations each team works in:
+
+```sh
+# List the iteration tree of the default project, two levels deep
+azdocli boards iteration project list --depth 2
+
+# Create, reschedule, rename and delete iterations
+azdocli boards iteration project create --name "Sprint 1" --start-date 2026-06-01 --finish-date 2026-06-14
+azdocli boards iteration project update --path "MyProject\Sprint 1" --start-date 2026-06-02 --finish-date 2026-06-15
+azdocli boards iteration project update --path "MyProject\Sprint 1" --name "Sprint 01"
+azdocli boards iteration project show --path "\MyProject\Iteration\Sprint 01"
+azdocli boards iteration project delete --path "MyProject\Sprint 01"
+
+# Manage the iterations a team works in
+azdocli boards iteration team list --team "Team A"
+azdocli boards iteration team list --team "Team A" --timeframe current
+azdocli boards iteration team add --team "Team A" --path "MyProject\Sprint 1"
+azdocli boards iteration team remove --team "Team A" --id 5a8e3c5e-8d61-4b0f-b5c4-1b9a6a9c5e3e
+azdocli boards iteration team list-work-items --team "Team A" --path "MyProject\Sprint 1"
+
+# Default and backlog iterations of a team
+azdocli boards iteration team show-default-iteration --team "Team A"
+azdocli boards iteration team set-default-iteration --team "Team A" --default-iteration-macro @CurrentIteration
+azdocli boards iteration team show-backlog-iteration --team "Team A"
+azdocli boards iteration team set-backlog-iteration --team "Team A" --path "MyProject"
+```
+
+**Area and Iteration Features:**
+
+- **Flexible paths**: `--path` accepts the absolute form Azure DevOps shows (`\MyProject\Area\Team A`), the form work items use (`MyProject\Team A`), or a path relative to the project's root (`Team A`)
+- **Iterations by path or ID**: Team iteration commands take either the iteration's identifier (`--id`) or its path (`--path`)
+- **Safe team edits**: Adding an area that a team already owns, or removing a team's default area, is refused with a clear message
+
 ## Testing
 
 The project includes integration tests that verify the core repository management functionality against a real Azure DevOps instance.
