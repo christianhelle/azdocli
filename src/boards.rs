@@ -109,11 +109,17 @@ pub enum WorkItemSubCommands {
         #[clap(long)]
         soft_delete: bool,
     },
-    /// List work items assigned to me
+    /// List work items assigned to me, to someone else, or to anyone
     List {
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
+        /// List work items assigned to this person (display name or email; '@me' for yourself)
+        #[clap(long, conflicts_with = "all")]
+        assigned_to: Option<String>,
+        /// List all work items in the project, whoever they are assigned to
+        #[clap(long)]
+        all: bool,
         /// Filter by work item state (e.g., 'Active', 'New', 'Resolved')
         #[clap(long)]
         state: Option<String>,
@@ -661,13 +667,53 @@ async fn run_wiql_query(project: &str, wiql: &str, limit: i32) -> Result<Vec<mod
     Ok(work_items)
 }
 
-async fn list_my_work_items(
+/// Whose work items `work-item list` shows.
+#[derive(Debug, PartialEq)]
+enum Assignee {
+    Me,
+    Person(String),
+    Anyone,
+}
+
+impl Assignee {
+    fn from_args(assigned_to: Option<&str>, all: bool) -> Self {
+        match assigned_to {
+            _ if all => Assignee::Anyone,
+            None => Assignee::Me,
+            Some(person) if person.eq_ignore_ascii_case("@me") => Assignee::Me,
+            Some(person) => Assignee::Person(person.to_string()),
+        }
+    }
+
+    fn heading(&self) -> String {
+        match self {
+            Assignee::Me => "My Work Items".to_string(),
+            Assignee::Person(person) => {
+                format!(
+                    "Work Items Assigned to {}",
+                    escape_control_characters(person)
+                )
+            }
+            Assignee::Anyone => "All Work Items".to_string(),
+        }
+    }
+}
+
+async fn list_work_items(
     project: &str,
+    assignee: &Assignee,
     state_filter: Option<&str>,
     work_item_type_filter: Option<&str>,
     limit: i32,
 ) -> Result<()> {
-    println!("📋 Listing work items assigned to you in project: {project}");
+    match assignee {
+        Assignee::Me => println!("📋 Listing work items assigned to you in project: {project}"),
+        Assignee::Person(person) => println!(
+            "📋 Listing work items assigned to {} in project: {project}",
+            escape_control_characters(person)
+        ),
+        Assignee::Anyone => println!("📋 Listing all work items in project: {project}"),
+    }
 
     if let Some(state) = state_filter {
         println!("🔍 Filtering by state: {state}");
@@ -679,14 +725,15 @@ async fn list_my_work_items(
 
     println!("📊 Limit: {limit} items");
 
-    let wiql_query = build_wiql_query(project, state_filter, work_item_type_filter);
+    let wiql_query = build_wiql_query(project, assignee, state_filter, work_item_type_filter);
+    let heading = assignee.heading();
 
     match run_wiql_query(project, &wiql_query, limit).await {
-        Ok(work_items) if work_items.is_empty() => display_empty_work_items_table("My Work Items"),
-        Ok(work_items) => display_work_items_list("My Work Items", &work_items),
+        Ok(work_items) if work_items.is_empty() => display_empty_work_items_table(&heading),
+        Ok(work_items) => display_work_items_list(&heading, &work_items),
         Err(e) => {
             eprintln!("❌ Failed to execute WIQL query: {e}");
-            display_empty_work_items_table("My Work Items");
+            display_empty_work_items_table(&heading);
         }
     }
 
@@ -700,13 +747,23 @@ fn sanitize_wiql_value(value: &str) -> String {
 
 fn build_wiql_query(
     project: &str,
+    assignee: &Assignee,
     state_filter: Option<&str>,
     work_item_type_filter: Option<&str>,
 ) -> String {
     let sanitized_project = sanitize_wiql_value(project);
     let mut wiql_query = format!(
-        "SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType], [System.AssignedTo], [System.CreatedDate], [Microsoft.VSTS.Common.Priority] FROM WorkItems WHERE [System.TeamProject] = '{sanitized_project}' AND [System.AssignedTo] = @Me"
+        "SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType], [System.AssignedTo], [System.CreatedDate], [Microsoft.VSTS.Common.Priority] FROM WorkItems WHERE [System.TeamProject] = '{sanitized_project}'"
     );
+
+    match assignee {
+        Assignee::Me => wiql_query.push_str(" AND [System.AssignedTo] = @Me"),
+        Assignee::Person(person) => {
+            let sanitized_person = sanitize_wiql_value(person);
+            wiql_query.push_str(&format!(" AND [System.AssignedTo] = '{sanitized_person}'"));
+        }
+        Assignee::Anyone => {}
+    }
 
     // Add state filter if provided
     if let Some(state) = state_filter {
@@ -881,14 +938,17 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
         }
         WorkItemSubCommands::List {
             project,
+            assigned_to,
+            all,
             state,
             work_item_type,
             limit,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
 
-            match list_my_work_items(
+            match list_work_items(
                 &project_name,
+                &Assignee::from_args(assigned_to.as_deref(), *all),
                 state.as_deref(),
                 work_item_type.as_deref(),
                 *limit,
@@ -1233,20 +1293,96 @@ mod tests {
 
     #[test]
     fn test_build_wiql_query_sanitizes_project() {
-        let query = build_wiql_query("test'project", None, None);
+        let query = build_wiql_query("test'project", &Assignee::Me, None, None);
         assert!(query.contains("test''project"));
         assert!(!query.contains("test'project' AND"));
     }
 
     #[test]
     fn test_build_wiql_query_sanitizes_state() {
-        let query = build_wiql_query("project", Some("Active'Hack"), None);
+        let query = build_wiql_query("project", &Assignee::Me, Some("Active'Hack"), None);
         assert!(query.contains("Active''Hack"));
     }
 
     #[test]
     fn test_build_wiql_query_sanitizes_work_item_type() {
-        let query = build_wiql_query("project", None, Some("Bug'Injection"));
+        let query = build_wiql_query("project", &Assignee::Me, None, Some("Bug'Injection"));
         assert!(query.contains("Bug''Injection"));
+    }
+
+    #[test]
+    fn list_defaults_to_my_work_items() {
+        let WorkItemSubCommands::List {
+            assigned_to, all, ..
+        } = parse(&["list"]).unwrap()
+        else {
+            panic!("expected List");
+        };
+        assert_eq!(
+            Assignee::from_args(assigned_to.as_deref(), all),
+            Assignee::Me
+        );
+    }
+
+    #[test]
+    fn list_accepts_a_person_to_filter_by() {
+        let WorkItemSubCommands::List {
+            assigned_to, all, ..
+        } = parse(&["list", "--assigned-to", "jane@example.com"]).unwrap()
+        else {
+            panic!("expected List");
+        };
+        assert_eq!(
+            Assignee::from_args(assigned_to.as_deref(), all),
+            Assignee::Person("jane@example.com".to_string())
+        );
+    }
+
+    #[test]
+    fn list_treats_at_me_as_myself() {
+        assert_eq!(Assignee::from_args(Some("@Me"), false), Assignee::Me);
+    }
+
+    #[test]
+    fn list_accepts_all() {
+        let WorkItemSubCommands::List {
+            assigned_to, all, ..
+        } = parse(&["list", "--all"]).unwrap()
+        else {
+            panic!("expected List");
+        };
+        assert_eq!(
+            Assignee::from_args(assigned_to.as_deref(), all),
+            Assignee::Anyone
+        );
+    }
+
+    #[test]
+    fn list_rejects_all_together_with_assigned_to() {
+        assert!(parse(&["list", "--all", "--assigned-to", "Jane Doe"]).is_err());
+    }
+
+    #[test]
+    fn wiql_query_for_me_uses_the_at_me_macro() {
+        let query = build_wiql_query("project", &Assignee::Me, None, None);
+        assert!(query.contains("[System.AssignedTo] = @Me"));
+    }
+
+    #[test]
+    fn wiql_query_for_a_person_filters_by_their_name() {
+        let query = build_wiql_query(
+            "project",
+            &Assignee::Person("O'Brien".to_string()),
+            None,
+            None,
+        );
+        assert!(query.contains("[System.AssignedTo] = 'O''Brien'"));
+    }
+
+    #[test]
+    fn wiql_query_for_anyone_has_no_assignee_filter() {
+        let query = build_wiql_query("project", &Assignee::Anyone, Some("Active"), None);
+        assert!(!query.contains("[System.AssignedTo] ="));
+        assert!(query.contains("[System.State] = 'Active'"));
     }
 }

@@ -800,6 +800,12 @@ The `boards work-item` commands allow you to manage work items in an Azure DevOp
 # List work items assigned to me (using default project)
 azdocli boards work-item list
 
+# List work items assigned to someone else, by display name or email
+azdocli boards work-item list --assigned-to "jane@contoso.com"
+
+# List all work items in the project, whoever they are assigned to
+azdocli boards work-item list --all
+
 # List work items with filters
 azdocli boards work-item list --state "Active" --work-item-type "Bug" --limit 20
 
@@ -839,7 +845,7 @@ azdocli boards work-item delete --id 123 --soft-delete
 **Work Item Features:**
 
 - **Full CRUD operations**: Create, read, update, and delete work items
-- **List my work items**: View work items assigned to you with filtering options
+- **List work items**: View work items assigned to you (default), to someone else with `--assigned-to <name or email>`, or to anyone with `--all`
 - **Multiple work item types**: Support for bug, task, user story, feature, and epic
 - **Parent links**: Create a work item as a child of another with `--parent <ID>`, e.g. tasks under a product backlog item
 - **Filtering**: Filter by state, work item type, and limit number of results
