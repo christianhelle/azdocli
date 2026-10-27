@@ -53,6 +53,26 @@ pub enum UniversalSubCommands {
         #[clap(flatten)]
         scope: ScopeArgs,
     },
+    /// Publish a directory as a Universal Package (uses Microsoft's ArtifactTool)
+    Publish {
+        /// Name or ID of the feed
+        #[clap(long)]
+        feed: String,
+        /// Name of the package, e.g. 'foo-package'
+        #[clap(short, long)]
+        name: String,
+        /// Version of the package, e.g. '1.0.0'
+        #[clap(short, long)]
+        version: String,
+        /// Directory containing the package contents
+        #[clap(long)]
+        path: PathBuf,
+        /// Description of the package
+        #[clap(short, long)]
+        description: Option<String>,
+        #[clap(flatten)]
+        scope: ScopeArgs,
+    },
 }
 
 #[derive(Subcommand, Clone)]
@@ -442,6 +462,36 @@ pub async fn handle_command(subcommand: &ArtifactsSubCommands) -> Result<()> {
                 Ok(files) => println!("✅ Downloaded {files} file(s) to {}", path.display()),
                 Err(e) => {
                     eprintln!("❌ Failed to download {name} {version} from feed '{feed}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        ArtifactsSubCommands::Universal {
+            subcommand:
+                UniversalSubCommands::Publish {
+                    feed,
+                    name,
+                    version,
+                    path,
+                    description,
+                    scope,
+                },
+        } => {
+            let project = scope.resolve_project()?;
+            let request = artifact_tool::PublishRequest {
+                project: project.as_deref(),
+                feed,
+                name,
+                version,
+                path,
+                description: description.as_deref(),
+            };
+            println!("⬆️  Publishing {name} {version} to feed '{feed}'...");
+            match artifact_tool::publish_universal_package(&get_credentials()?, &request).await {
+                Ok(()) => println!("✅ Published {name} {version} to feed '{feed}'"),
+                Err(e) => {
+                    eprintln!("❌ Failed to publish {name} {version} to feed '{feed}'");
                     eprintln!("   {e}");
                     return Err(e);
                 }
