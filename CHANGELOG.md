@@ -3,6 +3,7 @@
 ## [Unreleased Changes]
 
 ### Features
+- Add --assigned-to and --all options to boards work-item list ([#139](https://github.com/christianhelle/azdocli/pull/139)) ([@christianhelle](https://github.com/christianhelle/))
 - Fix variable-group show for unknown IDs and substring --name filter ([#138](https://github.com/christianhelle/azdocli/pull/138)) ([@christianhelle](https://github.com/christianhelle/))
 - Add support for managing releases ([#137](https://github.com/christianhelle/azdocli/pull/137)) ([@christianhelle](https://github.com/christianhelle/))
 
