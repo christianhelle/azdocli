@@ -780,11 +780,11 @@ fn full_ref_name(branch: &str) -> String {
     }
 }
 
-fn parse_variable(variable: &str) -> Result<(&str, &str)> {
-    variable
-        .split_once('=')
+/// Splits a NAME=VALUE argument; `label` names the argument in the error.
+fn parse_name_value<'a>(pair: &'a str, label: &str) -> Result<(&'a str, &'a str)> {
+    pair.split_once('=')
         .filter(|(name, _)| !name.is_empty())
-        .ok_or_else(|| anyhow!("Invalid variable '{variable}', expected NAME=VALUE"))
+        .ok_or_else(|| anyhow!("Invalid {label} '{pair}', expected NAME=VALUE"))
 }
 
 /// What to queue a pipeline run with, mirroring the `az pipelines run` arguments.
@@ -817,7 +817,7 @@ fn build_run_parameters(options: &RunOptions) -> Result<models::RunPipelineParam
     if !options.variables.is_empty() {
         let mut values = serde_json::Map::new();
         for variable in options.variables {
-            let (name, value) = parse_variable(variable)?;
+            let (name, value) = parse_name_value(variable, "variable")?;
             values.insert(name.to_string(), json!({ "value": value }));
         }
         parameters.variables = Some(Value::Object(values));
@@ -826,7 +826,7 @@ fn build_run_parameters(options: &RunOptions) -> Result<models::RunPipelineParam
     if !options.parameters.is_empty() {
         let mut values = serde_json::Map::new();
         for parameter in options.parameters {
-            let (name, value) = parse_variable(parameter)?;
+            let (name, value) = parse_name_value(parameter, "parameter")?;
             values.insert(name.to_string(), json!(value));
         }
         parameters.template_parameters = Some(Value::Object(values));
@@ -1868,16 +1868,27 @@ mod tests {
     }
 
     #[test]
-    fn parse_variable_splits_on_the_first_equals_sign() {
-        assert_eq!(parse_variable("name=value").unwrap(), ("name", "value"));
-        assert_eq!(parse_variable("name=a=b").unwrap(), ("name", "a=b"));
-        assert_eq!(parse_variable("name=").unwrap(), ("name", ""));
+    fn parse_name_value_splits_on_the_first_equals_sign() {
+        assert_eq!(
+            parse_name_value("name=value", "variable").unwrap(),
+            ("name", "value")
+        );
+        assert_eq!(
+            parse_name_value("name=a=b", "variable").unwrap(),
+            ("name", "a=b")
+        );
+        assert_eq!(parse_name_value("name=", "variable").unwrap(), ("name", ""));
     }
 
     #[test]
-    fn parse_variable_rejects_input_without_a_name() {
-        assert!(parse_variable("novalue").is_err());
-        assert!(parse_variable("=value").is_err());
+    fn parse_name_value_rejects_input_without_a_name() {
+        assert!(parse_name_value("novalue", "variable").is_err());
+        assert!(parse_name_value("=value", "variable").is_err());
+        let error = parse_name_value("=x", "parameter").unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "Invalid parameter '=x', expected NAME=VALUE"
+        );
     }
 
     #[test]
