@@ -16,24 +16,9 @@ env:
 jobs:
   build:
     name: Build
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
-        include:
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-          - os: windows-11-arm
-            target: aarch64-pc-windows-msvc
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
-          - os: macos-latest
-            target: aarch64-apple-darwin
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
+    runs-on: ubuntu-latest
+    env:
+      TARGET: x86_64-unknown-linux-gnu
 
     steps:
       - uses: actions/checkout@v6
@@ -45,7 +30,7 @@ jobs:
       - name: Install Rust
         uses: christianhelle/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ env.TARGET }}
       - name: Rust cache
         uses: christianhelle/rust-cache@v2
       - name: Build
@@ -60,9 +45,9 @@ jobs:
         shell: pwsh
         run: |
           mv target/release/azdocli* ./
-          Compress-Archive azdocli*, README.md, LICENSE ${{ matrix.target }}.zip
+          Compress-Archive azdocli*, README.md, LICENSE ${{ env.TARGET }}.zip
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.target }}
-          path: ${{ matrix.target }}.zip
+          name: ${{ env.TARGET }}
+          path: ${{ env.TARGET }}.zip
