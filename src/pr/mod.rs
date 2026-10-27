@@ -113,6 +113,7 @@ pub enum PullRequestsSubCommands {
         target: Option<String>,
 
         /// Maximum number of pull requests to return
+        /// (defaults to 50 for statuses other than active)
         #[clap(long)]
         top: Option<i32>,
     },

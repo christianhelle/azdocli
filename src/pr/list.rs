@@ -39,6 +39,10 @@ impl StatusFilter {
     }
 }
 
+/// How many pull requests a non-active listing returns when `--top` is not
+/// given, since completed and abandoned histories can be very long.
+const DEFAULT_HISTORY_TOP: i32 = 50;
+
 /// The filters `repos pr list` accepts.
 pub(super) struct ListFilters<'a> {
     pub status: StatusFilter,
@@ -47,6 +51,17 @@ pub(super) struct ListFilters<'a> {
     pub source: Option<&'a str>,
     pub target: Option<&'a str>,
     pub top: Option<i32>,
+}
+
+impl ListFilters<'_> {
+    /// The page size to request: what the user asked for, or a cap for
+    /// listings that reach into history.
+    fn effective_top(&self) -> Option<i32> {
+        self.top.or(match self.status {
+            StatusFilter::Active => None,
+            _ => Some(DEFAULT_HISTORY_TOP),
+        })
+    }
 }
 
 /// The project, and optionally the repository, a listing runs against.
@@ -104,7 +119,7 @@ impl ListContext {
         if let Some(target) = filters.target {
             request = request.search_criteria_target_ref_name(branch_ref(target));
         }
-        if let Some(top) = filters.top {
+        if let Some(top) = filters.effective_top() {
             request = request.top(top);
         }
 
@@ -309,6 +324,48 @@ mod tests {
             "url": "url"
         }))
         .expect("fixture should deserialize")
+    }
+
+    fn filters(status: StatusFilter, top: Option<i32>) -> ListFilters<'static> {
+        ListFilters {
+            status,
+            creator: None,
+            reviewer: None,
+            source: None,
+            target: None,
+            top,
+        }
+    }
+
+    #[test]
+    fn active_listings_are_uncapped_by_default() {
+        assert_eq!(filters(StatusFilter::Active, None).effective_top(), None);
+    }
+
+    #[test]
+    fn history_listings_are_capped_by_default() {
+        for status in [
+            StatusFilter::Completed,
+            StatusFilter::Abandoned,
+            StatusFilter::All,
+        ] {
+            assert_eq!(
+                filters(status, None).effective_top(),
+                Some(DEFAULT_HISTORY_TOP)
+            );
+        }
+    }
+
+    #[test]
+    fn an_explicit_top_wins_over_the_default() {
+        assert_eq!(
+            filters(StatusFilter::Completed, Some(5)).effective_top(),
+            Some(5)
+        );
+        assert_eq!(
+            filters(StatusFilter::Active, Some(5)).effective_top(),
+            Some(5)
+        );
     }
 
     #[test]
