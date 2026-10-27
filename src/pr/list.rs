@@ -97,17 +97,33 @@ pub(super) fn short_branch(ref_name: &str) -> &str {
     ref_name.strip_prefix("refs/heads/").unwrap_or(ref_name)
 }
 
+/// Marks draft pull requests, which the web portal badges in its list.
+fn draft_marker(pr: &GitPullRequest) -> &'static str {
+    if pr.is_draft {
+        "draft"
+    } else {
+        ""
+    }
+}
+
+/// The day a pull request was opened, as `YYYY-MM-DD`.
+fn created_on(pr: &GitPullRequest) -> String {
+    pr.creation_date.date().to_string()
+}
+
 /// Prints one row per pull request.
 fn display_pull_requests(pull_requests: &[GitPullRequest]) {
     println!(
-        "{:<8} {:<11} {:<50} {:<24} {}",
+        "{:<8} {:<11} {:<6} {:<50} {:<24} {:<11} {}",
         "ID".bold(),
         "Status".bold(),
+        "Draft".bold(),
         "Title".bold(),
         "Author".bold(),
+        "Created".bold(),
         "Branches".bold()
     );
-    println!("{}", "-".repeat(120));
+    println!("{}", "-".repeat(135));
 
     for pr in pull_requests {
         let author = pr
@@ -118,11 +134,13 @@ fn display_pull_requests(pull_requests: &[GitPullRequest]) {
             .unwrap_or("-");
 
         println!(
-            "{:<8} {:<11} {:<50} {:<24} {} -> {}",
+            "{:<8} {:<11} {:<6} {:<50} {:<24} {:<11} {} -> {}",
             pr.pull_request_id,
             format!("{:?}", pr.status).to_lowercase(),
+            draft_marker(pr),
             pr.title.as_deref().unwrap_or("-"),
             author,
+            created_on(pr),
             short_branch(&pr.source_ref_name),
             short_branch(&pr.target_ref_name)
         );
@@ -185,6 +203,41 @@ mod tests {
         assert_eq!(StatusFilter::Completed.as_api_value(), "completed");
         assert_eq!(StatusFilter::Abandoned.as_api_value(), "abandoned");
         assert_eq!(StatusFilter::All.as_api_value(), "all");
+    }
+
+    /// Builds a minimal pull request by deserializing the API shape, which
+    /// avoids depending on the SDK's date type in tests.
+    fn pull_request(id: i32) -> GitPullRequest {
+        serde_json::from_value(serde_json::json!({
+            "pullRequestId": id,
+            "createdBy": { "id": "author" },
+            "creationDate": "2026-10-20T13:45:00Z",
+            "isDraft": false,
+            "repository": {
+                "id": "repo-id",
+                "name": "repo",
+                "url": "url",
+                "project": { "name": "project", "visibility": "private" }
+            },
+            "sourceRefName": "refs/heads/feature",
+            "targetRefName": "refs/heads/main",
+            "status": "active",
+            "url": "url"
+        }))
+        .expect("fixture should deserialize")
+    }
+
+    #[test]
+    fn draft_marker_only_marks_drafts() {
+        let mut pr = pull_request(1);
+        assert_eq!(draft_marker(&pr), "");
+        pr.is_draft = true;
+        assert_eq!(draft_marker(&pr), "draft");
+    }
+
+    #[test]
+    fn created_on_shows_the_day() {
+        assert_eq!(created_on(&pull_request(1)), "2026-10-20");
     }
 
     #[test]
