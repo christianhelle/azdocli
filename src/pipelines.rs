@@ -4,7 +4,7 @@ use crate::project::get_project_or_default;
 use anyhow::{anyhow, Context, Result};
 use azure_core::time::OffsetDateTime;
 use azure_devops_rust_api::build::models::{
-    Build, BuildArtifact, BuildDefinition, BuildDefinitionReference,
+    Build, BuildArtifact, BuildDefinition, BuildDefinitionReference, Folder,
 };
 use azure_devops_rust_api::distributed_task::models::VariableGroup;
 use azure_devops_rust_api::pipelines::{self, models};
@@ -79,6 +79,16 @@ pub enum PipelinesSubCommands {
     Runs {
         #[clap(subcommand)]
         subcommand: RunsSubCommands,
+    },
+    /// Inspect the folders pipelines are organized in
+    Folder {
+        #[clap(subcommand)]
+        subcommand: FolderSubCommands,
+    },
+    /// Inspect the variables of a pipeline
+    Variable {
+        #[clap(subcommand)]
+        subcommand: VariableSubCommands,
     },
     /// Inspect the variable groups of a project
     VariableGroup {
@@ -280,6 +290,60 @@ pub enum RunStatus {
     NotStarted,
     #[value(name = "postponed")]
     Postponed,
+}
+
+#[derive(Subcommand, Clone)]
+pub enum FolderSubCommands {
+    /// List all folders
+    List {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Full path of the folder to list, along with the folders under it
+        #[clap(long)]
+        path: Option<String>,
+        /// Order in which folders are returned
+        #[clap(long)]
+        query_order: Option<FolderQueryOrder>,
+    },
+}
+
+/// The orders `pipelines folder list` can return folders in.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+pub enum FolderQueryOrder {
+    #[value(name = "Asc")]
+    Asc,
+    #[value(name = "Desc")]
+    Desc,
+    #[value(name = "None")]
+    None,
+}
+
+impl FolderQueryOrder {
+    /// The value Azure DevOps expects in the folders `queryOrder`.
+    fn as_api_value(self) -> &'static str {
+        match self {
+            FolderQueryOrder::Asc => "folderAscending",
+            FolderQueryOrder::Desc => "folderDescending",
+            FolderQueryOrder::None => "none",
+        }
+    }
+}
+
+#[derive(Subcommand, Clone)]
+pub enum VariableSubCommands {
+    /// List the variables in a pipeline
+    List {
+        /// ID of the pipeline
+        #[clap(long, required_unless_present = "pipeline_name")]
+        pipeline_id: Option<i32>,
+        /// Name of the pipeline. Ignored if --pipeline-id is supplied
+        #[clap(long)]
+        pipeline_name: Option<String>,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
 }
 
 /// For filters whose command line names are the Azure DevOps values.
@@ -628,6 +692,26 @@ async fn list_runs(project: &str, filters: &RunFilters<'_>) -> Result<Vec<Build>
     }
     if !filters.tags.is_empty() {
         request = request.tag_filters(comma_separated(filters.tags));
+    }
+
+    Ok(request.await?.value)
+}
+
+async fn list_folders(
+    project: &str,
+    path: Option<&str>,
+    query_order: Option<FolderQueryOrder>,
+) -> Result<Vec<Folder>> {
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds)?;
+
+    let mut request = factory.build_build().folders_client().list(
+        &creds.organization,
+        project,
+        api_folder_path(path.unwrap_or("\\")),
+    );
+    if let Some(query_order) = query_order {
+        request = request.query_order(query_order.as_api_value());
     }
 
     Ok(request.await?.value)
@@ -1287,6 +1371,65 @@ fn display_run_tags(tags: &[String]) {
     }
 }
 
+fn display_folders(folders: &[Folder]) {
+    if folders.is_empty() {
+        println!("No folders found.");
+        return;
+    }
+
+    println!(
+        "{:<50} {:<12} {}",
+        "Path".bold(),
+        "Created".bold(),
+        "Description".bold()
+    );
+    println!("{}", "-".repeat(90));
+
+    for folder in folders {
+        println!(
+            "{:<50} {:<12} {}",
+            folder.path.as_deref().unwrap_or("-"),
+            folder
+                .created_on
+                .map(|created| created.date().to_string())
+                .unwrap_or_else(|| "-".to_string()),
+            folder.description.as_deref().unwrap_or("")
+        );
+    }
+}
+
+fn display_pipeline_variables(pipeline: &BuildDefinition) {
+    let Some(variables) = pipeline.variables.as_ref().and_then(Value::as_object) else {
+        println!("No variables found.");
+        return;
+    };
+    if variables.is_empty() {
+        println!("No variables found.");
+        return;
+    }
+
+    println!(
+        "{:<30} {:<40} {}",
+        "Name".bold(),
+        "Value".bold(),
+        "Settable at queue time".bold()
+    );
+    println!("{}", "-".repeat(95));
+
+    for (name, variable) in variables {
+        let allow_override = variable
+            .get("allowOverride")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        println!(
+            "{:<30} {:<40} {}",
+            name,
+            format_variable_value(variable),
+            if allow_override { "Yes" } else { "No" }
+        );
+    }
+}
+
 fn display_build_details(run: &models::Run) {
     println!("📋 Pipeline Run Details");
     println!("=======================");
@@ -1546,6 +1689,53 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
         PipelinesSubCommands::Runs { subcommand } => {
             return handle_runs_command(subcommand).await;
         }
+        PipelinesSubCommands::Folder {
+            subcommand:
+                FolderSubCommands::List {
+                    project,
+                    path,
+                    query_order,
+                },
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match list_folders(&project_name, path.as_deref(), *query_order).await {
+                Ok(folders) => display_folders(&folders),
+                Err(e) => {
+                    eprintln!("❌ Failed to list the pipeline folders of '{project_name}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
+        PipelinesSubCommands::Variable {
+            subcommand:
+                VariableSubCommands::List {
+                    pipeline_id,
+                    pipeline_name,
+                    project,
+                },
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            let result = async {
+                let id = resolve_pipeline_id(
+                    &project_name,
+                    *pipeline_id,
+                    pipeline_name.as_deref(),
+                    None,
+                )
+                .await?;
+                get_pipeline(&project_name, id).await
+            }
+            .await;
+            match result {
+                Ok(pipeline) => display_pipeline_variables(&pipeline),
+                Err(e) => {
+                    eprintln!("❌ Failed to list the pipeline variables");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
         PipelinesSubCommands::VariableGroup { subcommand } => {
             return handle_variable_group_command(subcommand).await;
         }
@@ -1773,6 +1963,20 @@ mod tests {
         assert!(parse(&["runs", "tag", "list", "--run-id", "7"]).is_ok());
         assert!(parse(&["runs", "logs", "--run-id", "7", "--log-id", "2"]).is_ok());
         assert!(parse(&["runs", "show", "--id", "abc"]).is_err());
+    }
+
+    #[test]
+    fn variable_list_needs_a_pipeline_id_or_name() {
+        assert!(parse(&["variable", "list"]).is_err());
+        assert!(parse(&["variable", "list", "--pipeline-id", "4"]).is_ok());
+        assert!(parse(&["variable", "list", "--pipeline-name", "ci"]).is_ok());
+    }
+
+    #[test]
+    fn folder_list_takes_a_path_and_order() {
+        assert!(parse(&["folder", "list"]).is_ok());
+        assert!(parse(&["folder", "list", "--path", "team", "--query-order", "Asc"]).is_ok());
+        assert!(parse(&["folder", "list", "--query-order", "Sideways"]).is_err());
     }
 
     #[test]
