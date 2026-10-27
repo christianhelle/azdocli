@@ -1,10 +1,13 @@
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::project::get_project_or_default;
+use crate::releases::continuation_token;
 use anyhow::{anyhow, Context, Result};
 use azure_core::time::OffsetDateTime;
+use azure_core::Uuid;
 use azure_devops_rust_api::build::models::{
-    Build, BuildArtifact, BuildDefinition, BuildDefinitionReference, Folder,
+    Build, BuildArtifact, BuildDefinition, BuildDefinitionReference, BuildDefinitionReferenceList,
+    BuildList, Folder,
 };
 use azure_devops_rust_api::distributed_task::models::VariableGroup;
 use azure_devops_rust_api::pipelines::{self, models};
@@ -542,11 +545,8 @@ struct PipelineFilters<'a> {
 /// but users tend to write them like file paths.
 fn api_folder_path(path: &str) -> String {
     let path = path.replace('/', "\\");
-    if path.starts_with('\\') {
-        path
-    } else {
-        format!("\\{path}")
-    }
+    // Folders are compared as stored, which has no trailing separator.
+    format!("\\{}", path.trim_matches('\\'))
 }
 
 /// Pipelines are listed through the build definitions API, because the
@@ -569,32 +569,66 @@ async fn list_pipelines(
     if let Some(folder_path) = filters.folder_path {
         request = request.path(api_folder_path(folder_path));
     }
-    if let Some(top) = filters.top {
-        request = request.top(top);
-    }
     if let Some(query_order) = filters.query_order {
         request = request.query_order(query_order.as_api_value());
     }
     if let Some(repository) = filters.repository {
         let repository_type = filters.repository_type.unwrap_or(RepositoryType::TfsGit);
-        // Azure Repos are filtered by id, while users know them by name.
-        let repository_id = if repository_type == RepositoryType::TfsGit {
-            factory
-                .build_git()
-                .repositories_client()
-                .get_repository(&creds.organization, repository, project)
-                .await
-                .with_context(|| format!("Repository '{repository}' not found"))?
-                .id
-        } else {
-            repository.to_string()
-        };
+        // Azure Repos are filtered by id, while users know them by name. An
+        // id is passed as is, which also spares a token without Code access.
+        let repository_id =
+            if repository_type == RepositoryType::TfsGit && Uuid::parse_str(repository).is_err() {
+                factory
+                    .build_git()
+                    .repositories_client()
+                    .get_repository(&creds.organization, repository, project)
+                    .await
+                    .with_context(|| format!("Repository '{repository}' not found"))?
+                    .id
+            } else {
+                repository.to_string()
+            };
         request = request
             .repository_id(repository_id)
             .repository_type(repository_type.as_api_value());
     }
 
-    Ok(request.await?.value)
+    // Results come a page at a time, and resolving a name needs every match
+    // to tell whether it is unique, so pages are followed to the end or --top.
+    let mut pipelines = Vec::new();
+    let mut token = None::<String>;
+    loop {
+        let mut page_request = request.clone();
+        if let Some(top) = filters.top {
+            page_request = page_request.top(top - pipelines.len() as i32);
+        }
+        if let Some(token) = token.take() {
+            page_request = page_request.continuation_token(token);
+        }
+
+        let response = page_request.send().await?.into_raw_response();
+        token = continuation_token(&response);
+        let page: BuildDefinitionReferenceList = response.into_body().json()?;
+        pipelines.extend(page.value);
+
+        if reached_top(&mut pipelines, filters.top) || token.is_none() {
+            break;
+        }
+    }
+
+    Ok(pipelines)
+}
+
+/// Caps `items` at `top`, saying whether the cap has been reached.
+fn reached_top<T>(items: &mut Vec<T>, top: Option<i32>) -> bool {
+    match top {
+        Some(top) => {
+            let top = top.max(0) as usize;
+            items.truncate(top);
+            items.len() >= top
+        }
+        None => false,
+    }
 }
 
 /// Of the pipelines carrying the requested name, picks the only one, as
@@ -692,9 +726,20 @@ fn comma_separated<T: ToString>(values: &[T]) -> String {
         .join(",")
 }
 
+/// One listing of runs, and whether Azure DevOps holds more beyond it.
+struct RunListing {
+    runs: Vec<Build>,
+    more: bool,
+}
+
 /// Runs are listed through the builds API, because the pipelines API only
 /// lists the runs of one pipeline and cannot filter them.
-async fn list_runs(project: &str, filters: &RunFilters<'_>) -> Result<Vec<Build>> {
+///
+/// With --top, pages are followed until that many runs are found. Without it
+/// only the first page is read, as `az pipelines runs list` does, since a
+/// project's whole run history can be very long; the caller is told when
+/// more runs exist.
+async fn list_runs(project: &str, filters: &RunFilters<'_>) -> Result<RunListing> {
     let creds = get_credentials()?;
     let factory = CredentialClientFactory::new(&creds)?;
 
@@ -708,9 +753,6 @@ async fn list_runs(project: &str, filters: &RunFilters<'_>) -> Result<Vec<Build>
     }
     if let Some(branch) = filters.branch {
         request = request.branch_name(full_ref_name(branch));
-    }
-    if let Some(top) = filters.top {
-        request = request.top(top);
     }
     if let Some(query_order) = filters.query_order {
         request = request.query_order(query_order.as_api_value());
@@ -731,7 +773,32 @@ async fn list_runs(project: &str, filters: &RunFilters<'_>) -> Result<Vec<Build>
         request = request.tag_filters(comma_separated(filters.tags));
     }
 
-    Ok(request.await?.value)
+    let mut runs = Vec::new();
+    let mut token = None::<String>;
+    loop {
+        let mut page_request = request.clone();
+        if let Some(top) = filters.top {
+            page_request = page_request.top(top - runs.len() as i32);
+        }
+        if let Some(token) = token.take() {
+            page_request = page_request.continuation_token(token);
+        }
+
+        let response = page_request.send().await?.into_raw_response();
+        token = continuation_token(&response);
+        let page: BuildList = response.into_body().json()?;
+        runs.extend(page.value);
+
+        if reached_top(&mut runs, filters.top) {
+            return Ok(RunListing { runs, more: false });
+        }
+        if filters.top.is_none() || token.is_none() {
+            return Ok(RunListing {
+                more: token.is_some(),
+                runs,
+            });
+        }
+    }
 }
 
 async fn list_folders(
@@ -1534,7 +1601,15 @@ async fn handle_runs_command(subcommand: &RunsSubCommands) -> Result<()> {
                 tags,
             };
             match list_runs(&project_name, &filters).await {
-                Ok(runs) => display_runs(&runs),
+                Ok(listing) => {
+                    display_runs(&listing.runs);
+                    if listing.more {
+                        println!(
+                            "
+More runs exist; use --top to list more of them."
+                        );
+                    }
+                }
                 Err(e) => {
                     eprintln!("❌ Failed to list the pipeline runs of '{project_name}'");
                     eprintln!("   {e}");
@@ -1838,9 +1913,13 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
                 Ok(run) => {
                     println!("{}", "✅ Pipeline started successfully".green());
                     display_build_details(&run);
+                    // The run is already queued, so a browser that cannot be
+                    // opened must not fail the command and invite a retry.
                     if *open {
                         if let Some(web) = &run.links.web {
-                            crate::browser::open_url(&web.href)?;
+                            if let Err(e) = crate::browser::open_url(&web.href) {
+                                eprintln!("⚠ Could not open the run in the browser: {e}");
+                            }
                         }
                     }
                 }
@@ -1937,6 +2016,17 @@ mod tests {
         assert_eq!(api_folder_path("user1/test"), "\\user1\\test");
         assert_eq!(api_folder_path("\\user1\\test"), "\\user1\\test");
         assert_eq!(api_folder_path("/"), "\\");
+        assert_eq!(api_folder_path("team/web/"), r"\team\web");
+        assert_eq!(api_folder_path(r"\team\"), r"\team");
+    }
+
+    #[test]
+    fn reached_top_caps_the_items_at_top() {
+        let mut items = vec![1, 2, 3];
+        assert!(!reached_top(&mut items, None));
+        assert!(!reached_top(&mut items, Some(5)));
+        assert!(reached_top(&mut items, Some(2)));
+        assert_eq!(items, [1, 2]);
     }
 
     #[test]

@@ -137,7 +137,7 @@ fn create_release_client() -> Result<(Client, String)> {
 
 /// The release API returns one page at a time and only signals that more
 /// pages exist through this response header.
-fn continuation_token(response: &RawResponse) -> Option<String> {
+pub(crate) fn continuation_token(response: &RawResponse) -> Option<String> {
     response
         .headers()
         .get_optional_string(&HeaderName::from_static("x-ms-continuationtoken"))
