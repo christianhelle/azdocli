@@ -22,7 +22,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use std::path::{Component, Path, PathBuf};
 
 /// `Content-Encoding` the blob store sets on blobs stored compressed.
@@ -135,6 +135,30 @@ fn safe_relative_path(package_path: &str) -> Result<PathBuf> {
         ));
     }
     Ok(relative.to_path_buf())
+}
+
+/// The path check above is lexical, so an existing symlink (or junction) in
+/// the target directory could still redirect a write elsewhere. Every
+/// component that already exists below `root` must be a real directory or file.
+fn ensure_no_symlinks(root: &Path, relative: &Path) -> Result<()> {
+    let mut current = root.to_path_buf();
+    for component in relative.components() {
+        current.push(component);
+        match fs::symlink_metadata(&current) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err(anyhow!(
+                    "Refusing to write through the symbolic link {}",
+                    current.display()
+                ));
+            }
+            Ok(_) => {}
+            Err(e) if e.kind() == ErrorKind::NotFound => return Ok(()),
+            Err(e) => {
+                return Err(e).with_context(|| format!("Failed to inspect {}", current.display()))
+            }
+        }
+    }
+    Ok(())
 }
 
 fn selected_items<'a>(
@@ -298,9 +322,9 @@ pub async fn download_universal_package(
             request.version
         ));
     }
-    let targets = items
+    let relative_paths = items
         .iter()
-        .map(|item| Ok(request.path.join(safe_relative_path(&item.path)?)))
+        .map(|item| safe_relative_path(&item.path))
         .collect::<Result<Vec<_>>>()?;
 
     fs::create_dir_all(request.path)
@@ -309,7 +333,9 @@ pub async fn download_universal_package(
     // the whole package.
     if request.file_filter.is_none() {
         for directory in directories {
-            let target = request.path.join(safe_relative_path(&directory.path)?);
+            let relative = safe_relative_path(&directory.path)?;
+            ensure_no_symlinks(request.path, &relative)?;
+            let target = request.path.join(relative);
             fs::create_dir_all(&target)
                 .with_context(|| format!("Failed to create directory {}", target.display()))?;
         }
@@ -327,9 +353,10 @@ pub async fn download_universal_package(
             .unwrap_or_else(|_| ProgressStyle::default_bar())
             .progress_chars("##-"),
     );
-    for (item, target) in items.iter().zip(&targets) {
+    for (item, relative) in items.iter().zip(&relative_paths) {
         progress.set_message(item.path.trim_start_matches('/').to_string());
-        download_file(&store, item, target, &progress).await?;
+        ensure_no_symlinks(request.path, relative)?;
+        download_file(&store, item, &request.path.join(relative), &progress).await?;
     }
     progress.finish_and_clear();
 
@@ -393,6 +420,30 @@ mod tests {
     fn parse_manifest_rejects_manifest_references() {
         let result = parse_manifest(br#"{"items":[],"manifestReferences":[{"id":"CD01"}]}"#);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn ensure_no_symlinks_accepts_real_and_missing_paths() {
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir(root.path().join("bin")).unwrap();
+        assert!(ensure_no_symlinks(root.path(), Path::new("bin/tool.dll")).is_ok());
+        assert!(ensure_no_symlinks(root.path(), Path::new("new/dir/file.txt")).is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ensure_no_symlinks_rejects_symlinked_directories_and_files() {
+        let root = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink(outside.path(), root.path().join("bin")).unwrap();
+        std::os::unix::fs::symlink(
+            outside.path().join("victim.txt"),
+            root.path().join("file.txt"),
+        )
+        .unwrap();
+
+        assert!(ensure_no_symlinks(root.path(), Path::new("bin/tool.dll")).is_err());
+        assert!(ensure_no_symlinks(root.path(), Path::new("file.txt")).is_err());
     }
 
     #[test]
