@@ -644,6 +644,9 @@ async fn run_wiql_query(project: &str, wiql: &str, limit: i32) -> Result<Vec<mod
             project.to_string(),
             String::new(),
         )
+        // Without $top the query returns every matching id, which for a whole
+        // project can run into Azure DevOps' result and time limits.
+        .top(limit)
         .await?;
 
     let mut work_items = Vec::new();
