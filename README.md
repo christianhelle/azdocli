@@ -393,7 +393,16 @@ azdocli repos pr list --repo MyRepository
 # Or specify a project explicitly
 azdocli repos pr list --repo MyRepository --project MyProject
 
-# Filter by state - active (the default), completed, abandoned, or all
+# Leave out --repo to list pull requests across every repository in the project
+azdocli repos pr list
+
+# Your pull requests, like the "Mine" tab in the web portal: the ones you
+# created and the ones assigned to you for review, with your vote
+azdocli repos pr list --mine
+azdocli repos pr list --mine --status completed --repo MyRepository
+
+# Filter by state - active (the default), completed, abandoned, or all.
+# Statuses other than active return at most 50 pull requests unless --top is given
 azdocli repos pr list --repo MyRepository --status completed
 
 # Filter by author, reviewer or branch, and cap the number of results
