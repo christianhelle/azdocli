@@ -808,9 +808,14 @@ azdocli repos pr comment resolve --repo MyRepository --id 123 --thread 7 --statu
 
           <p>
             The pipelines commands follow the shape of the official Azure
-            DevOps CLI (<code>az pipelines</code>), so the command names and
-            arguments you know from <code>az pipelines</code> work the same
-            way here.
+            DevOps CLI (<code>az pipelines</code>) for the read commands and
+            <code>run</code>: the commands below take the same names and
+            arguments as their <code>az pipelines</code> counterparts.
+            Commands that change pipelines (such as <code>create</code>,
+            <code>update</code> and <code>delete</code>), the
+            <code>build</code>, <code>release</code>, <code>pool</code>,
+            <code>agent</code> and <code>queue</code> groups, and global
+            arguments such as <code>--output</code> are not supported.
           </p>
 
           <div class="command-example">
@@ -905,12 +910,15 @@ azdocli pipelines runs logs --run-id 123 --log-id 7</code></pre>
             <pre><code># List the folders pipelines are organized in
 azdocli pipelines folder list
 
-# List the variables defined in a pipeline
+# List the variables defined on a pipeline in Azure DevOps
 azdocli pipelines variable list --pipeline-id 42
 azdocli pipelines variable list --pipeline-name web-ci</code></pre>
             <p>
               <strong>Features</strong>: See how pipelines are organized and
-              which variables can be set at queue time.
+              which variables can be set at queue time. Only variables
+              defined on the pipeline in Azure DevOps (the Variables button of
+              the pipeline editor) are listed, not those declared in the YAML
+              file.
             </p>
           </div>
 

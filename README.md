@@ -582,8 +582,11 @@ Valid thread statuses are `fixed`, `wont-fix`, `closed`, `by-design`, `active` a
 
 ### Pipeline Management Features
 
-The `pipelines` commands follow the shape of the official Azure DevOps CLI (`az pipelines`), so the
-command names and arguments you know from `az pipelines` work the same way here.
+The `pipelines` commands follow the shape of the official Azure DevOps CLI (`az pipelines`) for the
+read commands and `run`: the commands below take the same names and arguments as their `az pipelines`
+counterparts. Commands that change pipelines (such as `create`, `update`, `delete`, `folder create`,
+`runs tag add` and `variable-group create`), the `build`, `release`, `pool`, `agent` and `queue`
+groups, and global arguments such as `--output` and `--query` are not supported.
 
 > **Breaking change:** earlier versions used their own command shape. The old forms map to the new
 > ones like this:
@@ -632,7 +635,8 @@ azdocli pipelines run --id 42 --open
 azdocli pipelines folder list
 azdocli pipelines folder list --path team --query-order Asc
 
-# List the variables defined in a pipeline (secret values are never returned by Azure DevOps)
+# List the variables defined on a pipeline in Azure DevOps (the Variables button of the pipeline
+# editor). Variables declared in the YAML file are not included. Secret values are never returned.
 azdocli pipelines variable list --pipeline-id 42
 azdocli pipelines variable list --pipeline-name web-ci
 ```
@@ -640,7 +644,8 @@ azdocli pipelines variable list --pipeline-name web-ci
 #### Pipeline Runs
 
 ```sh
-# List the runs of the project, or of one or more pipelines
+# List the runs of the project, or of one or more pipelines. Without --top only the first page of
+# results is shown, with a note when more runs exist
 azdocli pipelines runs list
 azdocli pipelines runs list --pipeline-ids 42 43 --top 10
 
@@ -664,7 +669,7 @@ azdocli pipelines runs logs --run-id 123 --log-id 7
 
 **Pipeline Features:**
 
-- **Same shape as `az pipelines`**: `list`, `show`, `run`, `runs list/show`, `runs artifact list`, `runs tag list`, `folder list`, `variable list` and `variable-group list/show` take the same arguments
+- **Same shape as `az pipelines`**: `list`, `show`, `run`, `runs list/show`, `runs artifact list`, `runs tag list`, `folder list`, `variable list` and `variable-group list/show` take the same arguments as in `az pipelines`
 - **Pipelines by name**: `show`, `run` and `variable list` accept a pipeline name instead of an ID
 - **Run filters**: Filter runs across the project by pipeline, branch, status, result, reason, requester and tags
 - **Full log text**: Print a log to stdout so it can be piped, searched or saved
