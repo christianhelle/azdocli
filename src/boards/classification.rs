@@ -66,8 +66,11 @@ impl NodePath {
 
     /// Accepts the absolute paths Azure DevOps shows (`\MyProject\Area\Team A`),
     /// the paths work items use (`MyProject\Team A`) and paths relative to the
-    /// project's root node (`Team A`).
+    /// project's root node (`Team A`). Only the absolute form, with its leading
+    /// separator, carries the `Area` or `Iteration` segment, so a child node
+    /// named `Area` in `MyProject\Area\Team A` is kept.
     pub(super) fn parse(path: &str, project: &str, group: StructureGroup) -> Self {
+        let is_absolute = path.starts_with(['\\', '/']);
         let mut segments: Vec<&str> = path
             .split(['\\', '/'])
             .filter(|segment| !segment.is_empty())
@@ -78,9 +81,10 @@ impl NodePath {
             .is_some_and(|segment| segment.eq_ignore_ascii_case(project))
         {
             segments.remove(0);
-            if segments
-                .first()
-                .is_some_and(|segment| segment.eq_ignore_ascii_case(group.path_segment()))
+            if is_absolute
+                && segments
+                    .first()
+                    .is_some_and(|segment| segment.eq_ignore_ascii_case(group.path_segment()))
             {
                 segments.remove(0);
             }
@@ -381,6 +385,33 @@ mod tests {
     fn keeps_a_child_named_like_the_other_structure_group() {
         let path = NodePath::parse("\\MyProject\\Iteration", "MyProject", StructureGroup::Areas);
         assert_eq!(segments(&path), ["Iteration"]);
+    }
+
+    #[test]
+    fn keeps_a_child_named_area_in_the_path_work_items_use() {
+        let path = NodePath::parse("MyProject\\Area\\Child", "MyProject", StructureGroup::Areas);
+        assert_eq!(segments(&path), ["Area", "Child"]);
+        assert_eq!(path.logical("MyProject"), "MyProject\\Area\\Child");
+    }
+
+    #[test]
+    fn keeps_a_child_named_iteration_in_the_path_work_items_use() {
+        let path = NodePath::parse(
+            "MyProject\\Iteration",
+            "MyProject",
+            StructureGroup::Iterations,
+        );
+        assert_eq!(segments(&path), ["Iteration"]);
+    }
+
+    #[test]
+    fn strips_the_structure_group_from_an_absolute_path_with_forward_slashes() {
+        let path = NodePath::parse(
+            "/MyProject/Iteration/Sprint 1",
+            "MyProject",
+            StructureGroup::Iterations,
+        );
+        assert_eq!(segments(&path), ["Sprint 1"]);
     }
 
     #[test]
