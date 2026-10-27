@@ -430,6 +430,37 @@ impl RepositoryType {
     }
 }
 
+/// The orders `pipelines variable-group list` can return groups in.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+pub enum VariableGroupQueryOrder {
+    #[value(name = "Asc")]
+    Asc,
+    #[value(name = "Desc")]
+    Desc,
+}
+
+impl VariableGroupQueryOrder {
+    /// The value Azure DevOps expects in the variable groups `queryOrder`.
+    fn as_api_value(self) -> &'static str {
+        match self {
+            VariableGroupQueryOrder::Asc => "idAscending",
+            VariableGroupQueryOrder::Desc => "idDescending",
+        }
+    }
+}
+
+/// The actions `pipelines variable-group list --action` filters on. The
+/// names are the values Azure DevOps expects.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+pub enum VariableGroupAction {
+    #[value(name = "manage")]
+    Manage,
+    #[value(name = "none")]
+    None,
+    #[value(name = "use")]
+    Use,
+}
+
 #[derive(Subcommand, Clone)]
 pub enum VariableGroupSubCommands {
     /// List the variable groups of a project
@@ -438,16 +469,22 @@ pub enum VariableGroupSubCommands {
         #[clap(short, long)]
         project: Option<String>,
         /// Only list groups whose name contains this text (or matches it, when it holds a * wildcard)
-        #[clap(long)]
-        name: Option<String>,
+        #[clap(long = "group-name", alias = "name")]
+        group_name: Option<String>,
         /// Maximum number of variable groups to return
         #[clap(long)]
         top: Option<i32>,
+        /// Order of the results
+        #[clap(long)]
+        query_order: Option<VariableGroupQueryOrder>,
+        /// Only list groups on which this action can be performed
+        #[clap(long = "action", alias = "action-filter")]
+        action: Option<VariableGroupAction>,
     },
     /// Show a variable group and its variables
     Show {
         /// ID of the variable group
-        #[clap(short, long)]
+        #[clap(short, long = "group-id", alias = "id")]
         id: String,
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
@@ -957,10 +994,19 @@ fn display_build_artifacts(artifacts: &[BuildArtifact]) {
     println!("\n{} artifact(s)", artifacts.len());
 }
 
+/// Filters for listing variable groups, mirroring the
+/// `az pipelines variable-group list` arguments.
+#[derive(Default)]
+struct VariableGroupFilters<'a> {
+    group_name: Option<&'a str>,
+    top: Option<i32>,
+    query_order: Option<VariableGroupQueryOrder>,
+    action: Option<VariableGroupAction>,
+}
+
 async fn list_variable_groups(
     project: &str,
-    name: Option<&str>,
-    top: Option<i32>,
+    filters: &VariableGroupFilters<'_>,
 ) -> Result<Vec<VariableGroup>> {
     let creds = get_credentials()?;
     let factory = CredentialClientFactory::new(&creds)?;
@@ -970,11 +1016,17 @@ async fn list_variable_groups(
         .variablegroups_client()
         .get_variable_groups(&creds.organization, project);
 
-    if let Some(name) = name {
+    if let Some(name) = filters.group_name {
         request = request.group_name(group_name_pattern(name));
     }
-    if let Some(top) = top {
+    if let Some(top) = filters.top {
         request = request.top(top);
+    }
+    if let Some(query_order) = filters.query_order {
+        request = request.query_order(query_order.as_api_value());
+    }
+    if let Some(action) = filters.action {
+        request = request.action_filter(value_name(action));
     }
 
     Ok(request.await?.value)
@@ -1564,9 +1616,21 @@ async fn handle_runs_command(subcommand: &RunsSubCommands) -> Result<()> {
 
 async fn handle_variable_group_command(subcommand: &VariableGroupSubCommands) -> Result<()> {
     match subcommand {
-        VariableGroupSubCommands::List { project, name, top } => {
+        VariableGroupSubCommands::List {
+            project,
+            group_name,
+            top,
+            query_order,
+            action,
+        } => {
             let project_name = get_project_or_default(project.as_deref())?;
-            match list_variable_groups(&project_name, name.as_deref(), *top).await {
+            let filters = VariableGroupFilters {
+                group_name: group_name.as_deref(),
+                top: *top,
+                query_order: *query_order,
+                action: *action,
+            };
+            match list_variable_groups(&project_name, &filters).await {
                 Ok(groups) => display_variable_groups(&groups),
                 Err(e) => {
                     eprintln!("❌ Failed to list the variable groups of '{project_name}'");
@@ -1977,6 +2041,24 @@ mod tests {
         assert!(parse(&["folder", "list"]).is_ok());
         assert!(parse(&["folder", "list", "--path", "team", "--query-order", "Asc"]).is_ok());
         assert!(parse(&["folder", "list", "--query-order", "Sideways"]).is_err());
+    }
+
+    #[test]
+    fn variable_group_commands_take_the_az_argument_names() {
+        assert!(parse(&[
+            "variable-group",
+            "list",
+            "--group-name",
+            "release",
+            "--query-order",
+            "Asc",
+            "--action",
+            "use",
+        ])
+        .is_ok());
+        assert!(parse(&["variable-group", "list", "--name", "release"]).is_ok());
+        assert!(parse(&["variable-group", "show", "--group-id", "7"]).is_ok());
+        assert!(parse(&["variable-group", "show", "--id", "7"]).is_ok());
     }
 
     #[test]
