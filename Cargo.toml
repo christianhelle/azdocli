@@ -63,6 +63,7 @@ hkdf = "0.12"
 sha2 = "0.10"
 base64 = "0.22"
 machine-uid = "0.5"
+zip = { version = "9.1.2", default-features = false, features = ["deflate"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [
