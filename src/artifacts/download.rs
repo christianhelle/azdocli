@@ -236,12 +236,14 @@ async fn download_file(
 
     let chunk_ids = Client::parse_dedup_node(&root)?;
     for batch in chunk_ids.chunks(BLOB_URL_BATCH_SIZE) {
-        let mut urls = store.resolve_urls(batch).await?;
+        // A node can list the same chunk more than once (e.g. runs of zeros),
+        // so every occurrence looks its URL up without consuming it.
+        let urls = store.resolve_urls(batch).await?;
         for chunk_id in batch {
             let url = urls
-                .remove(chunk_id)
+                .get(chunk_id)
                 .ok_or_else(|| anyhow!("The blob store returned no URL for chunk {chunk_id}"))?;
-            let chunk = store.fetch(&url).await?;
+            let chunk = store.fetch(url).await?;
             file.write_all(&chunk)?;
             progress.inc(chunk.len() as u64);
         }
