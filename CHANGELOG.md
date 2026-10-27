@@ -6,6 +6,7 @@
 - Align the pipelines commands with az pipelines ([#141](https://github.com/christianhelle/azdocli/pull/141)) ([@christianhelle](https://github.com/christianhelle/))
 
 ### Features
+- Add area and iteration management to boards ([#143](https://github.com/christianhelle/azdocli/pull/143)) ([@christianhelle](https://github.com/christianhelle/))
 - Add support for Azure Artifacts ([#142](https://github.com/christianhelle/azdocli/pull/142)) ([@christianhelle](https://github.com/christianhelle/))
 - Filter pull request listings - Mine / Active / Completed / Abandoned ([#140](https://github.com/christianhelle/azdocli/pull/140)) ([@christianhelle](https://github.com/christianhelle/))
 - Add --assigned-to and --all options to boards work-item list ([#139](https://github.com/christianhelle/azdocli/pull/139)) ([@christianhelle](https://github.com/christianhelle/))
