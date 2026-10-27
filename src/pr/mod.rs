@@ -94,6 +94,11 @@ pub enum PullRequestsSubCommands {
         #[clap(long, value_enum, default_value = "active")]
         status: list::StatusFilter,
 
+        /// List the pull requests you created and the ones assigned to you,
+        /// in separate sections
+        #[clap(long, conflicts_with_all = ["creator", "reviewer"])]
+        mine: bool,
+
         /// Only list pull requests opened by this user
         /// (email address, identity ID, or '@me')
         #[clap(long)]
@@ -112,8 +117,8 @@ pub enum PullRequestsSubCommands {
         #[clap(long)]
         target: Option<String>,
 
-        /// Maximum number of pull requests to return
-        /// (defaults to 50 for statuses other than active)
+        /// Maximum number of pull requests to return (per section with --mine;
+        /// defaults to 50 for statuses other than active)
         #[clap(long)]
         top: Option<i32>,
     },
@@ -339,6 +344,7 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
             project,
             repo,
             status,
+            mine,
             creator,
             reviewer,
             source,
@@ -347,6 +353,7 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
         } => {
             let filters = list::ListFilters {
                 status: *status,
+                mine: *mine,
                 creator: creator.as_deref(),
                 reviewer: reviewer.as_deref(),
                 source: source.as_deref(),
@@ -621,10 +628,42 @@ mod tests {
     fn list_without_a_repository_is_project_wide() {
         let command = parse(&["list"]).unwrap();
 
-        let PullRequestsSubCommands::List { repo, .. } = command else {
+        let PullRequestsSubCommands::List { repo, mine, .. } = command else {
             panic!("expected List");
         };
         assert_eq!(repo, None);
+        assert!(!mine);
+    }
+
+    #[test]
+    fn list_mine_combines_with_status_and_branches() {
+        let command = parse(&[
+            "list",
+            "--mine",
+            "--status",
+            "completed",
+            "--target",
+            "main",
+            "--top",
+            "5",
+        ])
+        .unwrap();
+
+        let PullRequestsSubCommands::List {
+            mine, status, top, ..
+        } = command
+        else {
+            panic!("expected List");
+        };
+        assert!(mine);
+        assert_eq!(status, list::StatusFilter::Completed);
+        assert_eq!(top, Some(5));
+    }
+
+    #[test]
+    fn list_mine_conflicts_with_creator_and_reviewer() {
+        assert!(parse(&["list", "--mine", "--creator", "@me"]).is_err());
+        assert!(parse(&["list", "--mine", "--reviewer", "@me"]).is_err());
     }
 
     #[test]

@@ -1,6 +1,7 @@
 //! Listing pull requests and their commits.
 
-use super::{create::branch_ref, create_git_client, identity, parse_pr_id};
+use super::reviewers::vote_label;
+use super::{create::branch_ref, create_git_client, http, identity, parse_pr_id};
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::{get_credentials, Credentials};
 use crate::project::get_project_or_default;
@@ -46,6 +47,7 @@ const DEFAULT_HISTORY_TOP: i32 = 50;
 /// The filters `repos pr list` accepts.
 pub(super) struct ListFilters<'a> {
     pub status: StatusFilter,
+    pub mine: bool,
     pub creator: Option<&'a str>,
     pub reviewer: Option<&'a str>,
     pub source: Option<&'a str>,
@@ -137,7 +139,12 @@ pub(super) async fn list_pull_requests(
     let ctx = ListContext::new(project, repo).await?;
     let columns = Columns {
         repository: repo.is_none(),
+        vote_of: None,
     };
+
+    if filters.mine {
+        return list_my_pull_requests(&ctx, filters, columns).await;
+    }
 
     let creator_id = match filters.creator {
         Some(creator) => Some(identity::resolve_identity(&ctx.creds, creator).await?),
@@ -164,6 +171,48 @@ pub(super) async fn list_pull_requests(
     Ok(())
 }
 
+/// Lists the signed-in user's pull requests the way the web portal's "Mine"
+/// tab does: the ones they created, then the ones they were asked to review.
+async fn list_my_pull_requests(
+    ctx: &ListContext,
+    filters: &ListFilters<'_>,
+    columns: Columns<'_>,
+) -> Result<()> {
+    let me = http::authenticated_user_id(&ctx.creds).await?;
+
+    let created = ctx.query(filters, Some(me.clone()), None).await?;
+    let assigned =
+        without_pull_requests_in(ctx.query(filters, None, Some(me.clone())).await?, &created);
+
+    display_section("Created by me", &created, &columns);
+    println!();
+    display_section(
+        "Assigned to me",
+        &assigned,
+        &Columns {
+            vote_of: Some(&me),
+            ..columns
+        },
+    );
+    Ok(())
+}
+
+/// Drops the pull requests that already appear in `seen`, so a pull request
+/// the user both created and reviews is only listed once.
+fn without_pull_requests_in(
+    pull_requests: Vec<GitPullRequest>,
+    seen: &[GitPullRequest],
+) -> Vec<GitPullRequest> {
+    pull_requests
+        .into_iter()
+        .filter(|pr| {
+            !seen
+                .iter()
+                .any(|other| other.pull_request_id == pr.pull_request_id)
+        })
+        .collect()
+}
+
 /// Strips the `refs/heads/` prefix so branch columns stay readable.
 pub(super) fn short_branch(ref_name: &str) -> &str {
     ref_name.strip_prefix("refs/heads/").unwrap_or(ref_name)
@@ -171,10 +220,22 @@ pub(super) fn short_branch(ref_name: &str) -> &str {
 
 /// The optional columns a listing shows.
 #[derive(Copy, Clone)]
-struct Columns {
+struct Columns<'a> {
     /// Show which repository each pull request belongs to, for project-wide
     /// listings.
     repository: bool,
+    /// Show the vote this identity cast on each pull request.
+    vote_of: Option<&'a str>,
+}
+
+/// The vote `identity_id` cast on a pull request.
+fn vote_of(pr: &GitPullRequest, identity_id: &str) -> &'static str {
+    vote_label(
+        pr.reviewers
+            .iter()
+            .find(|reviewer| reviewer.identity_ref.id.eq_ignore_ascii_case(identity_id))
+            .and_then(|reviewer| reviewer.vote),
+    )
 }
 
 /// Marks draft pull requests, which the web portal badges in its list.
@@ -191,6 +252,16 @@ fn created_on(pr: &GitPullRequest) -> String {
     pr.creation_date.date().to_string()
 }
 
+/// Prints a titled group of pull requests, or "none" when it is empty.
+fn display_section(title: &str, pull_requests: &[GitPullRequest], columns: &Columns) {
+    println!("{}", format!("{title} ({})", pull_requests.len()).bold());
+    if pull_requests.is_empty() {
+        println!("  none");
+    } else {
+        display_pull_requests(pull_requests, columns);
+    }
+}
+
 /// Prints one row per pull request.
 fn display_pull_requests(pull_requests: &[GitPullRequest], columns: &Columns) {
     let mut header = format!(
@@ -204,6 +275,9 @@ fn display_pull_requests(pull_requests: &[GitPullRequest], columns: &Columns) {
         header.push_str(&format!("{:<24} ", "Repository".bold()));
     }
     header.push_str(&format!("{:<24} ", "Author".bold()));
+    if columns.vote_of.is_some() {
+        header.push_str(&format!("{:<26} ", "My vote".bold()));
+    }
     header.push_str(&format!("{:<11} {}", "Created".bold(), "Branches".bold()));
     println!("{header}");
     println!("{}", "-".repeat(header_width(columns)));
@@ -227,6 +301,9 @@ fn display_pull_requests(pull_requests: &[GitPullRequest], columns: &Columns) {
             row.push_str(&format!("{:<24} ", pr.repository.name));
         }
         row.push_str(&format!("{author:<24} "));
+        if let Some(identity_id) = columns.vote_of {
+            row.push_str(&format!("{:<26} ", vote_of(pr, identity_id)));
+        }
         row.push_str(&format!(
             "{:<11} {} -> {}",
             created_on(pr),
@@ -242,6 +319,9 @@ fn header_width(columns: &Columns) -> usize {
     let mut width = 135;
     if columns.repository {
         width += 25;
+    }
+    if columns.vote_of.is_some() {
+        width += 27;
     }
     width
 }
@@ -321,7 +401,11 @@ mod tests {
             "sourceRefName": "refs/heads/feature",
             "targetRefName": "refs/heads/main",
             "status": "active",
-            "url": "url"
+            "url": "url",
+            "reviewers": [
+                { "id": "AAAA-me", "vote": -5 },
+                { "id": "someone-else", "vote": 10 }
+            ]
         }))
         .expect("fixture should deserialize")
     }
@@ -329,6 +413,7 @@ mod tests {
     fn filters(status: StatusFilter, top: Option<i32>) -> ListFilters<'static> {
         ListFilters {
             status,
+            mine: false,
             creator: None,
             reviewer: None,
             source: None,
@@ -366,6 +451,30 @@ mod tests {
             filters(StatusFilter::Active, Some(5)).effective_top(),
             Some(5)
         );
+    }
+
+    #[test]
+    fn pull_requests_already_seen_are_dropped() {
+        let created = vec![pull_request(1), pull_request(2)];
+        let assigned = vec![pull_request(2), pull_request(3)];
+
+        let ids: Vec<i32> = without_pull_requests_in(assigned, &created)
+            .iter()
+            .map(|pr| pr.pull_request_id)
+            .collect();
+        assert_eq!(ids, vec![3]);
+    }
+
+    #[test]
+    fn vote_of_finds_the_identity_ignoring_case() {
+        let pr = pull_request(1);
+        assert_eq!(vote_of(&pr, "aaaa-ME"), "waiting for author");
+        assert_eq!(vote_of(&pr, "someone-else"), "approved");
+    }
+
+    #[test]
+    fn vote_of_an_identity_not_reviewing_is_no_vote() {
+        assert_eq!(vote_of(&pull_request(1), "stranger"), "no vote");
     }
 
     #[test]
