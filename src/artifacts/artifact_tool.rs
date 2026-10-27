@@ -132,25 +132,19 @@ async fn fetch_release_info(creds: &Credentials) -> Result<ReleaseInfo> {
     serde_json::from_str(&text).context("Parsing ArtifactTool release information")
 }
 
-/// Downloads and unpacks the tool into a staging directory that is renamed
-/// into place, so an interrupted download never leaves a half-extracted cache.
-async fn install(release: &ReleaseInfo, install_dir: &Path) -> Result<()> {
-    println!("📦 Downloading ArtifactTool {}...", release.version);
-    let archive = reqwest::get(&release.uri)
-        .await
-        .and_then(|response| response.error_for_status())
-        .context("Downloading ArtifactTool")?
-        .bytes()
-        .await
-        .context("Downloading ArtifactTool")?;
+/// Staging directory for one installation attempt. It is unique per process
+/// so concurrent first-time publishes never extract into each other's files,
+/// and the version is kept whole (a dotted version has no "extension").
+fn staging_dir(install_dir: &Path, process_id: u32) -> PathBuf {
+    let mut name = install_dir.file_name().unwrap_or_default().to_owned();
+    name.push(format!(".partial-{process_id}"));
+    install_dir.with_file_name(name)
+}
 
-    let staging = install_dir.with_extension("partial");
-    if staging.exists() {
-        fs::remove_dir_all(&staging)?;
-    }
+fn extract(archive: &[u8], staging: &Path) -> Result<()> {
     zip::ZipArchive::new(Cursor::new(archive))
         .context("Opening the ArtifactTool archive")?
-        .extract(&staging)
+        .extract(staging)
         .context("Extracting ArtifactTool")?;
 
     #[cfg(unix)]
@@ -161,9 +155,38 @@ async fn install(release: &ReleaseInfo, install_dir: &Path) -> Result<()> {
             fs::Permissions::from_mode(0o755),
         )?;
     }
-
-    fs::rename(&staging, install_dir).context("Installing ArtifactTool")?;
     Ok(())
+}
+
+/// Downloads and unpacks the tool into a staging directory that is renamed
+/// into place, so an interrupted download never leaves a half-extracted cache.
+/// When another process finishes the same installation first, its copy is used.
+async fn install(release: &ReleaseInfo, install_dir: &Path) -> Result<()> {
+    println!("📦 Downloading ArtifactTool {}...", release.version);
+    let archive = reqwest::get(&release.uri)
+        .await
+        .and_then(|response| response.error_for_status())
+        .context("Downloading ArtifactTool")?
+        .bytes()
+        .await
+        .context("Downloading ArtifactTool")?;
+
+    // A leftover with this process id can only be from an earlier, dead process.
+    let staging = staging_dir(install_dir, std::process::id());
+    if staging.exists() {
+        fs::remove_dir_all(&staging)?;
+    }
+
+    let installed =
+        extract(&archive, &staging).and_then(|()| match fs::rename(&staging, install_dir) {
+            Ok(()) => Ok(()),
+            Err(_) if install_dir.join(executable_name()).exists() => Ok(()),
+            Err(e) => Err(e).context("Installing ArtifactTool"),
+        });
+    if staging.exists() {
+        let _ = fs::remove_dir_all(&staging);
+    }
+    installed
 }
 
 /// Returns the path to the ArtifactTool executable, downloading the current
@@ -234,6 +257,20 @@ mod tests {
         assert_eq!(platform("linux", "x86_64").unwrap(), ("linux", "amd64"));
         assert!(platform("freebsd", "x86_64").is_err());
         assert!(platform("linux", "riscv64").is_err());
+    }
+
+    #[test]
+    fn staging_dir_keeps_the_whole_version_and_is_unique_per_process() {
+        let install_dir = Path::new("tools").join("0.2.576");
+        assert_eq!(
+            staging_dir(&install_dir, 42),
+            Path::new("tools").join("0.2.576.partial-42")
+        );
+        assert_ne!(
+            staging_dir(&Path::new("tools").join("0.2.577"), 42),
+            staging_dir(&install_dir, 42)
+        );
+        assert_ne!(staging_dir(&install_dir, 7), staging_dir(&install_dir, 42));
     }
 
     #[test]
