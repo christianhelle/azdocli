@@ -86,8 +86,9 @@ pub enum PullRequestsSubCommands {
         project: Option<String>,
 
         /// Name of the repository to list pull requests from
+        /// (lists across the whole project when omitted)
         #[clap(short, long)]
-        repo: String,
+        repo: Option<String>,
 
         /// Only list pull requests in this state
         #[clap(long, value_enum, default_value = "active")]
@@ -351,7 +352,7 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
                 target: target.as_deref(),
                 top: *top,
             };
-            list::list_pull_requests(project.as_deref(), repo, &filters).await?;
+            list::list_pull_requests(project.as_deref(), repo.as_deref(), &filters).await?;
         }
         PullRequestsSubCommands::Show {
             project,
@@ -613,6 +614,16 @@ mod tests {
         assert_eq!(source.as_deref(), Some("feature"));
         assert_eq!(target.as_deref(), Some("main"));
         assert_eq!(top, Some(5));
+    }
+
+    #[test]
+    fn list_without_a_repository_is_project_wide() {
+        let command = parse(&["list"]).unwrap();
+
+        let PullRequestsSubCommands::List { repo, .. } = command else {
+            panic!("expected List");
+        };
+        assert_eq!(repo, None);
     }
 
     #[test]
