@@ -21,7 +21,7 @@ use std::time::Duration;
 
 mod views;
 
-use views::PipelineList;
+use views::{PipelineDetails, PipelineList};
 
 #[derive(Subcommand, Clone)]
 pub enum PipelinesSubCommands {
@@ -1299,49 +1299,6 @@ fn pipeline_web_url(pipeline: &BuildDefinition) -> Option<&str> {
         .map(|web| web.href.as_str())
 }
 
-fn display_pipeline(pipeline: &BuildDefinition) {
-    let reference = &pipeline.build_definition_reference;
-    let definition = &reference.definition_reference;
-
-    println!("🔧 Pipeline");
-    println!("===========");
-    println!("ID: {}", definition.id);
-    println!("Name: {}", definition.name.as_deref().unwrap_or("-"));
-    println!("Folder: {}", definition.path.as_deref().unwrap_or("-"));
-    println!("Revision: {}", definition.revision);
-    println!("Queue status: {:?}", definition.queue_status);
-
-    if let Some(description) = &pipeline.description {
-        println!("Description: {description}");
-    }
-    if let Some(queue) = reference.queue.as_ref().and_then(|q| q.name.as_deref()) {
-        println!("Agent queue: {queue}");
-    }
-    if let Some(repository) = &pipeline.repository {
-        println!(
-            "Repository: {} ({})",
-            repository.name.as_deref().unwrap_or(&repository.id),
-            repository.type_.as_deref().unwrap_or("-")
-        );
-        if let Some(default_branch) = &repository.default_branch {
-            println!("Default branch: {default_branch}");
-        }
-    }
-    if let Some(author) = reference
-        .authored_by
-        .as_ref()
-        .and_then(|identity| identity.graph_subject_base.display_name.as_deref())
-    {
-        println!("Authored by: {author}");
-    }
-    if let Some(created) = definition.created_date {
-        println!("Created: {}", format_timestamp(created));
-    }
-    if let Some(url) = pipeline_web_url(pipeline) {
-        println!("URL: {url}");
-    }
-}
-
 /// Runs and logs are often seconds apart, so the date alone is not enough to
 /// order or correlate them.
 fn format_timestamp(timestamp: OffsetDateTime) -> String {
@@ -1796,7 +1753,7 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands, format: OutputFor
                         println!("Opening pipeline in browser: {url}");
                         crate::browser::open_url(url)?;
                     }
-                    _ => display_pipeline(&definition),
+                    _ => output::emit(&PipelineDetails(&definition), format)?,
                 },
                 Err(e) => {
                     eprintln!("❌ Failed to retrieve the pipeline");
