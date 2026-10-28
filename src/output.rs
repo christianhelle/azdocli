@@ -33,6 +33,7 @@ pub fn render<T: Render>(value: &T, format: OutputFormat, w: &mut dyn Write) -> 
             serde_json::to_writer_pretty(&mut *w, value)?;
             writeln!(w)?;
         }
+        OutputFormat::Yaml => serde_norway::to_writer(&mut *w, value)?,
         _ => todo!(),
     }
     Ok(())
@@ -108,5 +109,10 @@ mod tests {
             rendered(OutputFormat::Json),
             "{\n  \"name\": \"repo\",\n  \"count\": 3\n}\n"
         );
+    }
+
+    #[test]
+    fn render_yaml_serializes_the_whole_model() {
+        assert_eq!(rendered(OutputFormat::Yaml), "name: repo\ncount: 3\n");
     }
 }
