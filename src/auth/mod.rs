@@ -295,10 +295,11 @@ pub async fn login(profile: Option<&str>) -> Result<()> {
 }
 
 /// Builds the REST URL that reports who the PAT belongs to. Azure DevOps only
-/// exposes `connectionData` as a preview resource.
+/// exposes `connectionData` as a preview resource; 5.0 keeps login working on
+/// Azure DevOps Server 2019 and later as well as the cloud.
 fn connection_data_url(creds: &Credentials) -> String {
     format!(
-        "{}/{}/_apis/connectionData?api-version=7.1-preview",
+        "{}/{}/_apis/connectionData?api-version=5.0-preview",
         normalize_base_url(&creds.base_url),
         percent_encode_path_segment(&creds.organization)
     )
@@ -307,14 +308,32 @@ fn connection_data_url(creds: &Credentials) -> String {
 /// Checks the PAT against Azure DevOps so a wrong token is rejected before
 /// anything is saved.
 async fn validate_credentials(creds: &Credentials) -> Result<()> {
-    let response = reqwest::Client::new()
+    // Redirects are not followed so the PAT is never re-sent to another URL,
+    // and the timeout keeps login from hanging on an unresponsive server.
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(30))
+        .build()?;
+    let response = client
         .get(connection_data_url(creds))
         .basic_auth("", Some(&creds.pat))
         .send()
         .await
         .context("Could not reach Azure DevOps to validate the credentials")?;
 
-    // Anything but 200 (an error, or 203 with an HTML sign-in page) is a refusal.
+    if response.status().is_redirection() {
+        let location = response
+            .headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("another URL");
+        return Err(anyhow!(
+            "Azure DevOps redirected the login to {}. Log in with that server URL instead.",
+            location
+        ));
+    }
+
+    // Anything else but 200 (an error, or 203 with an HTML sign-in page) is a refusal.
     if response.status() != reqwest::StatusCode::OK {
         return Err(anyhow!(
             "Azure DevOps rejected the credentials ({}). Check the organization and PAT.",
@@ -414,7 +433,7 @@ mod tests {
         };
         assert_eq!(
             connection_data_url(&creds),
-            "https://dev.azure.com/my%20org/_apis/connectionData?api-version=7.1-preview"
+            "https://dev.azure.com/my%20org/_apis/connectionData?api-version=5.0-preview"
         );
     }
 
