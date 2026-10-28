@@ -14,6 +14,7 @@ use serde_json::json;
 mod area;
 mod classification;
 mod iteration;
+mod views;
 
 #[derive(Subcommand, Clone)]
 pub enum BoardsSubCommands {
