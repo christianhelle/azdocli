@@ -1,6 +1,7 @@
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::auth::url::{api_work_item_url, web_work_item_url};
+use crate::output::{self, OutputFormat};
 use crate::project::get_project_or_default;
 use crate::text::escape_control_characters;
 use anyhow::{anyhow, Result};
@@ -15,6 +16,8 @@ mod area;
 mod classification;
 mod iteration;
 mod views;
+
+use views::{WorkItemDetails, WorkItemList};
 
 #[derive(Subcommand, Clone)]
 pub enum BoardsSubCommands {
@@ -549,105 +552,19 @@ fn open_work_item_in_browser(
     Ok(())
 }
 
-fn display_work_item(work_item: &models::WorkItem) {
-    println!("📋 Work Item Details");
-    println!("=====================");
-
-    println!("🆔 ID: {}", work_item.id);
-
-    if let Some(rev) = work_item.rev {
-        println!("📚 Revision: {rev}");
-    }
-
-    if let Some(fields) = work_item.fields.as_object() {
-        if let Some(title) = fields.get("System.Title").and_then(|v| v.as_str()) {
-            println!("📝 Title: {title}");
-        }
-
-        if let Some(state) = fields.get("System.State").and_then(|v| v.as_str()) {
-            println!("🔄 State: {state}");
-        }
-
-        if let Some(work_item_type) = fields.get("System.WorkItemType").and_then(|v| v.as_str()) {
-            println!("📌 Type: {work_item_type}");
-        }
-
-        if let Some(created_by) = fields.get("System.CreatedBy").and_then(|v| v.as_str()) {
-            println!("👤 Created By: {created_by}");
-        }
-
-        if let Some(created_date) = fields.get("System.CreatedDate").and_then(|v| v.as_str()) {
-            println!("📅 Created Date: {created_date}");
-        }
-
-        if let Some(changed_by) = fields.get("System.ChangedBy").and_then(|v| v.as_str()) {
-            println!("🔄 Changed By: {changed_by}");
-        }
-
-        if let Some(changed_date) = fields.get("System.ChangedDate").and_then(|v| v.as_str()) {
-            println!("📅 Changed Date: {changed_date}");
-        }
-
-        if let Some(priority) = fields
-            .get("Microsoft.VSTS.Common.Priority")
-            .and_then(serde_json::Value::as_i64)
-        {
-            println!("🔝 Priority: {priority}");
-        }
-
-        if let Some(desc) = fields.get("System.Description").and_then(|v| v.as_str()) {
-            println!("\n📄 Description:");
-            println!("{desc}");
-        }
-    }
+pub(crate) fn display_work_items_list(heading: &str, work_items: &[models::WorkItem]) {
+    print_work_items(heading, work_items, OutputFormat::Text);
 }
 
-pub(crate) fn display_work_items_list(heading: &str, work_items: &[models::WorkItem]) {
-    println!();
-    println!("📋 {heading} ({} items)", work_items.len());
-    let separator = "=".repeat(80);
-    println!("{separator}");
-    println!("{:<8} {:<15} {:<20} {:<30}", "ID", "Type", "State", "Title");
-    let dash_separator = "-".repeat(80);
-    println!("{dash_separator}");
-
-    for work_item in work_items {
-        let id = work_item.id;
-
-        let (work_item_type, state, title) = if let Some(fields) = work_item.fields.as_object() {
-            let wit_type = fields
-                .get("System.WorkItemType")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Unknown");
-
-            let state = fields
-                .get("System.State")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Unknown");
-
-            let title = fields
-                .get("System.Title")
-                .and_then(|v| v.as_str())
-                .unwrap_or("No Title");
-
-            (wit_type, state, title)
-        } else {
-            ("Unknown", "Unknown", "No Title")
-        };
-
-        // Truncate title if too long
-        let truncated_title = if title.len() > 30 {
-            format!("{}...", &title[..27])
-        } else {
-            title.to_string()
-        };
-
-        println!("{id:<8} {work_item_type:<15} {state:<20} {truncated_title:<30}");
+/// Prints a titled work item list, reporting a failure to write to stdout.
+fn print_work_items(heading: &str, work_items: &[models::WorkItem], format: OutputFormat) {
+    let list = WorkItemList {
+        heading,
+        work_items,
+    };
+    if let Err(e) = output::emit(&list, format) {
+        eprintln!("❌ Failed to print work items: {e}");
     }
-
-    println!();
-    println!("💡 Use 'azdocli boards work-item show --id <ID>' for detailed information");
-    println!("💡 Use 'azdocli boards work-item show --id <ID> --web' to open in browser");
 }
 
 /// Runs a WIQL query and fetches the full work items behind the ids it returns.
@@ -729,7 +646,40 @@ async fn list_work_items(
     state_filter: Option<&str>,
     work_item_type_filter: Option<&str>,
     limit: i32,
+    format: OutputFormat,
 ) -> Result<()> {
+    if format == OutputFormat::Text {
+        print_listing_criteria(
+            project,
+            assignee,
+            state_filter,
+            work_item_type_filter,
+            limit,
+        );
+    }
+
+    let wiql_query = build_wiql_query(project, assignee, state_filter, work_item_type_filter);
+    let heading = assignee.heading();
+
+    match run_wiql_query(project, &wiql_query, limit).await {
+        Ok(work_items) => print_work_items(&heading, &work_items, format),
+        Err(e) => {
+            eprintln!("❌ Failed to execute WIQL query: {e}");
+            print_work_items(&heading, &[], format);
+        }
+    }
+
+    Ok(())
+}
+
+/// Tells the user which work items a listing is about to fetch.
+fn print_listing_criteria(
+    project: &str,
+    assignee: &Assignee,
+    state_filter: Option<&str>,
+    work_item_type_filter: Option<&str>,
+    limit: i32,
+) {
     match assignee {
         Assignee::Me => println!("📋 Listing work items assigned to you in project: {project}"),
         Assignee::Person(person) => println!(
@@ -748,20 +698,6 @@ async fn list_work_items(
     }
 
     println!("📊 Limit: {limit} items");
-
-    let wiql_query = build_wiql_query(project, assignee, state_filter, work_item_type_filter);
-    let heading = assignee.heading();
-
-    match run_wiql_query(project, &wiql_query, limit).await {
-        Ok(work_items) if work_items.is_empty() => display_empty_work_items_table(&heading),
-        Ok(work_items) => display_work_items_list(&heading, &work_items),
-        Err(e) => {
-            eprintln!("❌ Failed to execute WIQL query: {e}");
-            display_empty_work_items_table(&heading);
-        }
-    }
-
-    Ok(())
 }
 
 /// Sanitizes a string for use in WIQL queries by escaping single quotes
@@ -808,23 +744,15 @@ fn build_wiql_query(
 }
 
 pub(crate) fn display_empty_work_items_table(heading: &str) {
-    println!();
-    println!("📋 {heading} (0 items)");
-    let separator = "=".repeat(80);
-    println!("{separator}");
-    println!("{:<8} {:<15} {:<20} {:<30}", "ID", "Type", "State", "Title");
-    let dash_separator = "-".repeat(80);
-    println!("{dash_separator}");
-    println!("No work items found.");
-    println!();
-    println!("💡 Use 'azdocli boards work-item show --id <ID>' for detailed information");
-    println!("💡 Use 'azdocli boards work-item show --id <ID> --web' to open in browser");
+    display_work_items_list(heading, &[]);
 }
 
-pub async fn handle_command(subcommand: &BoardsSubCommands) -> Result<()> {
+pub async fn handle_command(subcommand: &BoardsSubCommands, format: OutputFormat) -> Result<()> {
     let _credentials = get_credentials()?;
     match subcommand {
-        BoardsSubCommands::WorkItem { subcommand } => handle_work_item_command(subcommand).await,
+        BoardsSubCommands::WorkItem { subcommand } => {
+            handle_work_item_command(subcommand, format).await
+        }
         BoardsSubCommands::Area { subcommand } => area::handle_command(subcommand).await,
         BoardsSubCommands::Iteration { subcommand } => iteration::handle_command(subcommand).await,
         BoardsSubCommands::Query {
@@ -834,10 +762,7 @@ pub async fn handle_command(subcommand: &BoardsSubCommands) -> Result<()> {
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
             match run_wiql_query(&project_name, wiql, *limit).await {
-                Ok(work_items) if work_items.is_empty() => {
-                    display_empty_work_items_table("Query Results")
-                }
-                Ok(work_items) => display_work_items_list("Query Results", &work_items),
+                Ok(work_items) => print_work_items("Query Results", &work_items, format),
                 Err(e) => {
                     eprintln!("❌ Failed to execute WIQL query");
                     eprintln!("   {e}");
@@ -887,7 +812,10 @@ async fn handle_work_item_comment_command(subcommand: &WorkItemCommentSubCommand
     Ok(())
 }
 
-async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()> {
+async fn handle_work_item_command(
+    subcommand: &WorkItemSubCommands,
+    format: OutputFormat,
+) -> Result<()> {
     match subcommand {
         WorkItemSubCommands::Create {
             work_item_type,
@@ -978,11 +906,14 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
                 state.as_deref(),
                 work_item_type.as_deref(),
                 *limit,
+                format,
             )
             .await
             {
                 Ok(_) => {
-                    println!("{}", "✅ Work items listed successfully!".green());
+                    if format == OutputFormat::Text {
+                        println!("{}", "✅ Work items listed successfully!".green());
+                    }
                 }
                 Err(e) => {
                     eprintln!("❌ Failed to list work items: {e}");
@@ -992,7 +923,9 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
         }
         WorkItemSubCommands::Show { id, project, web } => {
             let project_name = get_project_or_default(project.as_deref())?;
-            println!("Showing work item with id: {id} in project: {project_name}");
+            if format == OutputFormat::Text {
+                println!("Showing work item with id: {id} in project: {project_name}");
+            }
 
             // Open in browser if requested
             if *web {
@@ -1018,7 +951,7 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
             // Otherwise show in terminal
             match get_work_item(&project_name, id).await {
                 Ok(work_item) => {
-                    display_work_item(&work_item);
+                    output::emit(&WorkItemDetails(&work_item), format)?;
                 }
                 Err(e) => {
                     eprintln!("❌ Failed to retrieve work item: {e}");

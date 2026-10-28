@@ -40,6 +40,9 @@ const STRUCTURED_OUTPUT_COMMANDS: &[&str] = &[
     "pipelines runs list",
     "repos pr list",
     "repos pr show",
+    "boards work-item list",
+    "boards work-item show",
+    "boards query",
 ];
 
 /// The subcommand names the user typed, e.g. `repos pr list`.
@@ -150,7 +153,7 @@ async fn main() -> anyhow::Result<()> {
             pipelines::handle_command(subcommand, cli.output).await?;
         }
         Some(Commands::Boards { subcommand }) => {
-            boards::handle_command(subcommand).await?;
+            boards::handle_command(subcommand, cli.output).await?;
         }
         Some(Commands::Artifacts { subcommand }) => {
             artifacts::handle_command(subcommand).await?;
@@ -227,6 +230,9 @@ mod tests {
             "pipelines runs list",
             "repos pr list",
             "repos pr show",
+            "boards work-item list",
+            "boards work-item show",
+            "boards query",
         ] {
             assert!(check_output_support(OutputFormat::Yaml, command).is_ok());
         }
