@@ -8,6 +8,7 @@ mod boards;
 mod browser;
 mod config;
 mod migrate;
+mod output;
 mod pipelines;
 mod pr;
 mod project;
