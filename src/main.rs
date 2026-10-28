@@ -32,7 +32,7 @@ struct Cli {
 }
 
 /// Commands that print through a `Render` model and so support every format.
-const STRUCTURED_OUTPUT_COMMANDS: &[&str] = &["repos list", "repos show"];
+const STRUCTURED_OUTPUT_COMMANDS: &[&str] = &["repos list", "repos show", "pipelines list"];
 
 /// The subcommand names the user typed, e.g. `repos pr list`.
 fn command_path(matches: &ArgMatches) -> String {
@@ -139,7 +139,7 @@ async fn main() -> anyhow::Result<()> {
             },
         },
         Some(Commands::Pipelines { subcommand }) => {
-            pipelines::handle_command(subcommand).await?;
+            pipelines::handle_command(subcommand, cli.output).await?;
         }
         Some(Commands::Boards { subcommand }) => {
             boards::handle_command(subcommand).await?;
@@ -211,7 +211,7 @@ mod tests {
 
     #[test]
     fn migrated_commands_accept_structured_output() {
-        for command in ["repos list", "repos show"] {
+        for command in ["repos list", "repos show", "pipelines list"] {
             assert!(check_output_support(OutputFormat::Yaml, command).is_ok());
         }
     }

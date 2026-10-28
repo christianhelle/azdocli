@@ -1,5 +1,6 @@
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
+use crate::output::{self, OutputFormat};
 use crate::project::get_project_or_default;
 use crate::releases::continuation_token;
 use anyhow::{anyhow, Context, Result};
@@ -19,6 +20,8 @@ use std::io::Write;
 use std::time::Duration;
 
 mod views;
+
+use views::PipelineList;
 
 #[derive(Subcommand, Clone)]
 pub enum PipelinesSubCommands {
@@ -1287,31 +1290,6 @@ fn display_service_connection(connection: &ServiceEndpoint) {
     }
 }
 
-fn display_pipelines(pipelines: &[BuildDefinitionReference]) {
-    if pipelines.is_empty() {
-        println!("No pipelines found.");
-        return;
-    }
-
-    println!(
-        "{:<10} {:<40} {}",
-        "ID".bold(),
-        "Name".bold(),
-        "Folder".bold()
-    );
-    println!("{}", "-".repeat(70));
-
-    for pipeline in pipelines {
-        let definition = &pipeline.definition_reference;
-        println!(
-            "{:<10} {:<40} {}",
-            definition.id,
-            definition.name.as_deref().unwrap_or("-"),
-            definition.path.as_deref().unwrap_or("-")
-        );
-    }
-}
-
 fn pipeline_web_url(pipeline: &BuildDefinition) -> Option<&str> {
     pipeline
         .build_definition_reference
@@ -1766,7 +1744,7 @@ async fn handle_service_connection_command(
     Ok(())
 }
 
-pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
+pub async fn handle_command(subcommand: &PipelinesSubCommands, format: OutputFormat) -> Result<()> {
     match subcommand {
         PipelinesSubCommands::List {
             project,
@@ -1787,7 +1765,7 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
                 repository_type: *repository_type,
             };
             match list_pipelines(&project_name, &filters).await {
-                Ok(pipelines) => display_pipelines(&pipelines),
+                Ok(pipelines) => output::emit(&PipelineList(&pipelines), format)?,
                 Err(e) => {
                     eprintln!("❌ Failed to list the pipelines of '{project_name}'");
                     eprintln!("   {e}");
