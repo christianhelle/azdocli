@@ -282,7 +282,7 @@ mod tests {
         let pipelines = [pipeline_reference()];
         assert_eq!(
             markdown(&PipelineList(&pipelines)),
-            "| ID | Name | Folder |\n| --- | --- | --- |\n| 7 | ci | \\apps |\n"
+            "| ID | Name | Folder |\n| --- | --- | --- |\n| 7 | ci | \\\\apps |\n"
         );
     }
 
