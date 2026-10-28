@@ -12,6 +12,7 @@ mod list;
 mod reviewers;
 mod show;
 mod update;
+mod views;
 mod work_items;
 
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};

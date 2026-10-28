@@ -271,16 +271,16 @@ pub(super) fn short_branch(ref_name: &str) -> &str {
 
 /// The optional columns a listing shows.
 #[derive(Copy, Clone)]
-struct Columns<'a> {
+pub(super) struct Columns<'a> {
     /// Show which repository each pull request belongs to, for project-wide
     /// listings.
-    repository: bool,
+    pub repository: bool,
     /// Show the vote this identity cast on each pull request.
-    vote_of: Option<&'a str>,
+    pub vote_of: Option<&'a str>,
 }
 
 /// The vote `identity_id` cast on a pull request.
-fn vote_of(pr: &GitPullRequest, identity_id: &str) -> &'static str {
+pub(super) fn vote_of(pr: &GitPullRequest, identity_id: &str) -> &'static str {
     vote_label(
         pr.reviewers
             .iter()
@@ -290,7 +290,7 @@ fn vote_of(pr: &GitPullRequest, identity_id: &str) -> &'static str {
 }
 
 /// Marks draft pull requests, which the web portal badges in its list.
-fn draft_marker(pr: &GitPullRequest) -> &'static str {
+pub(super) fn draft_marker(pr: &GitPullRequest) -> &'static str {
     if pr.is_draft {
         "draft"
     } else {
@@ -299,7 +299,7 @@ fn draft_marker(pr: &GitPullRequest) -> &'static str {
 }
 
 /// The day a pull request was opened, as `YYYY-MM-DD`.
-fn created_on(pr: &GitPullRequest) -> String {
+pub(super) fn created_on(pr: &GitPullRequest) -> String {
     pr.creation_date.date().to_string()
 }
 
@@ -366,7 +366,7 @@ fn display_pull_requests(pull_requests: &[GitPullRequest], columns: &Columns) {
 }
 
 /// How wide the separator under the header should be for these columns.
-fn header_width(columns: &Columns) -> usize {
+pub(super) fn header_width(columns: &Columns) -> usize {
     let mut width = 135;
     if columns.repository {
         width += 25;
