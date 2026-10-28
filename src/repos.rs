@@ -10,6 +10,8 @@ use dialoguer::Confirm;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
+mod views;
+
 #[derive(Subcommand, Clone)]
 pub enum ReposSubCommands {
     /// Create a new repository
