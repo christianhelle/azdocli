@@ -1,5 +1,6 @@
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
+use crate::output::{self, OutputFormat};
 use crate::pr::{self, PullRequestsSubCommands};
 use crate::project::get_project_or_default;
 use anyhow::Result;
@@ -11,6 +12,8 @@ use std::sync::Arc;
 use tokio::sync::Semaphore;
 
 mod views;
+
+use views::RepoList;
 
 #[derive(Subcommand, Clone)]
 pub enum ReposSubCommands {
@@ -148,7 +151,7 @@ pub enum ReposSubCommands {
     },
 }
 
-pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
+pub async fn handle_command(subcommand: &ReposSubCommands, format: OutputFormat) -> Result<()> {
     match subcommand {
         ReposSubCommands::Create { project, name } => {
             let project_name = get_project_or_default(project.as_deref())?;
@@ -169,9 +172,7 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
         ReposSubCommands::List { project } => {
             let project_name = get_project_or_default(project.as_deref())?;
             let repos = list_repos(&project_name).await?;
-            for repo in repos.iter() {
-                println!("{}", repo.name);
-            }
+            output::emit(&RepoList(&repos), format)?;
         }
         ReposSubCommands::Clone {
             project,

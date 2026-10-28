@@ -40,6 +40,11 @@ pub fn render<T: Render>(value: &T, format: OutputFormat, w: &mut dyn Write) -> 
     Ok(())
 }
 
+/// Writes `value` to stdout in `format`.
+pub fn emit<T: Render>(value: &T, format: OutputFormat) -> anyhow::Result<()> {
+    render(value, format, &mut io::stdout().lock())
+}
+
 /// Fails for any format but text, for commands not yet moved onto `Render`.
 pub fn require_text(format: OutputFormat, command: &str) -> anyhow::Result<()> {
     if format == OutputFormat::Text {

@@ -32,7 +32,7 @@ struct Cli {
 }
 
 /// Commands that print through a `Render` model and so support every format.
-const STRUCTURED_OUTPUT_COMMANDS: &[&str] = &[];
+const STRUCTURED_OUTPUT_COMMANDS: &[&str] = &["repos list"];
 
 /// The subcommand names the user typed, e.g. `repos pr list`.
 fn command_path(matches: &ArgMatches) -> String {
@@ -151,7 +151,7 @@ async fn main() -> anyhow::Result<()> {
             releases::handle_command(subcommand).await?;
         }
         Some(Commands::Repos { subcommand }) => {
-            repos::handle_command(subcommand).await?;
+            repos::handle_command(subcommand, cli.output).await?;
         }
         Some(Commands::Projects { subcommand }) => {
             projects::handle_command(subcommand).await?;
@@ -207,6 +207,13 @@ mod tests {
             err.to_string(),
             "--output json is not supported for 'wiki list' yet"
         );
+    }
+
+    #[test]
+    fn migrated_commands_accept_structured_output() {
+        for command in ["repos list"] {
+            assert!(check_output_support(OutputFormat::Yaml, command).is_ok());
+        }
     }
 
     #[test]
