@@ -2,9 +2,11 @@ pub mod factory;
 mod secret;
 pub mod url;
 
-use crate::auth::url::{default_base_url, normalize_base_url, parse_organization_or_url};
+use crate::auth::url::{
+    default_base_url, normalize_base_url, parse_organization_or_url, percent_encode_path_segment,
+};
 use crate::config::get_config_dir;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use colored::Colorize;
 use dialoguer::{Input, Password};
 use serde::{Deserialize, Serialize};
@@ -268,29 +270,99 @@ pub async fn login(profile: Option<&str>) -> Result<()> {
 
     let pat: String = Password::new()
         .with_prompt("Personal Access Token (PAT)")
-        .with_confirmation("Confirm PAT", "PATs don't match")
         .interact()?;
+    let creds = Credentials {
+        organization,
+        pat,
+        base_url,
+    };
+
     println!("Validating credentials...");
+    validate_credentials(&creds).await?;
 
     match profile {
         Some(name) => {
-            save_profile(
-                name,
-                &Credentials {
-                    organization,
-                    pat,
-                    base_url,
-                },
-            )?;
+            save_profile(name, &creds)?;
             println!("{} (profile: {})", "Login successful!".green(), name);
         }
         None => {
-            save_organization(&organization)?;
-            save_pat(&pat, &base_url)?;
+            save_organization(&creds.organization)?;
+            save_pat(&creds.pat, &creds.base_url)?;
             println!("{}", "Login successful!".green());
         }
     }
     Ok(())
+}
+
+/// Builds the REST URL that reports who the PAT belongs to. Azure DevOps only
+/// exposes `connectionData` as a preview resource; 5.0 keeps login working on
+/// Azure DevOps Server 2019 and later as well as the cloud.
+fn connection_data_url(creds: &Credentials) -> String {
+    format!(
+        "{}/{}/_apis/connectionData?api-version=5.0-preview",
+        normalize_base_url(&creds.base_url),
+        percent_encode_path_segment(&creds.organization)
+    )
+}
+
+/// Checks the PAT against Azure DevOps so a wrong token is rejected before
+/// anything is saved.
+async fn validate_credentials(creds: &Credentials) -> Result<()> {
+    // Redirects are not followed so the PAT is never re-sent to another URL,
+    // and the timeout keeps login from hanging on an unresponsive server.
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(30))
+        .build()?;
+    let response = client
+        .get(connection_data_url(creds))
+        .basic_auth("", Some(&creds.pat))
+        .send()
+        .await
+        .context("Could not reach Azure DevOps to validate the credentials")?;
+
+    if response.status().is_redirection() {
+        let location = response
+            .headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("another URL");
+        return Err(anyhow!(
+            "Azure DevOps redirected the login to {}. Log in with that server URL instead.",
+            location
+        ));
+    }
+
+    // Anything else but 200 (an error, or 203 with an HTML sign-in page) is a refusal.
+    if response.status() != reqwest::StatusCode::OK {
+        return Err(anyhow!(
+            "Azure DevOps rejected the credentials ({}). Check the organization and PAT.",
+            response.status()
+        ));
+    }
+
+    let body: serde_json::Value = response
+        .json()
+        .await
+        .context("Azure DevOps returned an unexpected response while validating the credentials")?;
+    if !is_authenticated(&body) {
+        return Err(anyhow!(
+            "Azure DevOps did not accept the PAT. Check the organization and PAT."
+        ));
+    }
+    Ok(())
+}
+
+/// Whether a `connectionData` response identifies a real user. Azure DevOps
+/// answers an invalid PAT with 200 and the anonymous public-access identity.
+fn is_authenticated(connection_data: &serde_json::Value) -> bool {
+    let descriptor = connection_data
+        .pointer("/authenticatedUser/descriptor")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    connection_data.pointer("/authenticatedUser/id").is_some()
+        && !descriptor.is_empty()
+        && !descriptor.starts_with("System:PublicAccess")
 }
 
 pub fn logout() -> Result<()> {
@@ -351,6 +423,45 @@ mod tests {
             pat: "my-secret-pat".to_string(),
             base_url: "https://dev.azure.com".to_string(),
         }
+    }
+
+    #[test]
+    fn connection_data_url_encodes_the_organization() {
+        let creds = Credentials {
+            organization: "my org".to_string(),
+            ..sample()
+        };
+        assert_eq!(
+            connection_data_url(&creds),
+            "https://dev.azure.com/my%20org/_apis/connectionData?api-version=5.0-preview"
+        );
+    }
+
+    #[test]
+    fn anonymous_connection_data_is_not_authenticated() {
+        let body = serde_json::json!({
+            "authenticatedUser": {
+                "id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                "descriptor": "System:PublicAccess;aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+            }
+        });
+        assert!(!is_authenticated(&body));
+    }
+
+    #[test]
+    fn user_connection_data_is_authenticated() {
+        let body = serde_json::json!({
+            "authenticatedUser": {
+                "id": "3b0b5c4e-1111-2222-3333-444455556666",
+                "descriptor": "Microsoft.IdentityModel.Claims.ClaimsIdentity;user@example.com"
+            }
+        });
+        assert!(is_authenticated(&body));
+    }
+
+    #[test]
+    fn connection_data_without_a_user_is_not_authenticated() {
+        assert!(!is_authenticated(&serde_json::json!({})));
     }
 
     #[test]
