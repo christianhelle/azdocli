@@ -373,7 +373,7 @@ pub async fn handle_command(
             id,
             web,
         } => {
-            show::show_pull_request(project.as_deref(), repo, id, *web).await?;
+            show::show_pull_request(project.as_deref(), repo, id, *web, format).await?;
         }
         PullRequestsSubCommands::Commits {
             ref project,

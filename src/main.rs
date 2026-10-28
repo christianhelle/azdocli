@@ -39,6 +39,7 @@ const STRUCTURED_OUTPUT_COMMANDS: &[&str] = &[
     "pipelines show",
     "pipelines runs list",
     "repos pr list",
+    "repos pr show",
 ];
 
 /// The subcommand names the user typed, e.g. `repos pr list`.
@@ -225,6 +226,7 @@ mod tests {
             "pipelines show",
             "pipelines runs list",
             "repos pr list",
+            "repos pr show",
         ] {
             assert!(check_output_support(OutputFormat::Yaml, command).is_ok());
         }
