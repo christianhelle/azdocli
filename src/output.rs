@@ -40,6 +40,17 @@ pub fn render<T: Render>(value: &T, format: OutputFormat, w: &mut dyn Write) -> 
     Ok(())
 }
 
+/// Fails for any format but text, for commands not yet moved onto `Render`.
+pub fn require_text(format: OutputFormat, command: &str) -> anyhow::Result<()> {
+    if format == OutputFormat::Text {
+        return Ok(());
+    }
+    let name = clap::ValueEnum::to_possible_value(&format)
+        .map(|value| value.get_name().to_string())
+        .unwrap_or_default();
+    anyhow::bail!("--output {name} is not supported for '{command}' yet")
+}
+
 /// Builds a Markdown table, escaping cell text so it cannot break the layout.
 pub fn md_table(headers: &[&str], rows: &[Vec<String>]) -> String {
     let line = |cells: Vec<String>| format!("| {} |\n", cells.join(" | "));
@@ -164,5 +175,19 @@ mod tests {
     fn md_table_escapes_pipes_and_newlines_in_cells() {
         let table = md_table(&["Title"], &[vec!["a|b\r\nc".to_string()]]);
         assert_eq!(table, "| Title |\n| --- |\n| a\\|b c |\n");
+    }
+
+    #[test]
+    fn require_text_allows_text_output() {
+        assert!(require_text(OutputFormat::Text, "wiki list").is_ok());
+    }
+
+    #[test]
+    fn require_text_rejects_other_formats_with_a_clear_message() {
+        let err = require_text(OutputFormat::Json, "wiki list").unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "--output json is not supported for 'wiki list' yet"
+        );
     }
 }
