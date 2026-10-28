@@ -172,7 +172,10 @@ azdocli pipelines list
 ### All Subcommands
 
 ```text
-azdocli [SUBCOMMAND]
+azdocli [OPTIONS] [SUBCOMMAND]
+
+OPTIONS:
+    -o, --output <OUTPUT>    Output format [default: text] [possible values: text, json, yaml, markdown]
 
 SUBCOMMANDS:
     artifacts    Manage Azure Artifacts feeds and Universal Packages
@@ -186,6 +189,37 @@ SUBCOMMANDS:
     repos        Manage Azure DevOps repos
     user         Manage user entitlements
 ```
+
+### Output Formats
+
+By default every command prints a human-readable summary. The global `-o/--output` option prints
+the result in another format instead, and can go before or after the subcommand:
+
+| Format | What it prints |
+| --- | --- |
+| `text` | The console summary (default) |
+| `json` | The full Azure DevOps API model, as pretty-printed JSON |
+| `yaml` | The full Azure DevOps API model, as YAML |
+| `markdown` | The console summary as Markdown headings, lists and tables |
+
+```shell
+# Names of all repositories, for scripting
+azdocli repos list -o json | jq -r '.[].name'
+
+# A pull request listing to paste into a wiki or issue
+azdocli repos pr list --output markdown
+
+# A work item as YAML
+azdocli boards work-item show --id 42 -o yaml
+```
+
+With `json`, `yaml` and `markdown`, progress and status messages are left out so the output can be
+piped. Errors still go to stderr.
+
+These commands support every format so far: `repos list`, `repos show`, `repos pr list`,
+`repos pr show`, `pipelines list`, `pipelines show`, `pipelines runs list`, `boards work-item list`,
+`boards work-item show` and `boards query`. The other commands accept only `text` and fail with a
+clear error for any other format.
 
 ## Features
 
@@ -588,7 +622,8 @@ The `pipelines` commands follow the shape of the official Azure DevOps CLI (`az 
 read commands and `run`: the commands below take the same names and arguments as their `az pipelines`
 counterparts. Commands that change pipelines (such as `create`, `update`, `delete`, `folder create`,
 `runs tag add` and `variable-group create`), the `build`, `release`, `pool`, `agent` and `queue`
-groups, and global arguments such as `--output` and `--query` are not supported.
+groups, and the global `--query` argument are not supported. `--output` is supported by
+`pipelines list`, `pipelines show` and `pipelines runs list` (see [Output Formats](#output-formats)).
 
 > **Breaking change:** earlier versions used their own command shape. The old forms map to the new
 > ones like this:
