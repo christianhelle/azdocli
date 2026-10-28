@@ -1,8 +1,8 @@
 //! Result models for pipeline commands and how each one prints.
 
-use super::{format_timestamp, pipeline_web_url};
+use super::{format_optional, format_timestamp, pipeline_web_url, short_branch_name};
 use crate::output::{md_table, Render};
-use azure_devops_rust_api::build::models::{BuildDefinition, BuildDefinitionReference};
+use azure_devops_rust_api::build::models::{Build, BuildDefinition, BuildDefinitionReference};
 use colored::Colorize;
 use serde::Serialize;
 use std::io::{self, Write};
@@ -143,6 +143,81 @@ impl Render for PipelineDetails<'_> {
     }
 }
 
+/// The runs matching a `pipelines runs list`.
+#[derive(Serialize)]
+#[serde(transparent)]
+pub struct RunList<'a> {
+    pub runs: &'a [Build],
+    /// Whether more runs matched than were fetched.
+    #[serde(skip)]
+    pub more: bool,
+}
+
+impl RunList<'_> {
+    fn rows(&self) -> Vec<[String; 7]> {
+        self.runs
+            .iter()
+            .map(|run| {
+                [
+                    run.id.to_string(),
+                    or_dash(run.build_number.as_deref()),
+                    or_dash(run.definition.name.as_deref()),
+                    format_optional(run.status.as_ref()),
+                    format_optional(run.result.as_ref()),
+                    or_dash(run.source_branch.as_deref().map(short_branch_name)),
+                    run.queue_time
+                        .map(format_timestamp)
+                        .unwrap_or_else(|| "-".to_string()),
+                ]
+            })
+            .collect()
+    }
+}
+
+impl Render for RunList<'_> {
+    fn text(&self, w: &mut dyn Write) -> io::Result<()> {
+        if self.runs.is_empty() {
+            return writeln!(w, "No runs found.");
+        }
+
+        writeln!(
+            w,
+            "{:<8} {:<16} {:<24} {:<12} {:<20} {:<20} {}",
+            "Run".bold(),
+            "Number".bold(),
+            "Pipeline".bold(),
+            "Status".bold(),
+            "Result".bold(),
+            "Branch".bold(),
+            "Queued".bold()
+        )?;
+        writeln!(w, "{}", "-".repeat(125))?;
+
+        for [id, number, pipeline, status, result, branch, queued] in self.rows() {
+            writeln!(
+                w,
+                "{id:<8} {number:<16} {pipeline:<24} {status:<12} {result:<20} {branch:<20} {queued}"
+            )?;
+        }
+        if self.more {
+            writeln!(w, "\nMore runs exist; use --top to list more of them.")?;
+        }
+        Ok(())
+    }
+
+    fn markdown(&self, w: &mut dyn Write) -> io::Result<()> {
+        let rows: Vec<Vec<String>> = self.rows().into_iter().map(Vec::from).collect();
+        write!(
+            w,
+            "{}",
+            md_table(
+                &["Run", "Number", "Pipeline", "Status", "Result", "Branch", "Queued"],
+                &rows
+            )
+        )
+    }
+}
+
 fn or_dash(value: Option<&str>) -> String {
     value.unwrap_or("-").to_string()
 }
@@ -271,5 +346,104 @@ mod tests {
         let value = serde_json::to_value(PipelineDetails(&pipeline())).unwrap();
         assert_eq!(value["name"], "ci");
         assert_eq!(value["repository"]["name"], "api");
+    }
+
+    fn run() -> Build {
+        serde_json::from_value(json!({
+            "id": 42,
+            "buildNumber": "20260102.1",
+            "definition": {
+                "id": 7,
+                "name": "ci",
+                "revision": 3,
+                "queueStatus": "enabled",
+                "url": "https://dev.azure.com/org/_apis/build/definitions/7",
+                "project": { "name": "Fabrikam", "visibility": "private" }
+            },
+            "project": { "name": "Fabrikam", "visibility": "private" },
+            "priority": "normal",
+            "reason": "manual",
+            "status": "completed",
+            "result": "succeeded",
+            "sourceBranch": "refs/heads/main",
+            "queueTime": "2026-01-02T03:04:05Z"
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn run_list_text_is_a_table() {
+        let runs = [run()];
+        let row_format = |values: [&str; 7]| {
+            format!(
+                "{:<8} {:<16} {:<24} {:<12} {:<20} {:<20} {}\n",
+                values[0], values[1], values[2], values[3], values[4], values[5], values[6]
+            )
+        };
+        let expected = row_format([
+            "Run", "Number", "Pipeline", "Status", "Result", "Branch", "Queued",
+        ]) + &format!("{}\n", "-".repeat(125))
+            + &row_format([
+                "42",
+                "20260102.1",
+                "ci",
+                "Completed",
+                "Succeeded",
+                "main",
+                "2026-01-02 03:04:05",
+            ]);
+        assert_eq!(
+            text(&RunList {
+                runs: &runs,
+                more: false
+            }),
+            expected
+        );
+    }
+
+    #[test]
+    fn run_list_text_says_when_more_runs_exist() {
+        let runs = [run()];
+        assert!(text(&RunList {
+            runs: &runs,
+            more: true
+        })
+        .ends_with("\nMore runs exist; use --top to list more of them.\n"));
+    }
+
+    #[test]
+    fn run_list_text_says_when_there_are_none() {
+        assert_eq!(
+            text(&RunList {
+                runs: &[],
+                more: false
+            }),
+            "No runs found.\n"
+        );
+    }
+
+    #[test]
+    fn run_list_markdown_is_a_table() {
+        let runs = [run()];
+        assert_eq!(
+            markdown(&RunList {
+                runs: &runs,
+                more: false
+            }),
+            "| Run | Number | Pipeline | Status | Result | Branch | Queued |\n\
+             | --- | --- | --- | --- | --- | --- | --- |\n\
+             | 42 | 20260102.1 | ci | Completed | Succeeded | main | 2026-01-02 03:04:05 |\n"
+        );
+    }
+
+    #[test]
+    fn run_list_serializes_as_an_array_of_runs() {
+        let runs = [run()];
+        let value = serde_json::to_value(RunList {
+            runs: &runs,
+            more: true,
+        })
+        .unwrap();
+        assert_eq!(value[0]["id"], 42);
     }
 }
