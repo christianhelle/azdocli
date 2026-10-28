@@ -40,6 +40,24 @@ pub fn render<T: Render>(value: &T, format: OutputFormat, w: &mut dyn Write) -> 
     Ok(())
 }
 
+/// Builds a Markdown table, escaping cell text so it cannot break the layout.
+pub fn md_table(headers: &[&str], rows: &[Vec<String>]) -> String {
+    let line = |cells: Vec<String>| format!("| {} |\n", cells.join(" | "));
+    let mut table = line(headers.iter().map(|h| md_cell(h)).collect());
+    table.push_str(&line(vec!["---".to_string(); headers.len()]));
+    for row in rows {
+        table.push_str(&line(row.iter().map(|cell| md_cell(cell)).collect()));
+    }
+    table
+}
+
+/// Escapes `|` and flattens line breaks so text fits in one table cell.
+fn md_cell(text: &str) -> String {
+    text.replace("\r\n", " ")
+        .replace(['\r', '\n'], " ")
+        .replace('|', "\\|")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -125,5 +143,26 @@ mod tests {
     #[test]
     fn render_markdown_uses_the_markdown_summary() {
         assert_eq!(rendered(OutputFormat::Markdown), "**repo** has 3\n");
+    }
+
+    #[test]
+    fn md_table_writes_header_separator_and_rows() {
+        let table = md_table(
+            &["ID", "Name"],
+            &[
+                vec!["1".to_string(), "alpha".to_string()],
+                vec!["2".to_string(), "beta".to_string()],
+            ],
+        );
+        assert_eq!(
+            table,
+            "| ID | Name |\n| --- | --- |\n| 1 | alpha |\n| 2 | beta |\n"
+        );
+    }
+
+    #[test]
+    fn md_table_escapes_pipes_and_newlines_in_cells() {
+        let table = md_table(&["Title"], &[vec!["a|b\r\nc".to_string()]]);
+        assert_eq!(table, "| Title |\n| --- |\n| a\\|b c |\n");
     }
 }
