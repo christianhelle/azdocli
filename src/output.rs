@@ -29,12 +29,13 @@ pub trait Render: serde::Serialize {
 /// Writes `value` to `w` in `format`.
 pub fn render<T: Render>(value: &T, format: OutputFormat, w: &mut dyn Write) -> anyhow::Result<()> {
     match format {
+        OutputFormat::Text => value.text(w)?,
+        OutputFormat::Markdown => value.markdown(w)?,
         OutputFormat::Json => {
             serde_json::to_writer_pretty(&mut *w, value)?;
             writeln!(w)?;
         }
         OutputFormat::Yaml => serde_norway::to_writer(&mut *w, value)?,
-        _ => todo!(),
     }
     Ok(())
 }
@@ -114,5 +115,15 @@ mod tests {
     #[test]
     fn render_yaml_serializes_the_whole_model() {
         assert_eq!(rendered(OutputFormat::Yaml), "name: repo\ncount: 3\n");
+    }
+
+    #[test]
+    fn render_text_uses_the_console_summary() {
+        assert_eq!(rendered(OutputFormat::Text), "repo has 3\n");
+    }
+
+    #[test]
+    fn render_markdown_uses_the_markdown_summary() {
+        assert_eq!(rendered(OutputFormat::Markdown), "**repo** has 3\n");
     }
 }
