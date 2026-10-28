@@ -268,7 +268,6 @@ pub async fn login(profile: Option<&str>) -> Result<()> {
 
     let pat: String = Password::new()
         .with_prompt("Personal Access Token (PAT)")
-        .with_confirmation("Confirm PAT", "PATs don't match")
         .interact()?;
     println!("Validating credentials...");
 
