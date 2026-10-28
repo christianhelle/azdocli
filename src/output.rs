@@ -164,6 +164,33 @@ mod tests {
         assert_eq!(rendered(OutputFormat::Markdown), "**repo** has 3\n");
     }
 
+    struct FullDisk;
+
+    impl Write for FullDisk {
+        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+            Err(io::Error::other("disk full"))
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn render_reports_write_failures_in_every_format() {
+        for format in [
+            OutputFormat::Text,
+            OutputFormat::Json,
+            OutputFormat::Yaml,
+            OutputFormat::Markdown,
+        ] {
+            assert!(
+                render(&sample(), format, &mut FullDisk).is_err(),
+                "{format:?} swallowed the error"
+            );
+        }
+    }
+
     #[test]
     fn md_table_writes_header_separator_and_rows() {
         let table = md_table(

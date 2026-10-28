@@ -553,18 +553,23 @@ fn open_work_item_in_browser(
 }
 
 pub(crate) fn display_work_items_list(heading: &str, work_items: &[models::WorkItem]) {
-    print_work_items(heading, work_items, OutputFormat::Text);
+    // Text-only callers print like `println!` and have no error to return.
+    if let Err(e) = print_work_items(heading, work_items, OutputFormat::Text) {
+        eprintln!("❌ Failed to print work items: {e}");
+    }
 }
 
-/// Prints a titled work item list, reporting a failure to write to stdout.
-fn print_work_items(heading: &str, work_items: &[models::WorkItem], format: OutputFormat) {
+/// Prints a titled work item list in `format`.
+fn print_work_items(
+    heading: &str,
+    work_items: &[models::WorkItem],
+    format: OutputFormat,
+) -> Result<()> {
     let list = WorkItemList {
         heading,
         work_items,
     };
-    if let Err(e) = output::emit(&list, format) {
-        eprintln!("❌ Failed to print work items: {e}");
-    }
+    output::emit(&list, format)
 }
 
 /// Runs a WIQL query and fetches the full work items behind the ids it returns.
@@ -665,11 +670,9 @@ async fn list_work_items(
         Ok(work_items) => print_work_items(&heading, &work_items, format),
         Err(e) => {
             eprintln!("❌ Failed to execute WIQL query: {e}");
-            print_work_items(&heading, &[], format);
+            print_work_items(&heading, &[], format)
         }
     }
-
-    Ok(())
 }
 
 /// Tells the user which work items a listing is about to fetch.
@@ -762,7 +765,7 @@ pub async fn handle_command(subcommand: &BoardsSubCommands, format: OutputFormat
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
             match run_wiql_query(&project_name, wiql, *limit).await {
-                Ok(work_items) => print_work_items("Query Results", &work_items, format),
+                Ok(work_items) => print_work_items("Query Results", &work_items, format)?,
                 Err(e) => {
                     eprintln!("❌ Failed to execute WIQL query");
                     eprintln!("   {e}");
