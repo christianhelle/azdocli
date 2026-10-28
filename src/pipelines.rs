@@ -18,6 +18,8 @@ use serde_json::{json, Value};
 use std::io::Write;
 use std::time::Duration;
 
+mod views;
+
 #[derive(Subcommand, Clone)]
 pub enum PipelinesSubCommands {
     /// List pipelines
