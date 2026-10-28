@@ -21,7 +21,7 @@ use std::time::Duration;
 
 mod views;
 
-use views::{PipelineDetails, PipelineList};
+use views::{PipelineDetails, PipelineList, RunList};
 
 #[derive(Subcommand, Clone)]
 pub enum PipelinesSubCommands {
@@ -1323,43 +1323,6 @@ fn format_optional<T: std::fmt::Debug>(value: Option<&T>) -> String {
         .unwrap_or_else(|| "-".to_string())
 }
 
-fn display_runs(runs: &[Build]) {
-    if runs.is_empty() {
-        println!("No runs found.");
-        return;
-    }
-
-    println!(
-        "{:<8} {:<16} {:<24} {:<12} {:<20} {:<20} {}",
-        "Run".bold(),
-        "Number".bold(),
-        "Pipeline".bold(),
-        "Status".bold(),
-        "Result".bold(),
-        "Branch".bold(),
-        "Queued".bold()
-    );
-    println!("{}", "-".repeat(125));
-
-    for run in runs {
-        println!(
-            "{:<8} {:<16} {:<24} {:<12} {:<20} {:<20} {}",
-            run.id,
-            run.build_number.as_deref().unwrap_or("-"),
-            run.definition.name.as_deref().unwrap_or("-"),
-            format_optional(run.status.as_ref()),
-            format_optional(run.result.as_ref()),
-            run.source_branch
-                .as_deref()
-                .map(short_branch_name)
-                .unwrap_or("-"),
-            run.queue_time
-                .map(format_timestamp)
-                .unwrap_or_else(|| "-".to_string())
-        );
-    }
-}
-
 fn run_web_url(run: &Build) -> Option<&str> {
     run.links
         .as_ref()
@@ -1511,7 +1474,7 @@ fn display_build_details(run: &models::Run) {
     }
 }
 
-async fn handle_runs_command(subcommand: &RunsSubCommands) -> Result<()> {
+async fn handle_runs_command(subcommand: &RunsSubCommands, format: OutputFormat) -> Result<()> {
     match subcommand {
         RunsSubCommands::List {
             project,
@@ -1539,12 +1502,13 @@ async fn handle_runs_command(subcommand: &RunsSubCommands) -> Result<()> {
             };
             match list_runs(&project_name, &filters).await {
                 Ok(listing) => {
-                    display_runs(&listing.runs);
-                    if listing.more {
-                        println!(
-                            "
-More runs exist; use --top to list more of them."
-                        );
+                    let runs = RunList {
+                        runs: &listing.runs,
+                        more: listing.more,
+                    };
+                    output::emit(&runs, format)?;
+                    if listing.more && format != OutputFormat::Text {
+                        eprintln!("More runs exist; use --top to list more of them.");
                     }
                 }
                 Err(e) => {
@@ -1763,7 +1727,7 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands, format: OutputFor
             }
         }
         PipelinesSubCommands::Runs { subcommand } => {
-            return handle_runs_command(subcommand).await;
+            return handle_runs_command(subcommand, format).await;
         }
         PipelinesSubCommands::Folder {
             subcommand:
