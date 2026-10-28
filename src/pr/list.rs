@@ -1,15 +1,16 @@
 //! Listing pull requests and their commits.
 
 use super::reviewers::vote_label;
+use super::views::{MyPullRequests, PullRequestList};
 use super::{create::branch_ref, create_git_client, http, identity, parse_pr_id};
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::{get_credentials, Credentials};
+use crate::output::{self, OutputFormat};
 use crate::project::get_project_or_default;
 use anyhow::Result;
 use azure_devops_rust_api::git;
 use azure_devops_rust_api::git::models::GitPullRequest;
 use clap::ValueEnum;
-use colored::Colorize;
 use std::future::Future;
 
 /// The pull request states `repos pr list` can filter on.
@@ -141,6 +142,7 @@ pub(super) async fn list_pull_requests(
     project: Option<&str>,
     repo: Option<&str>,
     filters: &ListFilters<'_>,
+    format: OutputFormat,
 ) -> Result<()> {
     let ctx = ListContext::new(project, repo).await?;
     let columns = Columns {
@@ -149,7 +151,7 @@ pub(super) async fn list_pull_requests(
     };
 
     if filters.mine {
-        return list_my_pull_requests(&ctx, filters, columns).await;
+        return list_my_pull_requests(&ctx, filters, columns, format).await;
     }
 
     let creator_id = match filters.creator {
@@ -164,19 +166,19 @@ pub(super) async fn list_pull_requests(
         .query(filters, creator_id, reviewer_id, filters.effective_top(), 0)
         .await?;
 
-    if pull_requests.is_empty() {
-        match repo {
-            Some(repo) => println!(
-                "No pull requests found for repository '{repo}' in project '{}'",
-                ctx.project
-            ),
-            None => println!("No pull requests found in project '{}'", ctx.project),
-        }
-        return Ok(());
-    }
-
-    display_pull_requests(&pull_requests, &columns);
-    Ok(())
+    let empty_message = match repo {
+        Some(repo) => format!(
+            "No pull requests found for repository '{repo}' in project '{}'",
+            ctx.project
+        ),
+        None => format!("No pull requests found in project '{}'", ctx.project),
+    };
+    let listing = PullRequestList {
+        pull_requests: &pull_requests,
+        columns,
+        empty_message,
+    };
+    output::emit(&listing, format)
 }
 
 /// Lists the signed-in user's pull requests the way the web portal's "Mine"
@@ -185,6 +187,7 @@ async fn list_my_pull_requests(
     ctx: &ListContext,
     filters: &ListFilters<'_>,
     columns: Columns<'_>,
+    format: OutputFormat,
 ) -> Result<()> {
     let me = http::authenticated_user_id(&ctx.creds).await?;
 
@@ -192,17 +195,13 @@ async fn list_my_pull_requests(
     let created = ctx.query(filters, Some(me.clone()), None, top, 0).await?;
     let assigned = assigned_to(ctx, filters, &me, top).await?;
 
-    display_section("Created by me", &created, &columns);
-    println!();
-    display_section(
-        "Assigned to me",
-        &assigned,
-        &Columns {
-            vote_of: Some(&me),
-            ..columns
-        },
-    );
-    Ok(())
+    let mine = MyPullRequests {
+        created: &created,
+        assigned: &assigned,
+        columns,
+        me: &me,
+    };
+    output::emit(&mine, format)
 }
 
 /// Fetches up to `top` pull requests `me` is reviewing but did not create.
@@ -301,68 +300,6 @@ pub(super) fn draft_marker(pr: &GitPullRequest) -> &'static str {
 /// The day a pull request was opened, as `YYYY-MM-DD`.
 pub(super) fn created_on(pr: &GitPullRequest) -> String {
     pr.creation_date.date().to_string()
-}
-
-/// Prints a titled group of pull requests, or "none" when it is empty.
-fn display_section(title: &str, pull_requests: &[GitPullRequest], columns: &Columns) {
-    println!("{}", format!("{title} ({})", pull_requests.len()).bold());
-    if pull_requests.is_empty() {
-        println!("  none");
-    } else {
-        display_pull_requests(pull_requests, columns);
-    }
-}
-
-/// Prints one row per pull request.
-fn display_pull_requests(pull_requests: &[GitPullRequest], columns: &Columns) {
-    let mut header = format!(
-        "{:<8} {:<11} {:<6} {:<50} ",
-        "ID".bold(),
-        "Status".bold(),
-        "Draft".bold(),
-        "Title".bold()
-    );
-    if columns.repository {
-        header.push_str(&format!("{:<24} ", "Repository".bold()));
-    }
-    header.push_str(&format!("{:<24} ", "Author".bold()));
-    if columns.vote_of.is_some() {
-        header.push_str(&format!("{:<26} ", "My vote".bold()));
-    }
-    header.push_str(&format!("{:<11} {}", "Created".bold(), "Branches".bold()));
-    println!("{header}");
-    println!("{}", "-".repeat(header_width(columns)));
-
-    for pr in pull_requests {
-        let author = pr
-            .created_by
-            .graph_subject_base
-            .display_name
-            .as_deref()
-            .unwrap_or("-");
-
-        let mut row = format!(
-            "{:<8} {:<11} {:<6} {:<50} ",
-            pr.pull_request_id,
-            format!("{:?}", pr.status).to_lowercase(),
-            draft_marker(pr),
-            pr.title.as_deref().unwrap_or("-")
-        );
-        if columns.repository {
-            row.push_str(&format!("{:<24} ", pr.repository.name));
-        }
-        row.push_str(&format!("{author:<24} "));
-        if let Some(identity_id) = columns.vote_of {
-            row.push_str(&format!("{:<26} ", vote_of(pr, identity_id)));
-        }
-        row.push_str(&format!(
-            "{:<11} {} -> {}",
-            created_on(pr),
-            short_branch(&pr.source_ref_name),
-            short_branch(&pr.target_ref_name)
-        ));
-        println!("{row}");
-    }
 }
 
 /// How wide the separator under the header should be for these columns.

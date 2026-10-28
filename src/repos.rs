@@ -340,7 +340,7 @@ pub async fn handle_command(subcommand: &ReposSubCommands, format: OutputFormat)
             }
         }
         ReposSubCommands::PR { subcommand } => {
-            pr::handle_command(subcommand).await?;
+            pr::handle_command(subcommand, format).await?;
         }
     }
     Ok(())
