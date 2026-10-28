@@ -3,6 +3,7 @@
 ## [Unreleased Changes]
 
 ### Features
+- Add --output flag with JSON, YAML and Markdown rendering ([#145](https://github.com/christianhelle/azdocli/pull/145)) ([@christianhelle](https://github.com/christianhelle/))
 - Only ask for the PAT once on login ([#144](https://github.com/christianhelle/azdocli/pull/144)) ([@christianhelle](https://github.com/christianhelle/))
 - Align the pipelines commands with az pipelines ([#141](https://github.com/christianhelle/azdocli/pull/141)) ([@christianhelle](https://github.com/christianhelle/))
 - Add area and iteration management to boards ([#143](https://github.com/christianhelle/azdocli/pull/143)) ([@christianhelle](https://github.com/christianhelle/))
