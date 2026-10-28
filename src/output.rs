@@ -67,10 +67,13 @@ pub fn md_table(headers: &[&str], rows: &[Vec<String>]) -> String {
     table
 }
 
-/// Escapes `|` and flattens line breaks so text fits in one table cell.
+/// Escapes backslashes and `|` and flattens line breaks so text fits in one
+/// table cell. Backslashes go first, so an existing `\|` cannot unescape the
+/// pipe.
 fn md_cell(text: &str) -> String {
     text.replace("\r\n", " ")
         .replace(['\r', '\n'], " ")
+        .replace('\\', "\\\\")
         .replace('|', "\\|")
 }
 
@@ -180,6 +183,12 @@ mod tests {
     fn md_table_escapes_pipes_and_newlines_in_cells() {
         let table = md_table(&["Title"], &[vec!["a|b\r\nc".to_string()]]);
         assert_eq!(table, "| Title |\n| --- |\n| a\\|b c |\n");
+    }
+
+    #[test]
+    fn md_table_escapes_a_backslash_before_a_pipe() {
+        let table = md_table(&["Title"], &[vec!["a\\|b".to_string()]]);
+        assert_eq!(table, "| Title |\n| --- |\n| a\\\\\\|b |\n");
     }
 
     #[test]
