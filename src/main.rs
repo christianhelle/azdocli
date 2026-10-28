@@ -1,6 +1,7 @@
 use crate::auth::{login, logout};
+use crate::output::OutputFormat;
 use crate::project::{get_default_project, save_default_project};
-use clap::{CommandFactory, Parser, Subcommand};
+use clap::{ArgMatches, CommandFactory, FromArgMatches, Parser, Subcommand};
 
 mod artifacts;
 mod auth;
@@ -22,8 +23,34 @@ mod wiki;
 #[derive(Parser)]
 #[clap(about, version)]
 struct Cli {
+    /// Output format
+    #[clap(short, long, global = true, value_enum, default_value_t)]
+    output: OutputFormat,
+
     #[clap(subcommand)]
     command: Option<Commands>,
+}
+
+/// Commands that print through a `Render` model and so support every format.
+const STRUCTURED_OUTPUT_COMMANDS: &[&str] = &[];
+
+/// The subcommand names the user typed, e.g. `repos pr list`.
+fn command_path(matches: &ArgMatches) -> String {
+    let mut names = Vec::new();
+    let mut current = matches;
+    while let Some((name, sub)) = current.subcommand() {
+        names.push(name);
+        current = sub;
+    }
+    names.join(" ")
+}
+
+/// Fails early when `format` isn't text and `command` has no renderer yet.
+fn check_output_support(format: OutputFormat, command: &str) -> anyhow::Result<()> {
+    if STRUCTURED_OUTPUT_COMMANDS.contains(&command) {
+        return Ok(());
+    }
+    output::require_text(format, command)
 }
 
 #[derive(Subcommand)]
@@ -91,7 +118,9 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let cli = Cli::parse();
+    let matches = Cli::command().get_matches();
+    let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
+    check_output_support(cli.output, &command_path(&matches))?;
     match &cli.command {
         Some(Commands::Login { profile }) => {
             login(profile.as_deref()).await?;
@@ -142,4 +171,46 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::output::OutputFormat;
+
+    fn matches(args: &[&str]) -> clap::ArgMatches {
+        Cli::command().try_get_matches_from(args).unwrap()
+    }
+
+    #[test]
+    fn output_flag_is_accepted_after_the_subcommand() {
+        let cli = Cli::try_parse_from(["azdocli", "repos", "list", "-o", "json"]).unwrap();
+        assert_eq!(cli.output, OutputFormat::Json);
+    }
+
+    #[test]
+    fn output_flag_defaults_to_text() {
+        let cli = Cli::try_parse_from(["azdocli", "repos", "list"]).unwrap();
+        assert_eq!(cli.output, OutputFormat::Text);
+    }
+
+    #[test]
+    fn command_path_names_the_nested_subcommand() {
+        let matches = matches(&["azdocli", "repos", "pr", "list", "--output", "yaml"]);
+        assert_eq!(command_path(&matches), "repos pr list");
+    }
+
+    #[test]
+    fn commands_without_a_renderer_reject_structured_output() {
+        let err = check_output_support(OutputFormat::Json, "wiki list").unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "--output json is not supported for 'wiki list' yet"
+        );
+    }
+
+    #[test]
+    fn every_command_accepts_text_output() {
+        assert!(check_output_support(OutputFormat::Text, "wiki list").is_ok());
+    }
 }
