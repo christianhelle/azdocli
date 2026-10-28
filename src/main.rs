@@ -32,7 +32,7 @@ struct Cli {
 }
 
 /// Commands that print through a `Render` model and so support every format.
-const STRUCTURED_OUTPUT_COMMANDS: &[&str] = &["repos list"];
+const STRUCTURED_OUTPUT_COMMANDS: &[&str] = &["repos list", "repos show"];
 
 /// The subcommand names the user typed, e.g. `repos pr list`.
 fn command_path(matches: &ArgMatches) -> String {
@@ -211,7 +211,7 @@ mod tests {
 
     #[test]
     fn migrated_commands_accept_structured_output() {
-        for command in ["repos list"] {
+        for command in ["repos list", "repos show"] {
             assert!(check_output_support(OutputFormat::Yaml, command).is_ok());
         }
     }
