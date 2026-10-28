@@ -1,6 +1,7 @@
 //! Result models for pull request commands and how each one prints.
 
 use super::list::{created_on, draft_marker, header_width, short_branch, vote_of, Columns};
+use super::reviewers::{reviewer_name, vote_label};
 use crate::output::{md_table, Render};
 use azure_devops_rust_api::git::models::GitPullRequest;
 use colored::Colorize;
@@ -93,6 +94,163 @@ impl Render for MyPullRequests<'_> {
             }
         }
         Ok(())
+    }
+}
+
+/// One pull request, with the work items and open threads `show` looks up.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct PullRequestDetails<'a> {
+    #[serde(flatten)]
+    pub pull_request: &'a GitPullRequest,
+    pub work_item_ids: Vec<String>,
+    pub open_comment_threads: usize,
+}
+
+impl PullRequestDetails<'_> {
+    fn description(&self) -> Option<&str> {
+        self.pull_request
+            .description
+            .as_deref()
+            .filter(|description| !description.is_empty())
+    }
+
+    fn author(&self) -> &str {
+        self.pull_request
+            .created_by
+            .graph_subject_base
+            .display_name
+            .as_deref()
+            .unwrap_or("-")
+    }
+
+    fn labels(&self) -> Vec<&str> {
+        self.pull_request
+            .labels
+            .iter()
+            .filter_map(|label| label.name.as_deref())
+            .collect()
+    }
+
+    fn reviewer_lines(&self) -> Vec<String> {
+        self.pull_request
+            .reviewers
+            .iter()
+            .map(|reviewer| {
+                format!(
+                    "{} ({}){}",
+                    reviewer_name(reviewer),
+                    vote_label(reviewer.vote),
+                    if reviewer.is_required.unwrap_or(false) {
+                        ", required"
+                    } else {
+                        ""
+                    }
+                )
+            })
+            .collect()
+    }
+}
+
+impl Render for PullRequestDetails<'_> {
+    fn text(&self, w: &mut dyn Write) -> io::Result<()> {
+        let pr = self.pull_request;
+        writeln!(w, "📋 Pull Request Details")?;
+        writeln!(w, "=======================")?;
+        writeln!(w, "  ID: {}", pr.pull_request_id)?;
+        writeln!(w, "  Title: {}", pr.title.as_deref().unwrap_or_default())?;
+        if let Some(description) = self.description() {
+            writeln!(w, "  Description: {description}")?;
+        }
+        writeln!(w, "  Status: {:?}", pr.status)?;
+        if pr.is_draft {
+            writeln!(w, "  Draft: {}", "yes".yellow())?;
+        }
+        if let Some(merge_status) = pr.merge_status.as_ref() {
+            writeln!(w, "  Merge status: {merge_status:?}")?;
+        }
+        if let Some(message) = pr.merge_failure_message.as_deref() {
+            writeln!(w, "  Merge failure: {}", message.red())?;
+        }
+        if pr.auto_complete_set_by.is_some() {
+            writeln!(w, "  Auto-complete: enabled")?;
+        }
+        writeln!(w, "  Source Branch: {}", short_branch(&pr.source_ref_name))?;
+        writeln!(w, "  Target Branch: {}", short_branch(&pr.target_ref_name))?;
+        writeln!(w, "  Created by: {}", self.author())?;
+        writeln!(w, "  Created: {}", pr.creation_date)?;
+        let labels = self.labels();
+        if !labels.is_empty() {
+            writeln!(w, "  Labels: {}", labels.join(", "))?;
+        }
+        let reviewers = self.reviewer_lines();
+        if reviewers.is_empty() {
+            writeln!(w, "  Reviewers: none")?;
+        } else {
+            writeln!(w, "  Reviewers:")?;
+            for reviewer in reviewers {
+                writeln!(w, "    • {reviewer}")?;
+            }
+        }
+        if !self.work_item_ids.is_empty() {
+            writeln!(w, "  Work Items: {}", self.work_item_ids.join(", "))?;
+        }
+        writeln!(w, "  Open comment threads: {}", self.open_comment_threads)
+    }
+
+    fn markdown(&self, w: &mut dyn Write) -> io::Result<()> {
+        let pr = self.pull_request;
+        writeln!(
+            w,
+            "## !{} {}\n",
+            pr.pull_request_id,
+            pr.title.as_deref().unwrap_or_default()
+        )?;
+        writeln!(w, "- **Status:** {:?}", pr.status)?;
+        if pr.is_draft {
+            writeln!(w, "- **Draft:** yes")?;
+        }
+        if let Some(merge_status) = pr.merge_status.as_ref() {
+            writeln!(w, "- **Merge status:** {merge_status:?}")?;
+        }
+        if let Some(message) = pr.merge_failure_message.as_deref() {
+            writeln!(w, "- **Merge failure:** {message}")?;
+        }
+        if pr.auto_complete_set_by.is_some() {
+            writeln!(w, "- **Auto-complete:** enabled")?;
+        }
+        writeln!(
+            w,
+            "- **Branches:** {} -> {}",
+            short_branch(&pr.source_ref_name),
+            short_branch(&pr.target_ref_name)
+        )?;
+        writeln!(w, "- **Created by:** {}", self.author())?;
+        writeln!(w, "- **Created:** {}", created_on(pr))?;
+        let labels = self.labels();
+        if !labels.is_empty() {
+            writeln!(w, "- **Labels:** {}", labels.join(", "))?;
+        }
+        if let Some(description) = self.description() {
+            writeln!(w, "\n### Description\n\n{description}")?;
+        }
+        writeln!(w, "\n### Reviewers\n")?;
+        let reviewers = self.reviewer_lines();
+        if reviewers.is_empty() {
+            writeln!(w, "_none_")?;
+        }
+        for reviewer in reviewers {
+            writeln!(w, "- {reviewer}")?;
+        }
+        writeln!(w)?;
+        if !self.work_item_ids.is_empty() {
+            writeln!(w, "- **Work items:** {}", self.work_item_ids.join(", "))?;
+        }
+        writeln!(
+            w,
+            "- **Open comment threads:** {}",
+            self.open_comment_threads
+        )
     }
 }
 
@@ -359,5 +517,64 @@ mod tests {
         assert_eq!(value["created"][0]["pullRequestId"], 1);
         assert_eq!(value["assigned"][0]["pullRequestId"], 2);
         assert!(value.get("me").is_none());
+    }
+
+    fn details(pr: &GitPullRequest) -> PullRequestDetails<'_> {
+        PullRequestDetails {
+            pull_request: pr,
+            work_item_ids: vec!["101".to_string(), "102".to_string()],
+            open_comment_threads: 2,
+        }
+    }
+
+    #[test]
+    fn pull_request_details_text_matches_the_console_summary() {
+        let pr = pull_request(12);
+        let expected = format!(
+            "📋 Pull Request Details\n\
+             =======================\n\
+             \x20 ID: 12\n\
+             \x20 Title: Add output formats\n\
+             \x20 Status: Active\n\
+             \x20 Draft: yes\n\
+             \x20 Source Branch: feature\n\
+             \x20 Target Branch: main\n\
+             \x20 Created by: Ada\n\
+             \x20 Created: {}\n\
+             \x20 Reviewers:\n\
+             \x20   • Me (approved)\n\
+             \x20 Work Items: 101, 102\n\
+             \x20 Open comment threads: 2\n",
+            pr.creation_date
+        );
+        assert_eq!(text(&details(&pr)), expected);
+    }
+
+    #[test]
+    fn pull_request_details_text_skips_work_items_when_there_are_none() {
+        let pr = pull_request(12);
+        let mut view = details(&pr);
+        view.work_item_ids.clear();
+        assert!(!text(&view).contains("Work Items"));
+    }
+
+    #[test]
+    fn pull_request_details_markdown_lists_the_fields() {
+        let pr = pull_request(12);
+        let output = markdown(&details(&pr));
+        assert!(output
+            .starts_with("## !12 Add output formats\n\n- **Status:** Active\n- **Draft:** yes\n"));
+        assert!(output.contains("- **Branches:** feature -> main\n"));
+        assert!(output.contains("\n### Reviewers\n\n- Me (approved)\n"));
+        assert!(output.ends_with("- **Work items:** 101, 102\n- **Open comment threads:** 2\n"));
+    }
+
+    #[test]
+    fn pull_request_details_serialize_the_pull_request_with_its_extras() {
+        let pr = pull_request(12);
+        let value = serde_json::to_value(details(&pr)).unwrap();
+        assert_eq!(value["pullRequestId"], 12);
+        assert_eq!(value["workItemIds"][1], "102");
+        assert_eq!(value["openCommentThreads"], 2);
     }
 }
