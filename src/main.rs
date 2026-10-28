@@ -64,6 +64,26 @@ fn check_output_support(format: OutputFormat, command: &str) -> anyhow::Result<(
     output::require_text(format, command)
 }
 
+/// Flags that open a browser instead of printing a result.
+const BROWSER_FLAGS: &[&str] = &["web", "open"];
+
+/// Fails when a browser flag is combined with a format other than text,
+/// since opening a browser prints a status line instead of the result.
+fn check_browser_flags(format: OutputFormat, matches: &ArgMatches) -> anyhow::Result<()> {
+    let mut leaf = matches;
+    while let Some((_, sub)) = leaf.subcommand() {
+        leaf = sub;
+    }
+    for flag in BROWSER_FLAGS {
+        if let Ok(Some(true)) = leaf.try_get_one::<bool>(flag) {
+            if format != OutputFormat::Text {
+                anyhow::bail!("--{flag} opens a browser and cannot be combined with --output");
+            }
+        }
+    }
+    Ok(())
+}
+
 #[derive(Subcommand)]
 enum Commands {
     /// Login to Azure DevOps with a Personal Access Token (PAT)
@@ -132,6 +152,7 @@ async fn main() -> anyhow::Result<()> {
     let matches = Cli::command().get_matches();
     let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
     check_output_support(cli.output, &command_path(&matches))?;
+    check_browser_flags(cli.output, &matches)?;
     match &cli.command {
         Some(Commands::Login { profile }) => {
             login(profile.as_deref()).await?;
@@ -236,6 +257,66 @@ mod tests {
         ] {
             assert!(check_output_support(OutputFormat::Yaml, command).is_ok());
         }
+    }
+
+    #[test]
+    fn browser_flags_reject_structured_output() {
+        for (args, flag) in [
+            (
+                &[
+                    "azdocli",
+                    "pipelines",
+                    "show",
+                    "--id",
+                    "7",
+                    "--open",
+                    "-o",
+                    "json",
+                ][..],
+                "--open",
+            ),
+            (
+                &[
+                    "azdocli", "repos", "pr", "show", "--repo", "api", "--id", "1", "--web", "-o",
+                    "yaml",
+                ][..],
+                "--web",
+            ),
+            (
+                &[
+                    "azdocli",
+                    "boards",
+                    "work-item",
+                    "show",
+                    "--id",
+                    "1",
+                    "--web",
+                    "-o",
+                    "markdown",
+                ][..],
+                "--web",
+            ),
+        ] {
+            let matches = matches(args);
+            let format = Cli::from_arg_matches(&matches).unwrap().output;
+            let err = check_browser_flags(format, &matches).unwrap_err();
+            assert!(
+                err.to_string().contains(flag),
+                "{args:?} gave unexpected error: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn browser_flags_are_fine_with_text_output() {
+        let matches = matches(&["azdocli", "pipelines", "show", "--id", "7", "--open"]);
+        assert!(check_browser_flags(OutputFormat::Text, &matches).is_ok());
+    }
+
+    #[test]
+    fn structured_output_is_fine_without_browser_flags() {
+        let matches = matches(&["azdocli", "repos", "list", "-o", "json"]);
+        assert!(check_browser_flags(OutputFormat::Json, &matches).is_ok());
     }
 
     #[test]
