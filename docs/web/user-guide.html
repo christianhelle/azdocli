@@ -223,6 +223,58 @@
         </div>
       </section>
 
+      <section id="output-formats">
+        <h2>🖨️ Output Formats</h2>
+        <div class="command-section">
+          <p>
+            By default every command prints a human-readable summary. The
+            global <code>-o</code>/<code>--output</code> option prints the
+            result in another format instead, and can go before or after the
+            subcommand.
+          </p>
+          <ul>
+            <li><code>text</code>: the console summary (default)</li>
+            <li>
+              <code>json</code>: the full Azure DevOps API model, as
+              pretty-printed JSON
+            </li>
+            <li><code>yaml</code>: the full Azure DevOps API model, as YAML</li>
+            <li>
+              <code>markdown</code>: the console summary as Markdown headings,
+              lists and tables
+            </li>
+          </ul>
+
+          <div class="command-example">
+            <h4>Examples</h4>
+            <pre><code># Names of all repositories, for scripting
+azdocli repos list -o json | jq -r '.[].name'
+
+# A pull request listing to paste into a wiki or issue
+azdocli repos pr list --output markdown
+
+# A work item as YAML
+azdocli boards work-item show --id 42 -o yaml</code></pre>
+            <p>
+              With <code>json</code>, <code>yaml</code> and
+              <code>markdown</code>, progress and status messages are left out
+              so the output can be piped. Errors still go to stderr.
+            </p>
+            <p>
+              These commands support every format so far:
+              <code>repos list</code>, <code>repos show</code>,
+              <code>repos pr list</code>, <code>repos pr show</code>,
+              <code>pipelines list</code>, <code>pipelines show</code>,
+              <code>pipelines runs list</code>,
+              <code>boards work-item list</code>,
+              <code>boards work-item show</code> and <code>boards query</code>.
+              The other commands accept only <code>text</code> and fail with a
+              clear error for any other format.
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section id="projects">
         <h2>📁 Projects and Default Project Management</h2>
         <div class="command-section">
@@ -814,8 +866,11 @@ azdocli repos pr comment resolve --repo MyRepository --id 123 --thread 7 --statu
             Commands that change pipelines (such as <code>create</code>,
             <code>update</code> and <code>delete</code>), the
             <code>build</code>, <code>release</code>, <code>pool</code>,
-            <code>agent</code> and <code>queue</code> groups, and global
-            arguments such as <code>--output</code> are not supported.
+            <code>agent</code> and <code>queue</code> groups, and the global
+            <code>--query</code> argument are not supported.
+            <code>--output</code> is supported by <code>pipelines list</code>,
+            <code>pipelines show</code> and <code>pipelines runs list</code>
+            (see <a href="#output-formats">Output Formats</a>).
           </p>
 
           <div class="command-example">

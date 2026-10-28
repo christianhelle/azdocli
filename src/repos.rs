@@ -1,5 +1,6 @@
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
+use crate::output::{self, OutputFormat};
 use crate::pr::{self, PullRequestsSubCommands};
 use crate::project::get_project_or_default;
 use anyhow::Result;
@@ -9,6 +10,10 @@ use colored::Colorize;
 use dialoguer::Confirm;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
+
+mod views;
+
+use views::{RepoDetails, RepoList};
 
 #[derive(Subcommand, Clone)]
 pub enum ReposSubCommands {
@@ -146,13 +151,13 @@ pub enum ReposSubCommands {
     },
 }
 
-pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
+pub async fn handle_command(subcommand: &ReposSubCommands, format: OutputFormat) -> Result<()> {
     match subcommand {
         ReposSubCommands::Create { project, name } => {
             let project_name = get_project_or_default(project.as_deref())?;
             match create_repo(&project_name, name).await {
                 Ok(repo) => {
-                    display_repo_details(&repo);
+                    output::emit(&RepoDetails(&repo), format)?;
                 }
                 Err(e) => {
                     eprintln!(
@@ -167,9 +172,7 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
         ReposSubCommands::List { project } => {
             let project_name = get_project_or_default(project.as_deref())?;
             let repos = list_repos(&project_name).await?;
-            for repo in repos.iter() {
-                println!("{}", repo.name);
-            }
+            output::emit(&RepoList(&repos), format)?;
         }
         ReposSubCommands::Clone {
             project,
@@ -237,7 +240,7 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
             let project_name = get_project_or_default(project.as_deref())?;
             match get_repo(&project_name, id).await {
                 Ok(repo) => {
-                    display_repo_details(&repo);
+                    output::emit(&RepoDetails(&repo), format)?;
                 }
                 Err(e) => {
                     eprintln!(
@@ -337,7 +340,7 @@ pub async fn handle_command(subcommand: &ReposSubCommands) -> Result<()> {
             }
         }
         ReposSubCommands::PR { subcommand } => {
-            pr::handle_command(subcommand).await?;
+            pr::handle_command(subcommand, format).await?;
         }
     }
     Ok(())
@@ -677,52 +680,6 @@ async fn get_file_content(
     item.item_model.content.ok_or_else(|| {
         anyhow::anyhow!("'{path}' has no text content; it may be a folder or a binary file")
     })
-}
-
-fn display_repo_details(repo: &git::models::GitRepository) {
-    println!("📋 Repository Details");
-    println!("=====================");
-    println!("📁 Name: {}", repo.name);
-    println!("🆔 ID: {}", repo.id);
-
-    if let Some(url) = &repo.web_url {
-        println!("🌐 Web URL: {url}");
-    }
-
-    if let Some(remote_url) = &repo.remote_url {
-        println!("🔗 Remote URL (HTTPS): {remote_url}");
-    }
-
-    if let Some(ssh_url) = &repo.ssh_url {
-        println!("🔑 Clone URL (SSH): {ssh_url}");
-    }
-
-    if let Some(size) = &repo.size {
-        let size_kilobytes = *size as f64 / 1024.0;
-        let size_megabytes = size_kilobytes / 1024.0;
-        if size_megabytes >= 1.0 {
-            println!("📦 Size: {size_megabytes:.2} MB ({size} bytes)");
-        } else {
-            println!("📦 Size: {size_kilobytes:.2} KB ({size} bytes)");
-        }
-    }
-
-    if let Some(default_branch) = &repo.default_branch {
-        println!("🌿 Default Branch: {default_branch}");
-    }
-
-    println!("🎯 Project: {}", repo.project.name);
-
-    if let Some(is_fork) = repo.is_fork {
-        println!("🍴 Is Fork: {}", if is_fork { "Yes" } else { "No" });
-    }
-
-    if let Some(is_disabled) = repo.is_disabled {
-        println!(
-            "⚠️  Is Disabled: {}",
-            if is_disabled { "Yes" } else { "No" }
-        );
-    }
 }
 
 async fn clone_all_repos(

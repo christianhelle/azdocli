@@ -1,5 +1,6 @@
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
+use crate::output::{self, OutputFormat};
 use crate::project::get_project_or_default;
 use crate::releases::continuation_token;
 use anyhow::{anyhow, Context, Result};
@@ -17,6 +18,10 @@ use colored::Colorize;
 use serde_json::{json, Value};
 use std::io::Write;
 use std::time::Duration;
+
+mod views;
+
+use views::{PipelineDetails, PipelineList, RunList};
 
 #[derive(Subcommand, Clone)]
 pub enum PipelinesSubCommands {
@@ -1285,31 +1290,6 @@ fn display_service_connection(connection: &ServiceEndpoint) {
     }
 }
 
-fn display_pipelines(pipelines: &[BuildDefinitionReference]) {
-    if pipelines.is_empty() {
-        println!("No pipelines found.");
-        return;
-    }
-
-    println!(
-        "{:<10} {:<40} {}",
-        "ID".bold(),
-        "Name".bold(),
-        "Folder".bold()
-    );
-    println!("{}", "-".repeat(70));
-
-    for pipeline in pipelines {
-        let definition = &pipeline.definition_reference;
-        println!(
-            "{:<10} {:<40} {}",
-            definition.id,
-            definition.name.as_deref().unwrap_or("-"),
-            definition.path.as_deref().unwrap_or("-")
-        );
-    }
-}
-
 fn pipeline_web_url(pipeline: &BuildDefinition) -> Option<&str> {
     pipeline
         .build_definition_reference
@@ -1317,49 +1297,6 @@ fn pipeline_web_url(pipeline: &BuildDefinition) -> Option<&str> {
         .as_ref()
         .and_then(|links| links.web.as_ref())
         .map(|web| web.href.as_str())
-}
-
-fn display_pipeline(pipeline: &BuildDefinition) {
-    let reference = &pipeline.build_definition_reference;
-    let definition = &reference.definition_reference;
-
-    println!("🔧 Pipeline");
-    println!("===========");
-    println!("ID: {}", definition.id);
-    println!("Name: {}", definition.name.as_deref().unwrap_or("-"));
-    println!("Folder: {}", definition.path.as_deref().unwrap_or("-"));
-    println!("Revision: {}", definition.revision);
-    println!("Queue status: {:?}", definition.queue_status);
-
-    if let Some(description) = &pipeline.description {
-        println!("Description: {description}");
-    }
-    if let Some(queue) = reference.queue.as_ref().and_then(|q| q.name.as_deref()) {
-        println!("Agent queue: {queue}");
-    }
-    if let Some(repository) = &pipeline.repository {
-        println!(
-            "Repository: {} ({})",
-            repository.name.as_deref().unwrap_or(&repository.id),
-            repository.type_.as_deref().unwrap_or("-")
-        );
-        if let Some(default_branch) = &repository.default_branch {
-            println!("Default branch: {default_branch}");
-        }
-    }
-    if let Some(author) = reference
-        .authored_by
-        .as_ref()
-        .and_then(|identity| identity.graph_subject_base.display_name.as_deref())
-    {
-        println!("Authored by: {author}");
-    }
-    if let Some(created) = definition.created_date {
-        println!("Created: {}", format_timestamp(created));
-    }
-    if let Some(url) = pipeline_web_url(pipeline) {
-        println!("URL: {url}");
-    }
 }
 
 /// Runs and logs are often seconds apart, so the date alone is not enough to
@@ -1384,43 +1321,6 @@ fn format_optional<T: std::fmt::Debug>(value: Option<&T>) -> String {
     value
         .map(|value| format!("{value:?}"))
         .unwrap_or_else(|| "-".to_string())
-}
-
-fn display_runs(runs: &[Build]) {
-    if runs.is_empty() {
-        println!("No runs found.");
-        return;
-    }
-
-    println!(
-        "{:<8} {:<16} {:<24} {:<12} {:<20} {:<20} {}",
-        "Run".bold(),
-        "Number".bold(),
-        "Pipeline".bold(),
-        "Status".bold(),
-        "Result".bold(),
-        "Branch".bold(),
-        "Queued".bold()
-    );
-    println!("{}", "-".repeat(125));
-
-    for run in runs {
-        println!(
-            "{:<8} {:<16} {:<24} {:<12} {:<20} {:<20} {}",
-            run.id,
-            run.build_number.as_deref().unwrap_or("-"),
-            run.definition.name.as_deref().unwrap_or("-"),
-            format_optional(run.status.as_ref()),
-            format_optional(run.result.as_ref()),
-            run.source_branch
-                .as_deref()
-                .map(short_branch_name)
-                .unwrap_or("-"),
-            run.queue_time
-                .map(format_timestamp)
-                .unwrap_or_else(|| "-".to_string())
-        );
-    }
 }
 
 fn run_web_url(run: &Build) -> Option<&str> {
@@ -1574,7 +1474,7 @@ fn display_build_details(run: &models::Run) {
     }
 }
 
-async fn handle_runs_command(subcommand: &RunsSubCommands) -> Result<()> {
+async fn handle_runs_command(subcommand: &RunsSubCommands, format: OutputFormat) -> Result<()> {
     match subcommand {
         RunsSubCommands::List {
             project,
@@ -1602,12 +1502,13 @@ async fn handle_runs_command(subcommand: &RunsSubCommands) -> Result<()> {
             };
             match list_runs(&project_name, &filters).await {
                 Ok(listing) => {
-                    display_runs(&listing.runs);
-                    if listing.more {
-                        println!(
-                            "
-More runs exist; use --top to list more of them."
-                        );
+                    let runs = RunList {
+                        runs: &listing.runs,
+                        more: listing.more,
+                    };
+                    output::emit(&runs, format)?;
+                    if listing.more && format != OutputFormat::Text {
+                        eprintln!("More runs exist; use --top to list more of them.");
                     }
                 }
                 Err(e) => {
@@ -1764,7 +1665,7 @@ async fn handle_service_connection_command(
     Ok(())
 }
 
-pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
+pub async fn handle_command(subcommand: &PipelinesSubCommands, format: OutputFormat) -> Result<()> {
     match subcommand {
         PipelinesSubCommands::List {
             project,
@@ -1785,7 +1686,7 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
                 repository_type: *repository_type,
             };
             match list_pipelines(&project_name, &filters).await {
-                Ok(pipelines) => display_pipelines(&pipelines),
+                Ok(pipelines) => output::emit(&PipelineList(&pipelines), format)?,
                 Err(e) => {
                     eprintln!("❌ Failed to list the pipelines of '{project_name}'");
                     eprintln!("   {e}");
@@ -1816,7 +1717,7 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
                         println!("Opening pipeline in browser: {url}");
                         crate::browser::open_url(url)?;
                     }
-                    _ => display_pipeline(&definition),
+                    _ => output::emit(&PipelineDetails(&definition), format)?,
                 },
                 Err(e) => {
                     eprintln!("❌ Failed to retrieve the pipeline");
@@ -1826,7 +1727,7 @@ pub async fn handle_command(subcommand: &PipelinesSubCommands) -> Result<()> {
             }
         }
         PipelinesSubCommands::Runs { subcommand } => {
-            return handle_runs_command(subcommand).await;
+            return handle_runs_command(subcommand, format).await;
         }
         PipelinesSubCommands::Folder {
             subcommand:

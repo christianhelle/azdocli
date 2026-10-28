@@ -12,10 +12,12 @@ mod list;
 mod reviewers;
 mod show;
 mod update;
+mod views;
 mod work_items;
 
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::{get_credentials, Credentials};
+use crate::output::OutputFormat;
 use crate::project::get_project_or_default;
 use anyhow::{Context, Result};
 use azure_devops_rust_api::git;
@@ -304,7 +306,10 @@ fn parse_pr_id(id: &str) -> Result<i32> {
 }
 
 /// Routes pull-request subcommands to their handlers.
-pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Result<()> {
+pub async fn handle_command(
+    subcommand: &PullRequestsSubCommands,
+    format: OutputFormat,
+) -> anyhow::Result<()> {
     match subcommand {
         PullRequestsSubCommands::Create {
             project,
@@ -360,7 +365,7 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
                 target: target.as_deref(),
                 top: *top,
             };
-            list::list_pull_requests(project.as_deref(), repo.as_deref(), &filters).await?;
+            list::list_pull_requests(project.as_deref(), repo.as_deref(), &filters, format).await?;
         }
         PullRequestsSubCommands::Show {
             project,
@@ -368,7 +373,7 @@ pub async fn handle_command(subcommand: &PullRequestsSubCommands) -> anyhow::Res
             id,
             web,
         } => {
-            show::show_pull_request(project.as_deref(), repo, id, *web).await?;
+            show::show_pull_request(project.as_deref(), repo, id, *web, format).await?;
         }
         PullRequestsSubCommands::Commits {
             ref project,
