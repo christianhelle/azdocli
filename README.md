@@ -2,6 +2,7 @@
 
 [![Build](https://github.com/christianhelle/azdocli/actions/workflows/build.yml/badge.svg)](https://github.com/christianhelle/azdocli/actions/workflows/build.yml)
 [![Security Audit](https://github.com/christianhelle/azdocli/actions/workflows/security-audit.yml/badge.svg)](https://github.com/christianhelle/azdocli/actions/workflows/security-audit.yml)
+![Crates.io Version](https://img.shields.io/crates/v/azdocli)
 
 CLI tool for interacting with Azure DevOps.
 
@@ -114,6 +115,17 @@ Before using the CLI, you need to create a Personal Access Token (PAT) in Azure 
 - Regularly rotate your tokens
 - Use the minimum required permissions
 
+**How azdocli stores your PAT**:
+
+`azdocli login` never writes the PAT to disk in plaintext. The `pat` field in `~/.azdocli/credentials.json` and `~/.azdocli/profiles/*.json` holds an encrypted value (`enc:v1:...`) bound to the machine where you logged in:
+
+- **Windows**: encrypted with DPAPI using your Windows account's keys, plus this machine's id. Another user account, or the same file on another machine, cannot decrypt it.
+- **macOS / Linux**: encrypted with AES-256-GCM using a key derived from this machine's id and your home directory path. These inputs are not secret, so this is machine binding, not secret-keyed encryption. The real access control is the file permission: the file is only readable by your user (`0600`).
+
+Copying the value out of the file does not give you a usable token, and azdocli on another machine cannot decrypt a copied file, so there you run `azdocli login` again. (See the limits below for what an attacker can still do on macOS/Linux.) Credentials saved by older versions in plaintext are encrypted automatically the next time azdocli reads them.
+
+Limits: any program running as your user on the same machine can decrypt the PAT, just as azdocli does. On macOS/Linux, someone who has both the file and the machine's id (for example from a full-disk backup) can also decrypt it.
+
 ### Enterprise Azure DevOps Installations
 
 By default `azdocli` targets the Azure DevOps cloud (`https://dev.azure.com`). You can log in to an enterprise or on-premises Azure DevOps installation by providing the server URL instead of a cloud organization name.
@@ -160,26 +172,65 @@ azdocli pipelines list
 ### All Subcommands
 
 ```text
-azdocli [SUBCOMMAND]
+azdocli [OPTIONS] [SUBCOMMAND]
+
+OPTIONS:
+    -o, --output <OUTPUT>    Output format [default: text] [possible values: text, json, yaml, markdown]
 
 SUBCOMMANDS:
+    artifacts    Manage Azure Artifacts feeds and Universal Packages
     boards       Manage Azure DevOps boards
     login        Login to Azure DevOps with a Personal Access Token (PAT)
     logout       Logout from Azure DevOps
     migrate      Migrate one or more team projects between organizations
     pipelines    Manage Azure DevOps pipelines
     project      Set or view the default project
+    releases     Manage Azure DevOps classic releases
     repos        Manage Azure DevOps repos
     user         Manage user entitlements
 ```
+
+### Output Formats
+
+By default every command prints a human-readable summary. The global `-o/--output` option prints
+the result in another format instead, and can go before or after the subcommand:
+
+| Format | What it prints |
+| --- | --- |
+| `text` | The console summary (default) |
+| `json` | The full Azure DevOps API model, as pretty-printed JSON |
+| `yaml` | The full Azure DevOps API model, as YAML |
+| `markdown` | The console summary as Markdown headings, lists and tables |
+
+```shell
+# Names of all repositories, for scripting
+azdocli repos list -o json | jq -r '.[].name'
+
+# A pull request listing to paste into a wiki or issue
+azdocli repos pr list --output markdown
+
+# A work item as YAML
+azdocli boards work-item show --id 42 -o yaml
+```
+
+With `json`, `yaml` and `markdown`, progress and status messages are left out so the output can be
+piped. Errors still go to stderr.
+
+These commands support every format so far: `repos list`, `repos show`, `repos pr list`,
+`repos pr show`, `pipelines list`, `pipelines show`, `pipelines runs list`, `boards work-item list`,
+`boards work-item show` and `boards query`. The other commands accept only `text` and fail with a
+clear error for any other format.
 
 ## Features
 
 - **Repository Management**: List, create, delete, clone, view, browse and manage pull requests in repositories
 - **Pipeline Management**: Manage Azure DevOps pipelines
+- **Release Management**: List release definitions and releases, show a release, and create a release from a specific build
+- **Artifacts**: Browse Azure Artifacts feeds and packages, and download or publish Universal Packages
 - **Project Management**: Create, delete, list, and show Azure DevOps team projects, their teams, team members and process templates
-- **Migration**: Cross-tenant team-project migration with `azdocli migrate` (see [src/README.md](src/README.md#migrate) for the full guide)
+- **Migration**: Cross-tenant team-project migration with `azdocli migrate` (see [docs/migrate.md](docs/migrate.md) for the full guide)
 - **Board Management**: Manage Azure DevOps boards
+- **User Management**: Add, list, show, remove, and update organization users
 - **Authentication**: Secure login using Personal Access Tokens (PAT)
 - **Default Project**: Set a default project to avoid specifying --project for every command
 
@@ -378,7 +429,16 @@ azdocli repos pr list --repo MyRepository
 # Or specify a project explicitly
 azdocli repos pr list --repo MyRepository --project MyProject
 
-# Filter by state - active (the default), completed, abandoned, or all
+# Leave out --repo to list pull requests across every repository in the project
+azdocli repos pr list
+
+# Your pull requests, like the "Mine" tab in the web portal: the ones you
+# created and the ones assigned to you for review, with your vote
+azdocli repos pr list --mine
+azdocli repos pr list --mine --status completed --repo MyRepository
+
+# Filter by state - active (the default), completed, abandoned, or all.
+# Statuses other than active return at most 50 pull requests unless --top is given
 azdocli repos pr list --repo MyRepository --status completed
 
 # Filter by author, reviewer or branch, and cap the number of results
@@ -498,6 +558,26 @@ azdocli repos pr reviewers vote --repo MyRepository --id 123 --vote wait-for-aut
 
 Valid votes are `approve`, `approve-with-suggestions`, `reset`, `wait-for-author` and `reject`.
 
+##### Manage Linked Work Items
+
+Work items can also be linked when the pull request is created, with
+`repos pr create --work-item`.
+
+```sh
+# List the linked work items with their type, state and title
+azdocli repos pr work-item list --repo MyRepository --id 123
+
+# Link one or more work items, repeating the flag or separating IDs with commas
+azdocli repos pr work-item add --repo MyRepository --id 123 --work-item 42 --work-item 43
+azdocli repos pr work-item add --repo MyRepository --id 123 --work-item 42,43
+
+# Unlink a work item
+azdocli repos pr work-item remove --repo MyRepository --id 123 --work-item 42
+```
+
+A work item that is already linked is reported and skipped, so `add` can be run
+again safely.
+
 ##### Read and Write Comments
 
 ```sh
@@ -538,121 +618,100 @@ Valid thread statuses are `fixed`, `wont-fix`, `closed`, `by-design`, `active` a
 
 ### Pipeline Management Features
 
-#### Pipeline List Feature
+The `pipelines` commands follow the shape of the official Azure DevOps CLI (`az pipelines`) for the
+read commands and `run`: the commands below take the same names and arguments as their `az pipelines`
+counterparts. Commands that change pipelines (such as `create`, `update`, `delete`, `folder create`,
+`runs tag add` and `variable-group create`), the `build`, `release`, `pool`, `agent` and `queue`
+groups, and the global `--query` argument are not supported. `--output` is supported by
+`pipelines list`, `pipelines show` and `pipelines runs list` (see [Output Formats](#output-formats)).
 
-The `pipelines list` command allows you to list all pipelines in an Azure DevOps project:
+> **Breaking change:** earlier versions used their own command shape. The old forms map to the new
+> ones like this:
+>
+> | Before | Now |
+> | --- | --- |
+> | `pipelines runs --id 42` | `pipelines runs list --pipeline-ids 42` |
+> | `pipelines show --id 42 --build-id 123` | `pipelines runs show --id 123` |
+> | `pipelines logs --id 42 --build-id 123` | `pipelines runs logs --run-id 123` |
+> | `pipelines artifacts --build-id 123` | `pipelines runs artifact list --run-id 123` |
+> | `pipelines run --id 42 --variable a=1 --variable b=2` | `pipelines run --id 42 --variables a=1 b=2` |
+> | `pipelines variable-group list --name x` | `pipelines variable-group list --group-name x` (`--name` still works) |
+>
+> `pipelines show` now shows the pipeline itself rather than one of its runs.
+
+#### Pipelines
 
 ```sh
-# List all pipelines in the default project
+# List the pipelines of the default project (or pass --project MyProject)
 azdocli pipelines list
 
-# Or specify a project explicitly
-azdocli pipelines list --project MyProject
-```
+# Filter by name (use * as a wildcard), folder or repository, and order or cap the results
+azdocli pipelines list --name "web*" --folder-path team/web --top 10 --query-order NameAsc
+azdocli pipelines list --repository MyRepo
+azdocli pipelines list --repository owner/repo --repository-type github
 
-**List Features:**
+# Show a pipeline by ID, or by name (add --folder-path when names repeat across folders)
+azdocli pipelines show --id 42
+azdocli pipelines show --name web-ci --folder-path team/web
 
-- **Comprehensive listing**: View all pipelines in a project with IDs and names
-- **User-friendly formatting**: Easy-to-read table format
-- **Error handling**: Helpful error messages when project not found or access denied
+# Open the pipeline in the browser
+azdocli pipelines show --id 42 --open
 
-#### Pipeline Runs Feature
-
-The `pipelines runs` command shows all builds (runs) of a specified pipeline:
-
-```sh
-# Show all runs for a pipeline (using default project)
-azdocli pipelines runs --id 42
-
-# Or specify a project explicitly
-azdocli pipelines runs --id 42 --project MyProject
-```
-
-**Runs Features:**
-
-- **Run history**: View all runs for a specific pipeline
-- **Status visibility**: See current state and result of each pipeline run
-- **User-friendly formatting**: Clear display of run information
-
-#### Pipeline Show Feature
-
-The `pipelines show` command displays detailed information about a specific pipeline build:
-
-```sh
-# Show details of a specific pipeline build (using default project)
-azdocli pipelines show --id 42 --build-id 123
-
-# Or specify a project explicitly
-azdocli pipelines show --id 42 --project MyProject --build-id 123
-```
-
-**Show Features:**
-
-- **Detailed information**: Run number, pipeline, state, result and timestamps
-- **Web link**: The URL of the run in the Azure DevOps web interface
-- **Error handling**: Helpful error messages when build not found
-
-#### Pipeline Run Feature
-
-The `pipelines run` command queues a new pipeline run:
-
-```sh
-# Run a pipeline (using default project)
+# Queue a run, by ID or by name
 azdocli pipelines run --id 42
+azdocli pipelines run --name web-ci --branch develop
+azdocli pipelines run --id 42 --commit-id 1a2b3c4d
 
-# Or specify a project explicitly
-azdocli pipelines run --id 42 --project MyProject
+# Set variables and template parameters (space separated NAME=VALUE pairs)
+azdocli pipelines run --id 42 --variables environment=staging verbose=true --parameters image=ubuntu-latest
 
-# Run a specific branch
-azdocli pipelines run --id 42 --branch develop
+# Open the new run in the browser
+azdocli pipelines run --id 42 --open
 
-# Pass pipeline variables (repeat --variable for more than one)
-azdocli pipelines run --id 42 --variable environment=staging --variable verbose=true
+# List the folders pipelines are organized in
+azdocli pipelines folder list
+azdocli pipelines folder list --path team --query-order Asc
+
+# List the variables defined on a pipeline in Azure DevOps (the Variables button of the pipeline
+# editor). Variables declared in the YAML file are not included. Secret values are never returned.
+azdocli pipelines variable list --pipeline-id 42
+azdocli pipelines variable list --pipeline-name web-ci
 ```
 
-**Run Features:**
-
-- **Pipeline execution**: Start a pipeline with a single command
-- **Branch selection**: Queue the run against any branch with `--branch`
-- **Runtime variables**: Set pipeline variables with repeatable `--variable NAME=VALUE` arguments
-- **Run summary**: Prints the new run number, state and web URL
-- **Error handling**: Clear feedback when pipeline cannot be started
-
-#### Pipeline Logs Feature
-
-The `pipelines logs` command lists the logs of a run, or prints one of them:
+#### Pipeline Runs
 
 ```sh
-# List the logs produced by a run
-azdocli pipelines logs --id 42 --build-id 123
+# List the runs of the project, or of one or more pipelines. Without --top only the first page of
+# results is shown, with a note when more runs exist
+azdocli pipelines runs list
+azdocli pipelines runs list --pipeline-ids 42 43 --top 10
 
-# Print the contents of a single log
-azdocli pipelines logs --id 42 --build-id 123 --log-id 7
+# Filter by branch, status, result, reason, requester or tags, and choose the order
+azdocli pipelines runs list --branch main --result failed --query-order QueueTimeDesc
+azdocli pipelines runs list --status inProgress --reason pullRequest
+azdocli pipelines runs list --requested-for "someone@example.com" --tags nightly release
+
+# Show a run, or open it in the browser
+azdocli pipelines runs show --id 123
+azdocli pipelines runs show --id 123 --open
+
+# List the artifacts and tags of a run
+azdocli pipelines runs artifact list --run-id 123
+azdocli pipelines runs tag list --run-id 123
+
+# List the logs of a run, or print one of them (not part of az pipelines)
+azdocli pipelines runs logs --run-id 123
+azdocli pipelines runs logs --run-id 123 --log-id 7
 ```
 
-**Logs Features:**
+**Pipeline Features:**
 
-- **Log inventory**: See every log a run produced, with line counts and timestamps
+- **Same shape as `az pipelines`**: `list`, `show`, `run`, `runs list/show`, `runs artifact list`, `runs tag list`, `folder list`, `variable list` and `variable-group list/show` take the same arguments as in `az pipelines`
+- **Pipelines by name**: `show`, `run` and `variable list` accept a pipeline name instead of an ID
+- **Run filters**: Filter runs across the project by pipeline, branch, status, result, reason, requester and tags
 - **Full log text**: Print a log to stdout so it can be piped, searched or saved
-- **Error handling**: Clear feedback when the run or log does not exist
-
-#### Pipeline Artifacts Feature
-
-The `pipelines artifacts` command lists the artifacts a run published:
-
-```sh
-# List the artifacts of a run
-azdocli pipelines artifacts --build-id 123
-
-# Or specify a project explicitly
-azdocli pipelines artifacts --build-id 123 --project MyProject
-```
-
-**Artifacts Features:**
-
-- **Artifact inventory**: See every artifact published by a run
-- **Download URLs**: Print the download URL of each artifact
-- **Error handling**: Clear feedback when the run does not exist
+- **Browser integration**: `--open` (or `--web`) opens a pipeline or run in the Azure DevOps web interface
+- **Default project support**: Use with default project or specify --project explicitly
 
 #### Variable Groups and Service Connections
 
@@ -663,11 +722,17 @@ pipeline consumes:
 # List the variable groups of the default project
 azdocli pipelines variable-group list
 
-# Filter by name and cap the number of results
-azdocli pipelines variable-group list --name "release" --top 10
+# Filter by name, order by ID and cap the number of results
+azdocli pipelines variable-group list --group-name "release" --query-order Asc --top 10
+
+# Use * for a pattern instead of a substring match
+azdocli pipelines variable-group list --group-name "release-*"
+
+# Only groups you can use (or manage) in a pipeline
+azdocli pipelines variable-group list --action use
 
 # Show a variable group and its variables (secret values are never returned by Azure DevOps)
-azdocli pipelines variable-group show --id 7
+azdocli pipelines variable-group show --group-id 7
 
 # List the service connections of the default project
 azdocli pipelines service-connection list
@@ -686,6 +751,102 @@ azdocli pipelines service-connection show --id 00000000-0000-0000-0000-000000000
 - **Service connection inventory**: List connections with their type and readiness, filtered by type
 - **Default project support**: Use with default project or specify --project explicitly
 
+### Release Management Features
+
+The `releases` command works with classic release pipelines. Its main use is creating a release that
+deploys a specific build, rather than the latest build of the linked artifact:
+
+```sh
+# Find the ID of the release definition (release pipeline)
+azdocli releases definitions
+azdocli releases definitions --name "web"
+
+# Find the build to release, e.g. from the runs of its build pipeline
+azdocli pipelines runs list --pipeline-ids 42
+
+# Create a release of build 1234 from release definition 5
+azdocli releases create --definition-id 5 --build-id 1234
+
+# When the definition links several build artifacts, name the one the build belongs to
+azdocli releases create --definition-id 5 --build-id 1234 --artifact-alias _web-ci --description "Hotfix for #321"
+
+# List releases, optionally for one definition
+azdocli releases list
+azdocli releases list --definition-id 5 --top 10
+
+# Show a release and the status of each of its stages
+azdocli releases show --id 87
+```
+
+**Release Features:**
+
+- **Release a specific build**: The build is pinned to the definition's primary build artifact, or to the artifact named with `--artifact-alias`
+- **Helpful errors**: An unknown alias, or a definition without a primary build artifact, reports the aliases you can choose from
+- **Stage overview**: `releases show` lists every stage with its deployment status
+- **Default project support**: Use with default project or specify --project explicitly
+
+### Artifacts Features
+
+The `artifacts` command browses Azure Artifacts feeds and transfers Universal Packages, mirroring
+`az artifacts universal`:
+
+```sh
+# List every feed in the organization, or only the feeds of a project
+azdocli artifacts feeds list
+azdocli artifacts feeds list --project MyProject
+
+# List the packages of a feed and the versions of one package
+azdocli artifacts packages list --feed tools
+azdocli artifacts packages list --feed tools --protocol upack --name cli
+azdocli artifacts packages versions --feed tools --name cli
+
+# Download a Universal Package, optionally only some of its files
+azdocli artifacts universal download --feed tools --name cli --version 1.2.3 --path ./cli
+azdocli artifacts universal download --feed tools --name cli --version 1.2.3 --path ./cli --file-filter "*.dll"
+
+# Publish a directory as a Universal Package
+azdocli artifacts universal publish --feed tools --name cli --version 1.2.4 --path ./dist --description "CLI tools"
+```
+
+**Artifacts Features:**
+
+- **Feed scope**: Feeds are organization-scoped by default, like in `az`; pass `--scope project` or `--project` for a feed created in a project (`--scope project` alone uses the default project)
+- **Native download**: Universal Packages are downloaded directly over the Azure Artifacts dedup protocol, without any extra tools. Package paths that would escape `--path` are refused
+- **Publish via ArtifactTool**: Publishing uses Microsoft's ArtifactTool, just like `az artifacts universal publish`. The tool is downloaded from your organization on first use and cached in `~/.azdocli/tools/ArtifactTool/<version>`; the PAT is handed to it through an environment variable, never on the command line
+- **Azure DevOps Services only**: Universal Packages are not available on Azure DevOps Server, so `universal download` and `universal publish` require the `https://dev.azure.com` host
+
+### User Management Features
+
+The `user` commands allow you to manage users and licenses in your Azure DevOps organization:
+
+```sh
+# Add a user with a license
+azdocli user add --email user@contoso.com --license express
+
+# List users (excluding users added via AAD groups)
+azdocli user list
+
+# Show user details by ID or email
+azdocli user show --id 00000000-0000-0000-0000-000000000000
+azdocli user show --email user@contoso.com
+
+# Remove a user by ID or email
+azdocli user remove --id 00000000-0000-0000-0000-000000000000
+azdocli user remove --email user@contoso.com
+
+# Update a user's license type
+azdocli user update --email user@contoso.com --license stakeholder
+```
+
+**User Features:**
+
+- **Organization-wide management**: Manage user access at the organization level
+- **Flexible user targeting**: Use either user ID or email for show, remove, and update
+- **License updates**: Set raw Azure DevOps account license types (`none`, `earlyAdopter`, `express`, `professional`, `advanced`, `stakeholder`)
+- **AAD-group filtering**: User list excludes accounts whose entitlement is inherited from AAD group rules
+- **Error handling**: Clear guidance for missing users and ambiguous email matches
+
+
 ### Board Management Features
 
 #### Work Item Management
@@ -695,6 +856,12 @@ The `boards work-item` commands allow you to manage work items in an Azure DevOp
 ```sh
 # List work items assigned to me (using default project)
 azdocli boards work-item list
+
+# List work items assigned to someone else, by display name or email
+azdocli boards work-item list --assigned-to "jane@contoso.com"
+
+# List all work items in the project, whoever they are assigned to
+azdocli boards work-item list --all
 
 # List work items with filters
 azdocli boards work-item list --state "Active" --work-item-type "Bug" --limit 20
@@ -715,6 +882,13 @@ azdocli boards work-item show --id 123 --project MyProject
 # Supported types: bug, task, user-story, feature, epic
 azdocli boards work-item create bug --title "Fix login issue" --description "Users cannot login after password change"
 
+# Create a task under an existing work item, such as a product backlog item
+azdocli boards work-item create task --title "Write integration tests" --parent 1234
+
+# Set iteration and area paths on create or update
+azdocli boards work-item create task --title "Write tests" --iteration "MyProject\Sprint 1" --area "MyProject\Team A"
+azdocli boards work-item update --id 123 --iteration "MyProject\Sprint 1" --area "MyProject\Team A"
+
 # Update a work item (using default project)
 azdocli boards work-item update --id 123 --title "New title" --state "Active" --priority 2
 
@@ -728,11 +902,13 @@ azdocli boards work-item delete --id 123 --soft-delete
 **Work Item Features:**
 
 - **Full CRUD operations**: Create, read, update, and delete work items
-- **List my work items**: View work items assigned to you with filtering options
+- **List work items**: View work items assigned to you (default), to someone else with `--assigned-to <name or email>`, or to anyone with `--all`
 - **Multiple work item types**: Support for bug, task, user story, feature, and epic
+- **Parent links**: Create a work item as a child of another with `--parent <ID>`, e.g. tasks under a product backlog item
 - **Filtering**: Filter by state, work item type, and limit number of results
 - **Web integration**: Open work items directly in browser with `--web` option
 - **Soft delete**: Option to change state to "Removed" instead of permanent deletion
+- **Iteration and area paths**: Set `System.IterationPath` and `System.AreaPath` on create or update with `--iteration` and `--area`
 - **Field updates**: Update title, description, state, and priority
 - **Default project support**: Use with default project or specify --project explicitly
 - **Error handling**: Clear feedback when work item not found or access denied
@@ -787,6 +963,65 @@ azdocli boards query --wiql "SELECT [System.Id] FROM WorkItems" --limit 10
 - **Arbitrary WIQL**: Anything the Azure DevOps query editor accepts
 - **Full work item details**: Results are shown in the same table as `work-item list`
 - **Result limits**: Cap the number of work items fetched with `--limit`
+
+#### Areas
+
+The `boards area` commands manage the area paths of a project and the areas each team owns:
+
+```sh
+# List the area tree of the default project, three levels deep
+azdocli boards area project list --depth 3
+
+# Show, create, rename and delete area paths
+azdocli boards area project show --path "\MyProject\Area\Team A"
+azdocli boards area project create --name "Backend" --path "MyProject\Team A"
+azdocli boards area project update --path "MyProject\Team A\Backend" --name "Services"
+azdocli boards area project delete --path "MyProject\Team A\Services" --reclassify-id 12
+
+# Move the area with ID 15, and everything below it, under Team A
+azdocli boards area project update --path "MyProject\Team A" --child-id 15
+
+# Manage the areas a team owns
+azdocli boards area team list --team "Team A"
+azdocli boards area team add --team "Team A" --path "MyProject\Team A" --include-sub-areas --set-as-default
+azdocli boards area team update --team "Team A" --path "MyProject\Team A" --include-sub-areas false
+azdocli boards area team remove --team "Team A" --path "MyProject\Shared"
+```
+
+#### Iterations
+
+The `boards iteration` commands manage the iterations of a project and the iterations each team works in:
+
+```sh
+# List the iteration tree of the default project, two levels deep
+azdocli boards iteration project list --depth 2
+
+# Create, reschedule, rename and delete iterations
+azdocli boards iteration project create --name "Sprint 1" --start-date 2026-06-01 --finish-date 2026-06-14
+azdocli boards iteration project update --path "MyProject\Sprint 1" --start-date 2026-06-02 --finish-date 2026-06-15
+azdocli boards iteration project update --path "MyProject\Sprint 1" --name "Sprint 01"
+azdocli boards iteration project show --path "\MyProject\Iteration\Sprint 01"
+azdocli boards iteration project delete --path "MyProject\Sprint 01"
+
+# Manage the iterations a team works in
+azdocli boards iteration team list --team "Team A"
+azdocli boards iteration team list --team "Team A" --timeframe current
+azdocli boards iteration team add --team "Team A" --path "MyProject\Sprint 1"
+azdocli boards iteration team remove --team "Team A" --id 5a8e3c5e-8d61-4b0f-b5c4-1b9a6a9c5e3e
+azdocli boards iteration team list-work-items --team "Team A" --path "MyProject\Sprint 1"
+
+# Default and backlog iterations of a team
+azdocli boards iteration team show-default-iteration --team "Team A"
+azdocli boards iteration team set-default-iteration --team "Team A" --default-iteration-macro @CurrentIteration
+azdocli boards iteration team show-backlog-iteration --team "Team A"
+azdocli boards iteration team set-backlog-iteration --team "Team A" --path "MyProject"
+```
+
+**Area and Iteration Features:**
+
+- **Flexible paths**: `--path` accepts the absolute form Azure DevOps shows (`\MyProject\Area\Team A`), the form work items use (`MyProject\Team A`), or a path relative to the project's root (`Team A`)
+- **Iterations by path or ID**: Team iteration commands take either the iteration's identifier (`--id`) or its path (`--path`)
+- **Safe team edits**: Adding an area that a team already owns, or removing a team's default area, is refused with a clear message
 
 ## Testing
 

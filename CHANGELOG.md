@@ -3,6 +3,39 @@
 ## [Unreleased Changes]
 
 ### Features
+- Add --output flag with JSON, YAML and Markdown rendering ([#145](https://github.com/christianhelle/azdocli/pull/145)) ([@christianhelle](https://github.com/christianhelle/))
+- Only ask for the PAT once on login ([#144](https://github.com/christianhelle/azdocli/pull/144)) ([@christianhelle](https://github.com/christianhelle/))
+- Align the pipelines commands with az pipelines ([#141](https://github.com/christianhelle/azdocli/pull/141)) ([@christianhelle](https://github.com/christianhelle/))
+- Add area and iteration management to boards ([#143](https://github.com/christianhelle/azdocli/pull/143)) ([@christianhelle](https://github.com/christianhelle/))
+- Add support for Azure Artifacts ([#142](https://github.com/christianhelle/azdocli/pull/142)) ([@christianhelle](https://github.com/christianhelle/))
+- Filter pull request listings - Mine / Active / Completed / Abandoned ([#140](https://github.com/christianhelle/azdocli/pull/140)) ([@christianhelle](https://github.com/christianhelle/))
+- Add --assigned-to and --all options to boards work-item list ([#139](https://github.com/christianhelle/azdocli/pull/139)) ([@christianhelle](https://github.com/christianhelle/))
+- Fix variable-group show for unknown IDs and substring --name filter ([#138](https://github.com/christianhelle/azdocli/pull/138)) ([@christianhelle](https://github.com/christianhelle/))
+- Add support for managing releases ([#137](https://github.com/christianhelle/azdocli/pull/137)) ([@christianhelle](https://github.com/christianhelle/))
+
+
+## [0.6.4](https://github.com/christianhelle/azdocli/releases/tag/0.6.4) (2026-10-19)
+
+### Merged Pull Requests
+- Publish the up-to-date root README to crates.io ([#135](https://github.com/christianhelle/azdocli/pull/135)) ([@christianhelle](https://github.com/christianhelle/))
+
+### Features
+- Encrypt the stored PAT and bind it to the machine it was entered on ([#136](https://github.com/christianhelle/azdocli/pull/136)) ([@christianhelle](https://github.com/christianhelle/))
+- Reconcile documented terminal icon set with actual usage ([#134](https://github.com/christianhelle/azdocli/pull/134)) ([@christianhelle](https://github.com/christianhelle/))
+- Add support for --area and --iteration on create/update work-item ([#133](https://github.com/christianhelle/azdocli/pull/133)) ([@christianhelle](https://github.com/christianhelle/))
+
+
+## [0.6.3](https://github.com/christianhelle/azdocli/releases/tag/0.6.3) (2026-09-22)
+
+### Features
+- Use the app icon for the Windows executable and snap package ([#131](https://github.com/christianhelle/azdocli/pull/131)) ([@christianhelle](https://github.com/christianhelle/))
+- Create work items with a parent ([#132](https://github.com/christianhelle/azdocli/pull/132)) ([@christianhelle](https://github.com/christianhelle/))
+- Link work items to an existing pull request ([#129](https://github.com/christianhelle/azdocli/pull/129)) ([@christianhelle](https://github.com/christianhelle/))
+
+
+## [0.6.2](https://github.com/christianhelle/azdocli/releases/tag/0.6.2) (2026-09-08)
+
+### Features
 - Queue pipeline runs and read run logs and artifacts ([#123](https://github.com/christianhelle/azdocli/pull/123)) ([@christianhelle](https://github.com/christianhelle/))
 - List a project's teams, team members and process templates ([#125](https://github.com/christianhelle/azdocli/pull/125)) ([@christianhelle](https://github.com/christianhelle/))
 - Query work items, comment on them, and list work item types ([#124](https://github.com/christianhelle/azdocli/pull/124)) ([@christianhelle](https://github.com/christianhelle/))
@@ -18,9 +51,9 @@
 
 ### Merged Pull Requests
 - Fix GitHub Pages deployment for docs/web site ([#119](https://github.com/christianhelle/azdocli/pull/119)) (@Copilot)
-- Add --description-file support for PR creation ([#118](https://github.com/christianhelle/azdocli/pull/118)) ([@christianhelle](https://github.com/christianhelle/))
 
 ### Features
+- Add --description-file support for PR creation ([#118](https://github.com/christianhelle/azdocli/pull/118)) ([@christianhelle](https://github.com/christianhelle/))
 - Add `repos pr update` command ([#120](https://github.com/christianhelle/azdocli/pull/120)) ([@christianhelle](https://github.com/christianhelle/))
 
 

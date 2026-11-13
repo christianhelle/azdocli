@@ -142,5 +142,29 @@ foreach ($subcommand in @("list", "add"))
   Invoke-Cli boards work-item comment $subcommand --help
 }
 
+foreach ($group in @("area", "iteration"))
+{
+  Write-Host "`nTesting boards $group help..." -ForegroundColor Yellow
+  Invoke-Cli boards $group --help
+
+  foreach ($subcommand in @("list", "show", "create", "delete", "update"))
+  {
+    Write-Host "`nTesting boards $group project $subcommand help..." -ForegroundColor Yellow
+    Invoke-Cli boards $group project $subcommand --help
+  }
+}
+
+foreach ($subcommand in @("list", "add", "remove", "update"))
+{
+  Write-Host "`nTesting boards area team $subcommand help..." -ForegroundColor Yellow
+  Invoke-Cli boards area team $subcommand --help
+}
+
+foreach ($subcommand in @("list", "add", "remove", "list-work-items", "show-default-iteration", "set-default-iteration", "show-backlog-iteration", "set-backlog-iteration"))
+{
+  Write-Host "`nTesting boards iteration team $subcommand help..." -ForegroundColor Yellow
+  Invoke-Cli boards iteration team $subcommand --help
+}
+
 Write-Host "`nAll command-line interface tests completed successfully!" -ForegroundColor Green
 Write-Host "Note: Actual functionality requires Azure DevOps authentication." -ForegroundColor Cyan

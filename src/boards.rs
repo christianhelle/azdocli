@@ -1,15 +1,23 @@
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
-use crate::auth::url::web_work_item_url;
+use crate::auth::url::{api_work_item_url, web_work_item_url};
+use crate::output::{self, OutputFormat};
 use crate::project::get_project_or_default;
 use crate::text::escape_control_characters;
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::wit::models::json_patch_operation::Op;
 use azure_devops_rust_api::wit::models::JsonPatchOperation;
 use azure_devops_rust_api::wit::{self, models};
-use clap::Subcommand;
+use clap::{Subcommand, ValueEnum};
 use colored::Colorize;
 use serde_json::json;
+
+mod area;
+mod classification;
+mod iteration;
+mod views;
+
+use views::{WorkItemDetails, WorkItemList};
 
 #[derive(Subcommand, Clone)]
 pub enum BoardsSubCommands {
@@ -17,6 +25,16 @@ pub enum BoardsSubCommands {
     WorkItem {
         #[clap(subcommand)]
         subcommand: WorkItemSubCommands,
+    },
+    /// Manage area paths of a project and its teams
+    Area {
+        #[clap(subcommand)]
+        subcommand: area::AreaSubCommands,
+    },
+    /// Manage iterations of a project and its teams
+    Iteration {
+        #[clap(subcommand)]
+        subcommand: iteration::IterationSubCommands,
     },
     /// Run a WIQL query and list the work items it returns
     Query {
@@ -32,14 +50,13 @@ pub enum BoardsSubCommands {
     },
 }
 
-#[derive(Subcommand, Clone, Debug)]
+#[derive(ValueEnum, Clone, Debug)]
 pub enum WorkItemType {
     /// Bug work item type
     Bug,
     /// Task work item type
     Task,
     /// User Story work item type
-    #[clap(name = "user-story")]
     UserStory,
     /// Feature work item type
     Feature,
@@ -80,7 +97,7 @@ pub enum WorkItemSubCommands {
     /// Create a new work item
     Create {
         /// Work item type
-        #[clap(subcommand)]
+        #[clap(value_enum)]
         work_item_type: WorkItemType,
         /// Work item title
         #[clap(short, long)]
@@ -88,6 +105,15 @@ pub enum WorkItemSubCommands {
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
+        /// ID of the parent work item, e.g. the product backlog item a task belongs to
+        #[clap(long, value_parser = clap::value_parser!(i32).range(1..))]
+        parent: Option<i32>,
+        /// Iteration path for the work item
+        #[clap(long = "iteration")]
+        iteration_path: Option<String>,
+        /// Area path for the work item
+        #[clap(long = "area")]
+        area_path: Option<String>,
     },
     /// Delete a work item
     Delete {
@@ -101,11 +127,17 @@ pub enum WorkItemSubCommands {
         #[clap(long)]
         soft_delete: bool,
     },
-    /// List work items assigned to me
+    /// List work items assigned to me, to someone else, or to anyone
     List {
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
+        /// List work items assigned to this person (display name or email; '@me' for yourself)
+        #[clap(long, conflicts_with = "all")]
+        assigned_to: Option<String>,
+        /// List all work items in the project, whoever they are assigned to
+        #[clap(long)]
+        all: bool,
         /// Filter by work item state (e.g., 'Active', 'New', 'Resolved')
         #[clap(long)]
         state: Option<String>,
@@ -159,6 +191,12 @@ pub enum WorkItemSubCommands {
         /// New priority for the work item (e.g., 1, 2, 3, 4)
         #[clap(long)]
         priority: Option<i32>,
+        /// New iteration path for the work item
+        #[clap(long = "iteration")]
+        iteration_path: Option<String>,
+        /// New area path for the work item
+        #[clap(long = "area")]
+        area_path: Option<String>,
     },
 }
 
@@ -287,6 +325,12 @@ fn create_wit_client() -> Result<wit::Client> {
     Ok(factory.build_wit())
 }
 
+fn create_work_client() -> Result<azure_devops_rust_api::work::Client> {
+    let creds = get_credentials()?;
+    let factory = CredentialClientFactory::new(&creds)?;
+    Ok(factory.build_work())
+}
+
 async fn get_work_item(project: &str, id: &str) -> Result<models::WorkItem> {
     let id_int = parse_work_item_id(id)?;
 
@@ -307,24 +351,68 @@ async fn get_work_item(project: &str, id: &str) -> Result<models::WorkItem> {
     }
 }
 
+/// Builds the patch that creates a work item, optionally as a child of the
+/// work item at `parent_url`.
+fn create_work_item_patch(
+    title: &str,
+    parent_url: Option<&str>,
+    iteration_path: Option<&str>,
+    area_path: Option<&str>,
+) -> Vec<JsonPatchOperation> {
+    let mut patch = vec![JsonPatchOperation {
+        from: None,
+        op: Some(Op::Add),
+        path: Some("/fields/System.Title".to_owned()),
+        value: Some(json!(title)),
+    }];
+
+    for (field, value) in [
+        ("System.IterationPath", iteration_path),
+        ("System.AreaPath", area_path),
+    ] {
+        if let Some(value) = value {
+            patch.push(JsonPatchOperation {
+                from: None,
+                op: Some(Op::Add),
+                path: Some(format!("/fields/{field}")),
+                value: Some(json!(value)),
+            });
+        }
+    }
+
+    if let Some(parent_url) = parent_url {
+        patch.push(JsonPatchOperation {
+            from: None,
+            op: Some(Op::Add),
+            path: Some("/relations/-".to_owned()),
+            value: Some(json!({
+                "rel": "System.LinkTypes.Hierarchy-Reverse",
+                "url": parent_url,
+            })),
+        });
+    }
+
+    patch
+}
+
 async fn create_work_item(
     project: &str,
     work_item_type: &WorkItemType,
     title: &str,
+    parent: Option<i32>,
+    iteration_path: Option<&str>,
+    area_path: Option<&str>,
 ) -> Result<models::WorkItem> {
     match get_credentials() {
         Ok(creds) => {
             let client = create_wit_client()?;
+            let parent_url =
+                parent.map(|id| api_work_item_url(&creds.base_url, &creds.organization, id));
             let work_item = client
                 .work_items_client()
                 .create(
                     creds.organization.clone(),
-                    vec![JsonPatchOperation {
-                        from: None,
-                        op: Some(Op::Add),
-                        path: Some("/fields/System.Title".to_owned()),
-                        value: Some(json!(title)),
-                    }],
+                    create_work_item_patch(title, parent_url.as_deref(), iteration_path, area_path),
                     project.to_string(),
                     match work_item_type {
                         WorkItemType::Bug => "Bug",
@@ -345,57 +433,53 @@ async fn create_work_item(
     }
 }
 
-async fn update_work_item(
-    project: &str,
-    id: &str,
+fn update_work_item_patch(
     title: Option<&str>,
     description: Option<&str>,
     state: Option<&str>,
     priority: Option<i32>,
+    iteration_path: Option<&str>,
+    area_path: Option<&str>,
+) -> Vec<JsonPatchOperation> {
+    let mut patch_operations = Vec::new();
+
+    for (field, value) in [
+        ("System.Title", title.map(|value| json!(value))),
+        ("System.Description", description.map(|value| json!(value))),
+        ("System.State", state.map(|value| json!(value))),
+        (
+            "Microsoft.VSTS.Common.Priority",
+            priority.map(|priority| json!(priority)),
+        ),
+        (
+            "System.IterationPath",
+            iteration_path.map(|value| json!(value)),
+        ),
+        ("System.AreaPath", area_path.map(|value| json!(value))),
+    ] {
+        if let Some(value) = value {
+            patch_operations.push(JsonPatchOperation {
+                from: None,
+                op: Some(Op::Add),
+                path: Some(format!("/fields/{field}")),
+                value: Some(value),
+            });
+        }
+    }
+
+    patch_operations
+}
+
+async fn update_work_item(
+    project: &str,
+    id: &str,
+    patch_operations: Vec<JsonPatchOperation>,
 ) -> Result<models::WorkItem> {
     let id_int = parse_work_item_id(id)?;
 
     match get_credentials() {
         Ok(creds) => {
             let client = create_wit_client()?;
-            let mut patch_operations = Vec::new();
-
-            if let Some(title) = title {
-                patch_operations.push(JsonPatchOperation {
-                    from: None,
-                    op: Some(Op::Add),
-                    path: Some("/fields/System.Title".to_owned()),
-                    value: Some(json!(title)),
-                });
-            }
-
-            if let Some(description) = description {
-                patch_operations.push(JsonPatchOperation {
-                    from: None,
-                    op: Some(Op::Add),
-                    path: Some("/fields/System.Description".to_owned()),
-                    value: Some(json!(description)),
-                });
-            }
-
-            if let Some(state) = state {
-                patch_operations.push(JsonPatchOperation {
-                    from: None,
-                    op: Some(Op::Add),
-                    path: Some("/fields/System.State".to_owned()),
-                    value: Some(json!(state)),
-                });
-            }
-
-            if let Some(priority) = priority {
-                patch_operations.push(JsonPatchOperation {
-                    from: None,
-                    op: Some(Op::Add),
-                    path: Some("/fields/Microsoft.VSTS.Common.Priority".to_owned()),
-                    value: Some(json!(priority)),
-                });
-            }
-
             let work_item = client
                 .work_items_client()
                 .update(
@@ -433,7 +517,12 @@ async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<
                         }
                     })
                     .unwrap_or("Closed");
-                update_work_item(project, id, None, None, Some(state), None).await?;
+                update_work_item(
+                    project,
+                    id,
+                    update_work_item_patch(None, None, Some(state), None, None, None),
+                )
+                .await?;
             } else {
                 create_wit_client()?
                     .work_items_client()
@@ -463,105 +552,24 @@ fn open_work_item_in_browser(
     Ok(())
 }
 
-fn display_work_item(work_item: &models::WorkItem) {
-    println!("📋 Work Item Details");
-    println!("=====================");
-
-    println!("🆔 ID: {}", work_item.id);
-
-    if let Some(rev) = work_item.rev {
-        println!("📚 Revision: {rev}");
-    }
-
-    if let Some(fields) = work_item.fields.as_object() {
-        if let Some(title) = fields.get("System.Title").and_then(|v| v.as_str()) {
-            println!("📝 Title: {title}");
-        }
-
-        if let Some(state) = fields.get("System.State").and_then(|v| v.as_str()) {
-            println!("🔄 State: {state}");
-        }
-
-        if let Some(work_item_type) = fields.get("System.WorkItemType").and_then(|v| v.as_str()) {
-            println!("📌 Type: {work_item_type}");
-        }
-
-        if let Some(created_by) = fields.get("System.CreatedBy").and_then(|v| v.as_str()) {
-            println!("👤 Created By: {created_by}");
-        }
-
-        if let Some(created_date) = fields.get("System.CreatedDate").and_then(|v| v.as_str()) {
-            println!("📅 Created Date: {created_date}");
-        }
-
-        if let Some(changed_by) = fields.get("System.ChangedBy").and_then(|v| v.as_str()) {
-            println!("🔄 Changed By: {changed_by}");
-        }
-
-        if let Some(changed_date) = fields.get("System.ChangedDate").and_then(|v| v.as_str()) {
-            println!("📅 Changed Date: {changed_date}");
-        }
-
-        if let Some(priority) = fields
-            .get("Microsoft.VSTS.Common.Priority")
-            .and_then(serde_json::Value::as_i64)
-        {
-            println!("🔝 Priority: {priority}");
-        }
-
-        if let Some(desc) = fields.get("System.Description").and_then(|v| v.as_str()) {
-            println!("\n📄 Description:");
-            println!("{desc}");
-        }
+pub(crate) fn display_work_items_list(heading: &str, work_items: &[models::WorkItem]) {
+    // Text-only callers print like `println!` and have no error to return.
+    if let Err(e) = print_work_items(heading, work_items, OutputFormat::Text) {
+        eprintln!("❌ Failed to print work items: {e}");
     }
 }
 
-fn display_work_items_list(heading: &str, work_items: &[models::WorkItem]) {
-    println!();
-    println!("📋 {heading} ({} items)", work_items.len());
-    let separator = "=".repeat(80);
-    println!("{separator}");
-    println!("{:<8} {:<15} {:<20} {:<30}", "ID", "Type", "State", "Title");
-    let dash_separator = "-".repeat(80);
-    println!("{dash_separator}");
-
-    for work_item in work_items {
-        let id = work_item.id;
-
-        let (work_item_type, state, title) = if let Some(fields) = work_item.fields.as_object() {
-            let wit_type = fields
-                .get("System.WorkItemType")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Unknown");
-
-            let state = fields
-                .get("System.State")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Unknown");
-
-            let title = fields
-                .get("System.Title")
-                .and_then(|v| v.as_str())
-                .unwrap_or("No Title");
-
-            (wit_type, state, title)
-        } else {
-            ("Unknown", "Unknown", "No Title")
-        };
-
-        // Truncate title if too long
-        let truncated_title = if title.len() > 30 {
-            format!("{}...", &title[..27])
-        } else {
-            title.to_string()
-        };
-
-        println!("{id:<8} {work_item_type:<15} {state:<20} {truncated_title:<30}");
-    }
-
-    println!();
-    println!("💡 Use 'azdocli boards work-item show --id <ID>' for detailed information");
-    println!("💡 Use 'azdocli boards work-item show --id <ID> --web' to open in browser");
+/// Prints a titled work item list in `format`.
+fn print_work_items(
+    heading: &str,
+    work_items: &[models::WorkItem],
+    format: OutputFormat,
+) -> Result<()> {
+    let list = WorkItemList {
+        heading,
+        work_items,
+    };
+    output::emit(&list, format)
 }
 
 /// Runs a WIQL query and fetches the full work items behind the ids it returns.
@@ -579,6 +587,9 @@ async fn run_wiql_query(project: &str, wiql: &str, limit: i32) -> Result<Vec<mod
             project.to_string(),
             String::new(),
         )
+        // Without $top the query returns every matching id, which for a whole
+        // project can run into Azure DevOps' result and time limits.
+        .top(limit)
         .await?;
 
     let mut work_items = Vec::new();
@@ -602,13 +613,84 @@ async fn run_wiql_query(project: &str, wiql: &str, limit: i32) -> Result<Vec<mod
     Ok(work_items)
 }
 
-async fn list_my_work_items(
+/// Whose work items `work-item list` shows.
+#[derive(Debug, PartialEq)]
+enum Assignee {
+    Me,
+    Person(String),
+    Anyone,
+}
+
+impl Assignee {
+    fn from_args(assigned_to: Option<&str>, all: bool) -> Self {
+        match assigned_to {
+            _ if all => Assignee::Anyone,
+            None => Assignee::Me,
+            Some(person) if person.eq_ignore_ascii_case("@me") => Assignee::Me,
+            Some(person) => Assignee::Person(person.to_string()),
+        }
+    }
+
+    fn heading(&self) -> String {
+        match self {
+            Assignee::Me => "My Work Items".to_string(),
+            Assignee::Person(person) => {
+                format!(
+                    "Work Items Assigned to {}",
+                    escape_control_characters(person)
+                )
+            }
+            Assignee::Anyone => "All Work Items".to_string(),
+        }
+    }
+}
+
+async fn list_work_items(
     project: &str,
+    assignee: &Assignee,
     state_filter: Option<&str>,
     work_item_type_filter: Option<&str>,
     limit: i32,
+    format: OutputFormat,
 ) -> Result<()> {
-    println!("📋 Listing work items assigned to you in project: {project}");
+    if format == OutputFormat::Text {
+        print_listing_criteria(
+            project,
+            assignee,
+            state_filter,
+            work_item_type_filter,
+            limit,
+        );
+    }
+
+    let wiql_query = build_wiql_query(project, assignee, state_filter, work_item_type_filter);
+    let heading = assignee.heading();
+
+    match run_wiql_query(project, &wiql_query, limit).await {
+        Ok(work_items) => print_work_items(&heading, &work_items, format),
+        Err(e) => {
+            eprintln!("❌ Failed to execute WIQL query: {e}");
+            print_work_items(&heading, &[], format)
+        }
+    }
+}
+
+/// Tells the user which work items a listing is about to fetch.
+fn print_listing_criteria(
+    project: &str,
+    assignee: &Assignee,
+    state_filter: Option<&str>,
+    work_item_type_filter: Option<&str>,
+    limit: i32,
+) {
+    match assignee {
+        Assignee::Me => println!("📋 Listing work items assigned to you in project: {project}"),
+        Assignee::Person(person) => println!(
+            "📋 Listing work items assigned to {} in project: {project}",
+            escape_control_characters(person)
+        ),
+        Assignee::Anyone => println!("📋 Listing all work items in project: {project}"),
+    }
 
     if let Some(state) = state_filter {
         println!("🔍 Filtering by state: {state}");
@@ -619,19 +701,6 @@ async fn list_my_work_items(
     }
 
     println!("📊 Limit: {limit} items");
-
-    let wiql_query = build_wiql_query(project, state_filter, work_item_type_filter);
-
-    match run_wiql_query(project, &wiql_query, limit).await {
-        Ok(work_items) if work_items.is_empty() => display_empty_work_items_table("My Work Items"),
-        Ok(work_items) => display_work_items_list("My Work Items", &work_items),
-        Err(e) => {
-            eprintln!("❌ Failed to execute WIQL query: {e}");
-            display_empty_work_items_table("My Work Items");
-        }
-    }
-
-    Ok(())
 }
 
 /// Sanitizes a string for use in WIQL queries by escaping single quotes
@@ -641,13 +710,23 @@ fn sanitize_wiql_value(value: &str) -> String {
 
 fn build_wiql_query(
     project: &str,
+    assignee: &Assignee,
     state_filter: Option<&str>,
     work_item_type_filter: Option<&str>,
 ) -> String {
     let sanitized_project = sanitize_wiql_value(project);
     let mut wiql_query = format!(
-        "SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType], [System.AssignedTo], [System.CreatedDate], [Microsoft.VSTS.Common.Priority] FROM WorkItems WHERE [System.TeamProject] = '{sanitized_project}' AND [System.AssignedTo] = @Me"
+        "SELECT [System.Id], [System.Title], [System.State], [System.WorkItemType], [System.AssignedTo], [System.CreatedDate], [Microsoft.VSTS.Common.Priority] FROM WorkItems WHERE [System.TeamProject] = '{sanitized_project}'"
     );
+
+    match assignee {
+        Assignee::Me => wiql_query.push_str(" AND [System.AssignedTo] = @Me"),
+        Assignee::Person(person) => {
+            let sanitized_person = sanitize_wiql_value(person);
+            wiql_query.push_str(&format!(" AND [System.AssignedTo] = '{sanitized_person}'"));
+        }
+        Assignee::Anyone => {}
+    }
 
     // Add state filter if provided
     if let Some(state) = state_filter {
@@ -667,24 +746,18 @@ fn build_wiql_query(
     wiql_query
 }
 
-fn display_empty_work_items_table(heading: &str) {
-    println!();
-    println!("📋 {heading} (0 items)");
-    let separator = "=".repeat(80);
-    println!("{separator}");
-    println!("{:<8} {:<15} {:<20} {:<30}", "ID", "Type", "State", "Title");
-    let dash_separator = "-".repeat(80);
-    println!("{dash_separator}");
-    println!("No work items found.");
-    println!();
-    println!("💡 Use 'azdocli boards work-item show --id <ID>' for detailed information");
-    println!("💡 Use 'azdocli boards work-item show --id <ID> --web' to open in browser");
+pub(crate) fn display_empty_work_items_table(heading: &str) {
+    display_work_items_list(heading, &[]);
 }
 
-pub async fn handle_command(subcommand: &BoardsSubCommands) -> Result<()> {
+pub async fn handle_command(subcommand: &BoardsSubCommands, format: OutputFormat) -> Result<()> {
     let _credentials = get_credentials()?;
     match subcommand {
-        BoardsSubCommands::WorkItem { subcommand } => handle_work_item_command(subcommand).await,
+        BoardsSubCommands::WorkItem { subcommand } => {
+            handle_work_item_command(subcommand, format).await
+        }
+        BoardsSubCommands::Area { subcommand } => area::handle_command(subcommand).await,
+        BoardsSubCommands::Iteration { subcommand } => iteration::handle_command(subcommand).await,
         BoardsSubCommands::Query {
             wiql,
             project,
@@ -692,10 +765,7 @@ pub async fn handle_command(subcommand: &BoardsSubCommands) -> Result<()> {
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
             match run_wiql_query(&project_name, wiql, *limit).await {
-                Ok(work_items) if work_items.is_empty() => {
-                    display_empty_work_items_table("Query Results")
-                }
-                Ok(work_items) => display_work_items_list("Query Results", &work_items),
+                Ok(work_items) => print_work_items("Query Results", &work_items, format)?,
                 Err(e) => {
                     eprintln!("❌ Failed to execute WIQL query");
                     eprintln!("   {e}");
@@ -745,21 +815,39 @@ async fn handle_work_item_comment_command(subcommand: &WorkItemCommentSubCommand
     Ok(())
 }
 
-async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()> {
+async fn handle_work_item_command(
+    subcommand: &WorkItemSubCommands,
+    format: OutputFormat,
+) -> Result<()> {
     match subcommand {
         WorkItemSubCommands::Create {
             work_item_type,
             title,
             project,
+            parent,
+            iteration_path,
+            area_path,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
             println!("Creating a {work_item_type:?} work item in project: {project_name}");
 
-            match create_work_item(&project_name, work_item_type, title).await {
+            match create_work_item(
+                &project_name,
+                work_item_type,
+                title,
+                *parent,
+                iteration_path.as_deref(),
+                area_path.as_deref(),
+            )
+            .await
+            {
                 Ok(work_item) => {
                     println!("{}", "✅ Work item created successfully!".green());
                     println!("Created work item with ID: {}", work_item.id);
                     println!("Title: {title}");
+                    if let Some(parent) = parent {
+                        println!("Parent: #{parent}");
+                    }
                     if let Some(fields) = work_item.fields.as_object() {
                         if let Some(desc) =
                             fields.get("System.Description").and_then(|v| v.as_str())
@@ -807,22 +895,28 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
         }
         WorkItemSubCommands::List {
             project,
+            assigned_to,
+            all,
             state,
             work_item_type,
             limit,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
 
-            match list_my_work_items(
+            match list_work_items(
                 &project_name,
+                &Assignee::from_args(assigned_to.as_deref(), *all),
                 state.as_deref(),
                 work_item_type.as_deref(),
                 *limit,
+                format,
             )
             .await
             {
                 Ok(_) => {
-                    println!("{}", "✅ Work items listed successfully!".green());
+                    if format == OutputFormat::Text {
+                        println!("{}", "✅ Work items listed successfully!".green());
+                    }
                 }
                 Err(e) => {
                     eprintln!("❌ Failed to list work items: {e}");
@@ -832,7 +926,9 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
         }
         WorkItemSubCommands::Show { id, project, web } => {
             let project_name = get_project_or_default(project.as_deref())?;
-            println!("Showing work item with id: {id} in project: {project_name}");
+            if format == OutputFormat::Text {
+                println!("Showing work item with id: {id} in project: {project_name}");
+            }
 
             // Open in browser if requested
             if *web {
@@ -858,7 +954,7 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
             // Otherwise show in terminal
             match get_work_item(&project_name, id).await {
                 Ok(work_item) => {
-                    display_work_item(&work_item);
+                    output::emit(&WorkItemDetails(&work_item), format)?;
                 }
                 Err(e) => {
                     eprintln!("❌ Failed to retrieve work item: {e}");
@@ -887,6 +983,8 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
             description,
             state,
             priority,
+            iteration_path,
+            area_path,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
             println!("Updating work item with id: {id} in project: {project_name}");
@@ -894,10 +992,14 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
             match update_work_item(
                 &project_name,
                 id,
-                title.as_deref(),
-                description.as_deref(),
-                state.as_deref(),
-                *priority,
+                update_work_item_patch(
+                    title.as_deref(),
+                    description.as_deref(),
+                    state.as_deref(),
+                    *priority,
+                    iteration_path.as_deref(),
+                    area_path.as_deref(),
+                ),
             )
             .await
             {
@@ -930,6 +1032,203 @@ async fn handle_work_item_command(subcommand: &WorkItemSubCommands) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
+
+    #[derive(Parser)]
+    struct TestCli {
+        #[clap(subcommand)]
+        command: WorkItemSubCommands,
+    }
+
+    fn parse(args: &[&str]) -> Result<WorkItemSubCommands, clap::Error> {
+        TestCli::try_parse_from(std::iter::once("work-item").chain(args.iter().copied()))
+            .map(|cli| cli.command)
+    }
+
+    #[test]
+    fn create_accepts_iteration_and_area_paths() {
+        let command = parse(&[
+            "create",
+            "task",
+            "--title",
+            "Write tests",
+            "--iteration",
+            "Project\\Sprint 1",
+            "--area",
+            "Project\\Team A",
+        ])
+        .unwrap();
+        let WorkItemSubCommands::Create {
+            iteration_path,
+            area_path,
+            ..
+        } = command
+        else {
+            panic!("expected Create");
+        };
+        assert_eq!(iteration_path.as_deref(), Some("Project\\Sprint 1"));
+        assert_eq!(area_path.as_deref(), Some("Project\\Team A"));
+    }
+
+    #[test]
+    fn create_patch_sets_iteration_and_area_paths() {
+        let patch = create_work_item_patch(
+            "Write tests",
+            None,
+            Some("Project\\Sprint 1"),
+            Some("Project\\Team A"),
+        );
+
+        assert_eq!(
+            patch[1].path.as_deref(),
+            Some("/fields/System.IterationPath")
+        );
+        assert_eq!(patch[1].value, Some(json!("Project\\Sprint 1")));
+        assert_eq!(patch[2].path.as_deref(), Some("/fields/System.AreaPath"));
+        assert_eq!(patch[2].value, Some(json!("Project\\Team A")));
+    }
+
+    #[test]
+    fn update_accepts_iteration_and_area_paths() {
+        let command = parse(&[
+            "update",
+            "--id",
+            "42",
+            "--iteration",
+            "Project\\Sprint 1",
+            "--area",
+            "Project\\Team A",
+        ])
+        .unwrap();
+        let WorkItemSubCommands::Update {
+            iteration_path,
+            area_path,
+            ..
+        } = command
+        else {
+            panic!("expected Update");
+        };
+        assert_eq!(iteration_path.as_deref(), Some("Project\\Sprint 1"));
+        assert_eq!(area_path.as_deref(), Some("Project\\Team A"));
+    }
+
+    #[test]
+    fn update_patch_sets_iteration_and_area_paths() {
+        let patch = update_work_item_patch(
+            None,
+            None,
+            None,
+            None,
+            Some("Project\\Sprint 1"),
+            Some("Project\\Team A"),
+        );
+
+        assert_eq!(patch.len(), 2);
+        assert_eq!(
+            patch[0].path.as_deref(),
+            Some("/fields/System.IterationPath")
+        );
+        assert_eq!(patch[0].value, Some(json!("Project\\Sprint 1")));
+        assert_eq!(patch[1].path.as_deref(), Some("/fields/System.AreaPath"));
+        assert_eq!(patch[1].value, Some(json!("Project\\Team A")));
+    }
+
+    #[test]
+    fn create_accepts_a_parent_work_item() {
+        let command =
+            parse(&["create", "--title", "Write tests", "--parent", "42", "task"]).unwrap();
+
+        let WorkItemSubCommands::Create {
+            work_item_type,
+            parent,
+            ..
+        } = command
+        else {
+            panic!("expected Create");
+        };
+        assert!(matches!(work_item_type, WorkItemType::Task));
+        assert_eq!(parent, Some(42));
+    }
+
+    #[test]
+    fn create_accepts_the_type_before_its_options() {
+        let command = parse(&[
+            "create",
+            "user-story",
+            "--title",
+            "Sign up",
+            "--parent",
+            "42",
+        ])
+        .unwrap();
+
+        let WorkItemSubCommands::Create {
+            work_item_type,
+            title,
+            parent,
+            ..
+        } = command
+        else {
+            panic!("expected Create");
+        };
+        assert!(matches!(work_item_type, WorkItemType::UserStory));
+        assert_eq!(title, "Sign up");
+        assert_eq!(parent, Some(42));
+    }
+
+    #[test]
+    fn create_without_a_parent_has_none() {
+        let command = parse(&["create", "--title", "Fix login", "bug"]).unwrap();
+
+        let WorkItemSubCommands::Create { parent, .. } = command else {
+            panic!("expected Create");
+        };
+        assert_eq!(parent, None);
+    }
+
+    #[test]
+    fn create_rejects_a_non_numeric_parent() {
+        assert!(parse(&[
+            "create",
+            "--title",
+            "Write tests",
+            "--parent",
+            "abc",
+            "task"
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn create_patch_sets_the_title() {
+        let patch = create_work_item_patch("Write tests", None, None, None);
+
+        assert_eq!(patch.len(), 1);
+        assert_eq!(patch[0].op, Some(Op::Add));
+        assert_eq!(patch[0].path.as_deref(), Some("/fields/System.Title"));
+        assert_eq!(patch[0].value, Some(json!("Write tests")));
+    }
+
+    #[test]
+    fn create_patch_links_the_new_work_item_to_its_parent() {
+        let patch = create_work_item_patch(
+            "Write tests",
+            Some("https://dev.azure.com/mycompany/_apis/wit/workItems/42"),
+            None,
+            None,
+        );
+
+        assert_eq!(patch.len(), 2);
+        assert_eq!(patch[1].op, Some(Op::Add));
+        assert_eq!(patch[1].path.as_deref(), Some("/relations/-"));
+        assert_eq!(
+            patch[1].value,
+            Some(json!({
+                "rel": "System.LinkTypes.Hierarchy-Reverse",
+                "url": "https://dev.azure.com/mycompany/_apis/wit/workItems/42",
+            }))
+        );
+    }
 
     #[test]
     fn test_sanitize_wiql_value_escapes_single_quotes() {
@@ -956,20 +1255,96 @@ mod tests {
 
     #[test]
     fn test_build_wiql_query_sanitizes_project() {
-        let query = build_wiql_query("test'project", None, None);
+        let query = build_wiql_query("test'project", &Assignee::Me, None, None);
         assert!(query.contains("test''project"));
         assert!(!query.contains("test'project' AND"));
     }
 
     #[test]
     fn test_build_wiql_query_sanitizes_state() {
-        let query = build_wiql_query("project", Some("Active'Hack"), None);
+        let query = build_wiql_query("project", &Assignee::Me, Some("Active'Hack"), None);
         assert!(query.contains("Active''Hack"));
     }
 
     #[test]
     fn test_build_wiql_query_sanitizes_work_item_type() {
-        let query = build_wiql_query("project", None, Some("Bug'Injection"));
+        let query = build_wiql_query("project", &Assignee::Me, None, Some("Bug'Injection"));
         assert!(query.contains("Bug''Injection"));
+    }
+
+    #[test]
+    fn list_defaults_to_my_work_items() {
+        let WorkItemSubCommands::List {
+            assigned_to, all, ..
+        } = parse(&["list"]).unwrap()
+        else {
+            panic!("expected List");
+        };
+        assert_eq!(
+            Assignee::from_args(assigned_to.as_deref(), all),
+            Assignee::Me
+        );
+    }
+
+    #[test]
+    fn list_accepts_a_person_to_filter_by() {
+        let WorkItemSubCommands::List {
+            assigned_to, all, ..
+        } = parse(&["list", "--assigned-to", "jane@example.com"]).unwrap()
+        else {
+            panic!("expected List");
+        };
+        assert_eq!(
+            Assignee::from_args(assigned_to.as_deref(), all),
+            Assignee::Person("jane@example.com".to_string())
+        );
+    }
+
+    #[test]
+    fn list_treats_at_me_as_myself() {
+        assert_eq!(Assignee::from_args(Some("@Me"), false), Assignee::Me);
+    }
+
+    #[test]
+    fn list_accepts_all() {
+        let WorkItemSubCommands::List {
+            assigned_to, all, ..
+        } = parse(&["list", "--all"]).unwrap()
+        else {
+            panic!("expected List");
+        };
+        assert_eq!(
+            Assignee::from_args(assigned_to.as_deref(), all),
+            Assignee::Anyone
+        );
+    }
+
+    #[test]
+    fn list_rejects_all_together_with_assigned_to() {
+        assert!(parse(&["list", "--all", "--assigned-to", "Jane Doe"]).is_err());
+    }
+
+    #[test]
+    fn wiql_query_for_me_uses_the_at_me_macro() {
+        let query = build_wiql_query("project", &Assignee::Me, None, None);
+        assert!(query.contains("[System.AssignedTo] = @Me"));
+    }
+
+    #[test]
+    fn wiql_query_for_a_person_filters_by_their_name() {
+        let query = build_wiql_query(
+            "project",
+            &Assignee::Person("O'Brien".to_string()),
+            None,
+            None,
+        );
+        assert!(query.contains("[System.AssignedTo] = 'O''Brien'"));
+    }
+
+    #[test]
+    fn wiql_query_for_anyone_has_no_assignee_filter() {
+        let query = build_wiql_query("project", &Assignee::Anyone, Some("Active"), None);
+        assert!(!query.contains("[System.AssignedTo] ="));
+        assert!(query.contains("[System.State] = 'Active'"));
     }
 }

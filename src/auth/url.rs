@@ -9,6 +9,8 @@ use anyhow::{anyhow, Result};
 const DEFAULT_BASE_URL: &str = "https://dev.azure.com";
 const DEFAULT_VSAEX_BASE_URL: &str = "https://vsaex.dev.azure.com";
 const DEFAULT_VSRM_BASE_URL: &str = "https://vsrm.dev.azure.com";
+const DEFAULT_FEEDS_BASE_URL: &str = "https://feeds.dev.azure.com";
+const DEFAULT_VSBLOB_BASE_URL: &str = "https://vsblob.dev.azure.com";
 
 /// Returns the default Azure DevOps cloud base URL.
 pub fn default_base_url() -> String {
@@ -101,6 +103,16 @@ pub fn web_work_item_url(
     )
 }
 
+/// Builds the REST API URL for a work item, as used by work item relations.
+pub fn api_work_item_url(base_url: &str, organization: &str, work_item_id: i32) -> String {
+    format!(
+        "{}/{}/_apis/wit/workItems/{}",
+        normalize_base_url(base_url),
+        percent_encode_path_segment(organization),
+        work_item_id
+    )
+}
+
 /// Builds the web URL for a pull request.
 pub fn web_pull_request_url(
     base_url: &str,
@@ -150,6 +162,28 @@ pub fn user_entitlements_url(base_url: &str, organization: &str, user_id: &str) 
 pub fn release_base_url(base_url: &str) -> String {
     if is_default_cloud_host(base_url) {
         DEFAULT_VSRM_BASE_URL.to_string()
+    } else {
+        normalize_base_url(base_url)
+    }
+}
+
+/// Base URL for Azure Artifacts feed APIs. On the cloud host this lives on
+/// `https://feeds.dev.azure.com`; otherwise it is assumed to share the same
+/// custom base URL.
+pub fn feeds_base_url(base_url: &str) -> String {
+    if is_default_cloud_host(base_url) {
+        DEFAULT_FEEDS_BASE_URL.to_string()
+    } else {
+        normalize_base_url(base_url)
+    }
+}
+
+/// Base URL for the blob store, which also serves client tools such as
+/// ArtifactTool. On the cloud host this lives on `https://vsblob.dev.azure.com`;
+/// otherwise it is assumed to share the same custom base URL.
+pub fn vsblob_base_url(base_url: &str) -> String {
+    if is_default_cloud_host(base_url) {
+        DEFAULT_VSBLOB_BASE_URL.to_string()
     } else {
         normalize_base_url(base_url)
     }
@@ -278,6 +312,22 @@ mod tests {
     }
 
     #[test]
+    fn api_work_item_url_points_at_the_organization_scoped_api() {
+        assert_eq!(
+            api_work_item_url("https://dev.azure.com", "mycompany", 42),
+            "https://dev.azure.com/mycompany/_apis/wit/workItems/42"
+        );
+    }
+
+    #[test]
+    fn api_work_item_url_normalizes_base_and_encodes_organization() {
+        assert_eq!(
+            api_work_item_url("https://tfs.mycompany.com/tfs/", "my company", 7),
+            "https://tfs.mycompany.com/tfs/my%20company/_apis/wit/workItems/7"
+        );
+    }
+
+    #[test]
     fn web_pull_request_url_encodes_segments() {
         assert_eq!(
             web_pull_request_url(
@@ -342,6 +392,38 @@ mod tests {
     fn release_base_url_uses_custom_host_for_enterprise() {
         assert_eq!(
             release_base_url("https://devops.mycompany.com"),
+            "https://devops.mycompany.com"
+        );
+    }
+
+    #[test]
+    fn feeds_base_url_uses_feeds_host_for_cloud() {
+        assert_eq!(
+            feeds_base_url("https://dev.azure.com/"),
+            "https://feeds.dev.azure.com"
+        );
+    }
+
+    #[test]
+    fn feeds_base_url_uses_custom_host_for_enterprise() {
+        assert_eq!(
+            feeds_base_url("https://devops.mycompany.com"),
+            "https://devops.mycompany.com"
+        );
+    }
+
+    #[test]
+    fn vsblob_base_url_uses_vsblob_host_for_cloud() {
+        assert_eq!(
+            vsblob_base_url("https://dev.azure.com"),
+            "https://vsblob.dev.azure.com"
+        );
+    }
+
+    #[test]
+    fn vsblob_base_url_uses_custom_host_for_enterprise() {
+        assert_eq!(
+            vsblob_base_url("https://devops.mycompany.com/"),
             "https://devops.mycompany.com"
         );
     }

@@ -7,7 +7,7 @@ description = "CLI tool for interacting with Azure DevOps"
 license = "MIT"
 homepage = "https://christianhelle.com/azdocli"
 repository = "https://github.com/christianhelle/azdocli"
-readme = "src/README.md"
+readme = "README.md"
 
 [package.metadata.bundle]
 name = "Azure DevOps CLI"
@@ -19,6 +19,7 @@ category = "Developer Tool"
 clap = { version = "4.5", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_norway = "0.9"
 tokio = { version = "1.0", features = ["full"] }
 anyhow = "1.0"
 dirs = "6.0"
@@ -26,6 +27,8 @@ dialoguer = "0.12"
 colored = "3.0"
 azure_core = "0.34"
 azure_devops_rust_api = { version = "0.36.0", features = [
+  "artifacts",
+  "artifacts_download",
   "git",
   "pipelines",
   "wit",
@@ -56,12 +59,24 @@ reqwest = { version = "0.12", default-features = false, features = [
   "stream",
 ] }
 futures = "0.3"
+aes-gcm = "0.10"
+hkdf = "0.12"
+sha2 = "0.10"
+base64 = "0.22"
+machine-uid = "0.5"
+zip = { version = "9.1.2", default-features = false, features = ["deflate"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_Security_Cryptography",
+] }
 
 [dev-dependencies]
 tempfile = "3.10"
 
 [build-dependencies]
-winres = "0.1"
+winresource = "0.1.31"
 
 [profile.release]
 opt-level = "z"

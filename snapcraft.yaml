@@ -44,6 +44,7 @@ description: |
 
   For full documentation and examples, see the docs/ site and the GitHub
   repository.
+icon: images/icon.png
 grade: stable
 confinement: strict
 

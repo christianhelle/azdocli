@@ -1,22 +1,35 @@
 pub mod factory;
+mod secret;
 pub mod url;
 
-use crate::auth::url::{default_base_url, normalize_base_url, parse_organization_or_url};
+use crate::auth::url::{
+    default_base_url, normalize_base_url, parse_organization_or_url, percent_encode_path_segment,
+};
 use crate::config::get_config_dir;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use colored::Colorize;
 use dialoguer::Input;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Credentials {
     pub organization: String,
     pub pat: String,
     #[serde(default = "default_base_url")]
     pub base_url: String,
+}
+
+impl std::fmt::Debug for Credentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Credentials")
+            .field("organization", &self.organization)
+            .field("pat", &"<redacted>")
+            .field("base_url", &self.base_url)
+            .finish()
+    }
 }
 
 fn profiles_dir() -> Result<PathBuf> {
@@ -43,20 +56,78 @@ fn sanitize_profile_name(name: &str) -> String {
         .collect()
 }
 
-/// Save credentials for a named profile.
-fn save_profile(name: &str, creds: &Credentials) -> Result<()> {
-    let path = profile_file(name)?;
-    let json = serde_json::to_string_pretty(creds)?;
-    let mut file = fs::File::create(&path)?;
-    file.write_all(json.as_bytes())?;
+/// Serializes credentials with the PAT encrypted for this machine.
+fn encode_credentials(creds: &Credentials) -> Result<String> {
+    let protected = Credentials {
+        pat: secret::protect(&creds.pat)?,
+        ..creds.clone()
+    };
+    Ok(serde_json::to_string_pretty(&protected)?)
+}
+
+/// Parses stored credentials and decrypts the PAT. The flag is true when the
+/// file held a legacy plaintext PAT that should be re-saved encrypted.
+fn decode_credentials(json: &str) -> Result<(Credentials, bool)> {
+    let mut creds: Credentials = serde_json::from_str(json)?;
+    if !secret::is_protected(&creds.pat) {
+        return Ok((creds, true));
+    }
+    creds.pat = secret::unprotect(&creds.pat)?;
+    Ok((creds, false))
+}
+
+/// Writes credentials to `path` with the PAT encrypted and, on Unix, the file
+/// readable by the owner only.
+///
+/// The file is written to a temporary sibling and then renamed over `path`,
+/// so readers never see a partial file and a failed write keeps the old one.
+fn write_credentials_file(path: &Path, creds: &Credentials) -> Result<()> {
+    let json = encode_credentials(creds)?;
+    let temp_path = credentials_temp_path(path);
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&path)?.permissions();
-        perms.set_mode(0o600);
-        fs::set_permissions(&path, perms)?;
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
     }
-    Ok(())
+    let result = (|| -> Result<()> {
+        let mut file = options.open(&temp_path)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            file.set_permissions(fs::Permissions::from_mode(0o600))?;
+        }
+        file.write_all(json.as_bytes())?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&temp_path, path)?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temp_path);
+    }
+    result
+}
+
+fn credentials_temp_path(path: &Path) -> PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".tmp");
+    path.with_file_name(name)
+}
+
+/// Reads credentials from `path`, re-saving a legacy plaintext PAT encrypted.
+fn read_credentials_file(path: &Path) -> Result<Credentials> {
+    let (creds, was_plaintext) = decode_credentials(&fs::read_to_string(path)?)?;
+    if was_plaintext {
+        write_credentials_file(path, &creds)?;
+    }
+    Ok(creds)
+}
+
+/// Save credentials for a named profile.
+fn save_profile(name: &str, creds: &Credentials) -> Result<()> {
+    write_credentials_file(&profile_file(name)?, creds)
 }
 
 /// Load credentials for a named profile.
@@ -69,8 +140,7 @@ fn load_profile(name: &str) -> Result<Credentials> {
             name
         ));
     }
-    let s = fs::read_to_string(&path)?;
-    Ok(serde_json::from_str(&s)?)
+    read_credentials_file(&path)
 }
 
 /// List known profile names (excluding the legacy default).
@@ -149,22 +219,7 @@ fn save_pat(pat: &str, base_url: &str) -> Result<()> {
         base_url: normalize_base_url(base_url),
     };
 
-    let creds_path = get_credentials_file_path()?;
-    let credentials_json = serde_json::to_string_pretty(&credentials)?;
-
-    let mut file = fs::File::create(&creds_path)?;
-    file.write_all(credentials_json.as_bytes())?;
-
-    // Set restrictive permissions on the file
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&creds_path)?.permissions();
-        perms.set_mode(0o600); // Read/write for owner only
-        fs::set_permissions(&creds_path, perms)?;
-    }
-
-    Ok(())
+    write_credentials_file(&get_credentials_file_path()?, &credentials)
 }
 
 /// Rejects a blank Personal Access Token so the user is re-prompted instead of
@@ -226,28 +281,98 @@ pub async fn login(profile: Option<&str>) -> Result<()> {
         .with_prompt("Personal Access Token (PAT)")
         .validate_with(|pat: &String| validate_pat(pat))
         .interact_text()?;
-    let pat = pat.trim().to_string();
+    let creds = Credentials {
+        organization,
+        pat: pat.trim().to_string(),
+        base_url,
+    };
+
     println!("Validating credentials...");
+    validate_credentials(&creds).await?;
 
     match profile {
         Some(name) => {
-            save_profile(
-                name,
-                &Credentials {
-                    organization,
-                    pat,
-                    base_url,
-                },
-            )?;
+            save_profile(name, &creds)?;
             println!("{} (profile: {})", "Login successful!".green(), name);
         }
         None => {
-            save_organization(&organization)?;
-            save_pat(&pat, &base_url)?;
+            save_organization(&creds.organization)?;
+            save_pat(&creds.pat, &creds.base_url)?;
             println!("{}", "Login successful!".green());
         }
     }
     Ok(())
+}
+
+/// Builds the REST URL that reports who the PAT belongs to. Azure DevOps only
+/// exposes `connectionData` as a preview resource; 5.0 keeps login working on
+/// Azure DevOps Server 2019 and later as well as the cloud.
+fn connection_data_url(creds: &Credentials) -> String {
+    format!(
+        "{}/{}/_apis/connectionData?api-version=5.0-preview",
+        normalize_base_url(&creds.base_url),
+        percent_encode_path_segment(&creds.organization)
+    )
+}
+
+/// Checks the PAT against Azure DevOps so a wrong token is rejected before
+/// anything is saved.
+async fn validate_credentials(creds: &Credentials) -> Result<()> {
+    // Redirects are not followed so the PAT is never re-sent to another URL,
+    // and the timeout keeps login from hanging on an unresponsive server.
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(30))
+        .build()?;
+    let response = client
+        .get(connection_data_url(creds))
+        .basic_auth("", Some(&creds.pat))
+        .send()
+        .await
+        .context("Could not reach Azure DevOps to validate the credentials")?;
+
+    if response.status().is_redirection() {
+        let location = response
+            .headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("another URL");
+        return Err(anyhow!(
+            "Azure DevOps redirected the login to {}. Log in with that server URL instead.",
+            location
+        ));
+    }
+
+    // Anything else but 200 (an error, or 203 with an HTML sign-in page) is a refusal.
+    if response.status() != reqwest::StatusCode::OK {
+        return Err(anyhow!(
+            "Azure DevOps rejected the credentials ({}). Check the organization and PAT.",
+            response.status()
+        ));
+    }
+
+    let body: serde_json::Value = response
+        .json()
+        .await
+        .context("Azure DevOps returned an unexpected response while validating the credentials")?;
+    if !is_authenticated(&body) {
+        return Err(anyhow!(
+            "Azure DevOps did not accept the PAT. Check the organization and PAT."
+        ));
+    }
+    Ok(())
+}
+
+/// Whether a `connectionData` response identifies a real user. Azure DevOps
+/// answers an invalid PAT with 200 and the anonymous public-access identity.
+fn is_authenticated(connection_data: &serde_json::Value) -> bool {
+    let descriptor = connection_data
+        .pointer("/authenticatedUser/descriptor")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    connection_data.pointer("/authenticatedUser/id").is_some()
+        && !descriptor.is_empty()
+        && !descriptor.starts_with("System:PublicAccess")
 }
 
 pub fn logout() -> Result<()> {
@@ -287,10 +412,7 @@ fn get_stored_credentials() -> Result<Credentials> {
         ));
     }
 
-    let credentials_json = fs::read_to_string(creds_path)?;
-    let credentials: Credentials = serde_json::from_str(&credentials_json)?;
-
-    Ok(credentials)
+    read_credentials_file(&creds_path)
 }
 
 /// Load credentials for a specific named profile, or the default if `None`.
@@ -318,5 +440,125 @@ mod tests {
     #[test]
     fn validate_pat_rejects_a_whitespace_only_token() {
         assert!(validate_pat("   ").is_err());
+    }
+
+    fn sample() -> Credentials {
+        Credentials {
+            organization: "contoso".to_string(),
+            pat: "my-secret-pat".to_string(),
+            base_url: "https://dev.azure.com".to_string(),
+        }
+    }
+
+    #[test]
+    fn connection_data_url_encodes_the_organization() {
+        let creds = Credentials {
+            organization: "my org".to_string(),
+            ..sample()
+        };
+        assert_eq!(
+            connection_data_url(&creds),
+            "https://dev.azure.com/my%20org/_apis/connectionData?api-version=5.0-preview"
+        );
+    }
+
+    #[test]
+    fn anonymous_connection_data_is_not_authenticated() {
+        let body = serde_json::json!({
+            "authenticatedUser": {
+                "id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                "descriptor": "System:PublicAccess;aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+            }
+        });
+        assert!(!is_authenticated(&body));
+    }
+
+    #[test]
+    fn user_connection_data_is_authenticated() {
+        let body = serde_json::json!({
+            "authenticatedUser": {
+                "id": "3b0b5c4e-1111-2222-3333-444455556666",
+                "descriptor": "Microsoft.IdentityModel.Claims.ClaimsIdentity;user@example.com"
+            }
+        });
+        assert!(is_authenticated(&body));
+    }
+
+    #[test]
+    fn connection_data_without_a_user_is_not_authenticated() {
+        assert!(!is_authenticated(&serde_json::json!({})));
+    }
+
+    #[test]
+    fn encoded_credentials_do_not_contain_the_pat() {
+        let json = encode_credentials(&sample()).unwrap();
+        assert!(!json.contains("my-secret-pat"));
+        assert!(json.contains("contoso"));
+    }
+
+    #[test]
+    fn encoded_credentials_decode_back() {
+        let json = encode_credentials(&sample()).unwrap();
+        let (creds, was_plaintext) = decode_credentials(&json).unwrap();
+        assert_eq!(creds.pat, "my-secret-pat");
+        assert_eq!(creds.organization, "contoso");
+        assert!(!was_plaintext);
+    }
+
+    #[test]
+    fn legacy_plaintext_credentials_decode_and_are_flagged() {
+        let json = serde_json::to_string(&sample()).unwrap();
+        let (creds, was_plaintext) = decode_credentials(&json).unwrap();
+        assert_eq!(creds.pat, "my-secret-pat");
+        assert!(was_plaintext);
+    }
+
+    #[test]
+    fn debug_output_redacts_the_pat() {
+        let debug = format!("{:?}", sample());
+        assert!(!debug.contains("my-secret-pat"));
+        assert!(debug.contains("contoso"));
+    }
+
+    #[test]
+    fn credentials_file_never_holds_the_pat_in_plaintext() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("credentials.json");
+        write_credentials_file(&path, &sample()).unwrap();
+        assert!(!fs::read_to_string(&path).unwrap().contains("my-secret-pat"));
+        assert_eq!(read_credentials_file(&path).unwrap().pat, "my-secret-pat");
+    }
+
+    #[test]
+    fn rewriting_credentials_replaces_the_file_without_leftovers() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("credentials.json");
+        fs::write(&path, "old contents").unwrap();
+        write_credentials_file(&path, &sample()).unwrap();
+        assert_eq!(read_credentials_file(&path).unwrap().pat, "my-secret-pat");
+        let entries: Vec<_> = fs::read_dir(dir.path()).unwrap().collect();
+        assert_eq!(entries.len(), 1);
+        assert!(!credentials_temp_path(&path).exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn credentials_file_is_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("credentials.json");
+        fs::write(&path, "old contents").unwrap();
+        write_credentials_file(&path, &sample()).unwrap();
+        let mode = fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
+
+    #[test]
+    fn reading_a_plaintext_credentials_file_encrypts_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("credentials.json");
+        fs::write(&path, serde_json::to_string(&sample()).unwrap()).unwrap();
+        assert_eq!(read_credentials_file(&path).unwrap().pat, "my-secret-pat");
+        assert!(!fs::read_to_string(&path).unwrap().contains("my-secret-pat"));
     }
 }

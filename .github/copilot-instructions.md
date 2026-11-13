@@ -233,7 +233,7 @@ azdocli repos list               # Now works with default project
 - Use `#[derive(Subcommand, Clone)]` for command enums
 - Include `--project` parameter support with `auth::get_project_or_default()`
 - Add comprehensive help documentation
-- Use `colored` crate for user-friendly output with emoji icons (✓ ❌ 📋 🚀 🔑)
+- Use `colored` crate for user-friendly output with emoji icons (✅ success, ❌ errors, ⚠ warnings, 📋 lists, 🔑 authentication)
 
 **Debugging tips:**
 - Use `cargo run -- <command>` for development testing

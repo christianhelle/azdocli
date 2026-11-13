@@ -1,6 +1,6 @@
 //! Cross-tenant team project migration.
 //!
-//! See `src/README.md` and the design plan for the high-level architecture
+//! See `docs/migrate.md` and the design plan for the high-level architecture
 //! and fidelity contract. This module orchestrates dependency-ordered phases
 //! against a source and target Azure DevOps organization, with named
 //! credential profiles, a JSON manifest for batch runs, a per-migration

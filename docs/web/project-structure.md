@@ -27,8 +27,14 @@ azdocli/
 │   │   ├── comments.rs    # Comment threads
 │   │   ├── identity.rs    # Resolving email/GUID/@me to an identity
 │   │   └── http.rs        # Raw REST calls the SDK models cannot express
-│   ├── pipelines.rs       # Pipelines, runs, logs, artifacts, variable groups, service connections
+│   ├── pipelines.rs       # Pipelines, runs, logs, artifacts, tags, folders, variables, variable groups, service connections (mirrors az pipelines)
+│   ├── releases.rs        # Classic release definitions and releases, releasing a build
+│   ├── artifacts/         # Azure Artifacts feeds and Universal Packages
+│   │   ├── mod.rs         # Subcommand enum, routing, feed and package listing
+│   │   ├── download.rs    # Native Universal Package download (dedup protocol)
+│   │   └── artifact_tool.rs # Fetching and running ArtifactTool to publish
 │   ├── boards.rs          # Work item CRUD, comments, types, WIQL queries
+│   ├── output.rs          # --output formats and the Render trait commands print through
 │   ├── text.rs            # Shared rendering helpers for remote text
 │   ├── wiki.rs            # Wiki and wiki page operations
 │   ├── user.rs            # User entitlement management
@@ -99,6 +105,21 @@ Some(Commands::Foo { subcommand }) => {   // 3. Match arm
     foo::handle_command(subcommand).await?;
 }
 ```
+
+### Rendering layer
+
+Commands that support `--output` keep fetching and printing apart:
+
+1. `handle_command` fetches the data and wraps it in a small result model, kept in the module's
+   `views.rs` (for example `repos/views.rs`, `pr/views.rs`).
+2. The model derives `Serialize` and implements `output::Render`, which has a `text` method (the
+   console summary) and a `markdown` method.
+3. `output::emit(&model, format)` prints it. JSON and YAML come from `Serialize`; text and Markdown
+   come from the `Render` methods. Renderers write to any `io::Write`, so they can be unit tested.
+
+To migrate a command, add its model and route it through `output::emit`. Then add its path (for
+example `"repos list"`) to `STRUCTURED_OUTPUT_COMMANDS` in `main.rs`. Commands not in that list
+reject any format other than `text`.
 
 ## Authentication
 
