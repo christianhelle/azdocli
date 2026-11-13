@@ -224,9 +224,9 @@ fn save_pat(pat: &str, base_url: &str) -> Result<()> {
 
 /// Rejects a blank Personal Access Token so the user is re-prompted instead of
 /// storing an empty credential.
-fn validate_pat(pat: &str) -> Result<(), &'static str> {
+fn validate_pat(pat: &str) -> Result<()> {
     if pat.trim().is_empty() {
-        return Err("PAT cannot be empty");
+        return Err(anyhow!("PAT cannot be empty"));
     }
     Ok(())
 }
