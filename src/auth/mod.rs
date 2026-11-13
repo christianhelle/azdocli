@@ -248,6 +248,10 @@ fn show_pat_instructions() {
         "{} Store your PAT securely and never commit it to version control.",
         "⚠️ Important:".yellow().bold()
     );
+    println!(
+        "{} The PAT is shown as you type it, so it stays visible in terminal scrollback.",
+        "⚠️ Important:".yellow().bold()
+    );
     println!();
 }
 
