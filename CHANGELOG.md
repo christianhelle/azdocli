@@ -3,6 +3,7 @@
 ## [Unreleased Changes]
 
 ### Features
+- Show the PAT while typing during login ([#128](https://github.com/christianhelle/azdocli/pull/128)) ([@christianhelle](https://github.com/christianhelle/))
 - Trust the OS certificate store for direct HTTP requests ([#147](https://github.com/christianhelle/azdocli/pull/147)) ([@christianhelle](https://github.com/christianhelle/))
 - Add --output flag with JSON, YAML and Markdown rendering ([#145](https://github.com/christianhelle/azdocli/pull/145)) ([@christianhelle](https://github.com/christianhelle/))
 - Only ask for the PAT once on login ([#144](https://github.com/christianhelle/azdocli/pull/144)) ([@christianhelle](https://github.com/christianhelle/))
