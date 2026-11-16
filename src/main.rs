@@ -17,6 +17,7 @@ mod projects;
 mod releases;
 mod repos;
 mod text;
+mod update;
 mod user;
 mod wiki;
 
