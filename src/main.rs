@@ -1,6 +1,7 @@
 use crate::auth::{login, logout};
 use crate::output::OutputFormat;
 use crate::project::{get_default_project, save_default_project};
+use anyhow::Context;
 use clap::{ArgMatches, CommandFactory, FromArgMatches, Parser, Subcommand};
 
 mod artifacts;
@@ -146,6 +147,50 @@ enum Commands {
         #[clap(subcommand)]
         subcommand: migrate::MigrateSubCommands,
     },
+    /// Check whether a newer azdocli has been released
+    CheckUpdate,
+    /// Install the latest azdocli release in place of this one
+    Update,
+}
+
+async fn check_update() -> anyhow::Result<()> {
+    let release = update::check(
+        &update::http_client(),
+        update::GITHUB_API,
+        &update::check_path()?,
+        chrono::Utc::now(),
+    )
+    .await
+    .context("could not check for updates")?;
+    let current = update::current();
+    if update::newer(&current, &release.version) {
+        println!(
+            "azdocli {} is available (you have {current}): {}",
+            release.version, release.url
+        );
+        println!("Run `azdocli update` to install it.");
+    } else {
+        println!("azdocli {current} is up to date.");
+    }
+    Ok(())
+}
+
+async fn install_update() -> anyhow::Result<()> {
+    let outcome = update::update_running(
+        &update::http_client(),
+        update::GITHUB_API,
+        &update::check_path()?,
+    )
+    .await?;
+    match outcome {
+        update::Outcome::Installed(version) => {
+            println!("✅ azdocli {version} is installed.");
+        }
+        update::Outcome::UpToDate(version) => {
+            println!("azdocli {version} is up to date.");
+        }
+    }
+    Ok(())
 }
 
 #[tokio::main]
@@ -197,6 +242,12 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Migrate { subcommand }) => {
             migrate::handle_command(subcommand).await?;
+        }
+        Some(Commands::CheckUpdate) => {
+            check_update().await?;
+        }
+        Some(Commands::Update) => {
+            install_update().await?;
         }
         None => {
             Cli::command().print_help()?;
@@ -318,6 +369,14 @@ mod tests {
     fn structured_output_is_fine_without_browser_flags() {
         let matches = matches(&["azdocli", "repos", "list", "-o", "json"]);
         assert!(check_browser_flags(OutputFormat::Json, &matches).is_ok());
+    }
+
+    #[test]
+    fn update_commands_parse() {
+        let cli = Cli::try_parse_from(["azdocli", "check-update"]).unwrap();
+        assert!(matches!(cli.command, Some(Commands::CheckUpdate)));
+        let cli = Cli::try_parse_from(["azdocli", "update"]).unwrap();
+        assert!(matches!(cli.command, Some(Commands::Update)));
     }
 
     #[test]
