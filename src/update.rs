@@ -51,23 +51,19 @@ pub struct Asset {
 }
 
 /// The name the release workflow gives the archive built for `target`,
-/// such as `windows-x64.zip`. `None` for a target it does not build.
+/// such as `windows-x64.zip`. `None` for a target it does not build, such as
+/// musl Linux, whose binary could not run a glibc build.
 pub fn asset_name(target: &str) -> Option<String> {
-    let os = if target.contains("windows") {
-        "windows"
-    } else if target.contains("apple-darwin") {
-        "macos"
-    } else if target.contains("linux") {
-        "linux"
-    } else {
-        return None;
-    };
-    let arch = match target.split('-').next()? {
-        "x86_64" => "x64",
-        "aarch64" => "arm64",
+    let name = match target {
+        "x86_64-pc-windows-msvc" => "windows-x64",
+        "aarch64-pc-windows-msvc" => "windows-arm64",
+        "x86_64-apple-darwin" => "macos-x64",
+        "aarch64-apple-darwin" => "macos-arm64",
+        "x86_64-unknown-linux-gnu" => "linux-x64",
+        "aarch64-unknown-linux-gnu" => "linux-arm64",
         _ => return None,
     };
-    Some(format!("{os}-{arch}.zip"))
+    Some(format!("{name}.zip"))
 }
 
 /// The name of azdocli's binary built for `target`.
@@ -456,8 +452,20 @@ mod tests {
     }
 
     #[test]
-    fn the_running_target_has_an_archive() {
-        assert!(asset_name(TARGET).is_some(), "{TARGET}");
+    fn linux_builds_other_than_glibc_have_no_archive() {
+        for target in [
+            "x86_64-unknown-linux-musl",
+            "aarch64-unknown-linux-musl",
+            "aarch64-linux-android",
+            "x86_64-linux-android",
+        ] {
+            assert_eq!(asset_name(target), None, "{target}");
+        }
+    }
+
+    #[test]
+    fn windows_gnu_builds_have_no_archive() {
+        assert_eq!(asset_name("x86_64-pc-windows-gnu"), None);
     }
 
     #[test]
