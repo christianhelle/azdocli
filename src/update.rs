@@ -5,10 +5,12 @@
 use std::{
     io::{Cursor, Read},
     path::{Path, PathBuf},
+    time::Duration as StdDuration,
 };
 
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Duration, Utc};
+use reqwest::Client;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -205,6 +207,199 @@ pub fn extract(archive: &[u8], binary: &str) -> Result<Vec<u8>> {
         }
     }
     bail!("the release archive has no {binary} in it")
+}
+
+/// Where azdocli's releases are published.
+pub const GITHUB_API: &str = "https://api.github.com";
+
+/// How long to wait for GitHub when asked to check.
+const TIMEOUT: StdDuration = StdDuration::from_secs(10);
+
+/// How long to wait for GitHub when checking unasked, which must never hold
+/// up a command for long.
+const QUIET_TIMEOUT: StdDuration = StdDuration::from_secs(2);
+
+/// How long a download of a release may take.
+const DOWNLOAD_TIMEOUT: StdDuration = StdDuration::from_secs(300);
+
+/// The part of GitHub's answer azdocli needs.
+#[derive(Deserialize)]
+struct GithubRelease {
+    tag_name: String,
+    html_url: String,
+    #[serde(default)]
+    assets: Vec<Asset>,
+}
+
+/// A client GitHub accepts, which needs a user agent.
+pub fn http_client() -> Client {
+    Client::builder()
+        .user_agent(concat!("azdocli/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .expect("a client with only a user agent set always builds")
+}
+
+/// Where the last check is kept.
+pub fn check_path() -> Result<PathBuf> {
+    let cache = dirs::cache_dir().context("no cache directory to keep the update check in")?;
+    Ok(cache.join("azdocli").join("update-check.json"))
+}
+
+/// Asks GitHub for the latest release. GitHub leaves out drafts and
+/// prereleases.
+pub async fn latest(client: &Client, base_url: &str, timeout: StdDuration) -> Result<Release> {
+    let url = format!("{base_url}/repos/christianhelle/azdocli/releases/latest");
+    let release: GithubRelease = client
+        .get(url)
+        .timeout(timeout)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+    let tag = release.tag_name;
+    let version = Version::parse(tag.strip_prefix('v').unwrap_or(&tag))
+        .with_context(|| format!("the latest release has a strange tag: {tag}"))?;
+    Ok(Release {
+        version,
+        url: release.html_url,
+        assets: release.assets,
+    })
+}
+
+/// Asks GitHub for the latest release and remembers the answer at `path`.
+async fn check_with(
+    client: &Client,
+    base_url: &str,
+    path: &Path,
+    now: DateTime<Utc>,
+    timeout: StdDuration,
+) -> Result<Release> {
+    let release = latest(client, base_url, timeout).await?;
+    let saved = Saved {
+        checked_at: now,
+        latest: release.version.clone(),
+    };
+    // Failing to remember only means asking again next time.
+    let _ = saved.save(path);
+    Ok(release)
+}
+
+/// Asks GitHub for the latest release and remembers the answer at `path`.
+pub async fn check(
+    client: &Client,
+    base_url: &str,
+    path: &Path,
+    now: DateTime<Utc>,
+) -> Result<Release> {
+    check_with(client, base_url, path, now, TIMEOUT).await
+}
+
+/// The newer version to tell the user about, if any, asking GitHub only when
+/// the check saved at `path` has gone stale. Nothing here is worth failing a
+/// command for, so a failed check goes unmentioned and the last answer stands.
+pub async fn available(
+    client: &Client,
+    base_url: &str,
+    path: &Path,
+    current: &Version,
+    now: DateTime<Utc>,
+) -> Option<Version> {
+    let latest = match Saved::load(path) {
+        Some(saved) if !saved.is_due(now) => saved.latest,
+        saved => match check_with(client, base_url, path, now, QUIET_TIMEOUT).await {
+            Ok(release) => release.version,
+            Err(_) => saved?.latest,
+        },
+    };
+    newer(current, &latest).then_some(latest)
+}
+
+/// Downloads `asset` and checks it is what GitHub published.
+pub async fn download(client: &Client, asset: &Asset) -> Result<Vec<u8>> {
+    let bytes = client
+        .get(&asset.url)
+        .timeout(DOWNLOAD_TIMEOUT)
+        .send()
+        .await?
+        .error_for_status()?
+        .bytes()
+        .await?;
+    verify(&bytes, asset.digest.as_deref())?;
+    Ok(bytes.to_vec())
+}
+
+/// What updating did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Outcome {
+    /// The running version is already the latest.
+    UpToDate(Version),
+    /// This version replaced the running binary.
+    Installed(Version),
+}
+
+/// Asks GitHub for the latest release, remembering the answer at `path`, and
+/// when it is newer than `current`, downloads the archive built for `target`
+/// and returns its version and binary.
+pub async fn fetch_newer(
+    client: &Client,
+    base_url: &str,
+    path: &Path,
+    current: &Version,
+    target: &str,
+    now: DateTime<Utc>,
+) -> Result<Option<(Version, Vec<u8>)>> {
+    let release = check(client, base_url, path, now).await?;
+    if !newer(current, &release.version) {
+        return Ok(None);
+    }
+    let asset = release.asset(target).with_context(|| {
+        format!(
+            "azdocli {} has no build for {target}; see {}",
+            release.version, release.url
+        )
+    })?;
+    let archive = download(client, asset).await?;
+    let binary = extract(&archive, binary_name(target))?;
+    Ok(Some((release.version, binary)))
+}
+
+/// Puts `binary` in place of the running `exe`. It is written next to it
+/// first, so the swap never crosses file systems.
+pub fn replace_running(exe: &Path, binary: &[u8]) -> Result<()> {
+    let staged = exe.with_file_name(".azdocli-update");
+    std::fs::write(&staged, binary)
+        .with_context(|| format!("could not write to {}", staged.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&staged, std::fs::Permissions::from_mode(0o755))?;
+    }
+    let replaced = self_replace::self_replace(&staged)
+        .with_context(|| format!("could not replace {}", exe.display()));
+    let _ = std::fs::remove_file(&staged);
+    replaced
+}
+
+/// Replaces the running azdocli with the latest release, unless it already
+/// is the latest or a package manager installed it. `path` keeps the answer,
+/// as a check does.
+pub async fn update_running(client: &Client, base_url: &str, path: &Path) -> Result<Outcome> {
+    let exe = std::env::current_exe().context("could not find the running azdocli")?;
+    if let Some(manager) = package_manager(&exe, cargo_bin().as_deref()) {
+        bail!(
+            "{manager:?} installed azdocli; update it with `{}`",
+            manager.update_command()
+        );
+    }
+    let current = current();
+    match fetch_newer(client, base_url, path, &current, TARGET, Utc::now()).await? {
+        None => Ok(Outcome::UpToDate(current)),
+        Some((version, binary)) => {
+            replace_running(&exe, &binary)?;
+            Ok(Outcome::Installed(version))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -444,6 +639,48 @@ mod tests {
         saved.save(&path).unwrap();
 
         assert_eq!(Saved::load(&path), Some(saved));
+    }
+
+    /// Nothing listens here, so asking it fails at once.
+    const UNREACHABLE: &str = "http://127.0.0.1:9";
+
+    #[tokio::test]
+    async fn a_fresh_check_is_used_without_asking_github() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("update-check.json");
+        let now = DateTime::from_timestamp(1_000_000, 0).unwrap();
+        saved_at(now).save(&path).unwrap();
+
+        let client = http_client();
+        let found = available(&client, UNREACHABLE, &path, &version("0.9.0"), now).await;
+        let none = available(&client, UNREACHABLE, &path, &version("1.0.0"), now).await;
+
+        assert_eq!(found, Some(version("1.0.0")));
+        assert_eq!(none, None);
+    }
+
+    #[tokio::test]
+    async fn a_failed_check_falls_back_to_the_last_answer() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("update-check.json");
+        let checked_at = DateTime::from_timestamp(1_000_000, 0).unwrap();
+        saved_at(checked_at).save(&path).unwrap();
+        let later = checked_at + Duration::hours(48);
+
+        let found = available(&http_client(), UNREACHABLE, &path, &version("0.9.0"), later).await;
+
+        assert_eq!(found, Some(version("1.0.0")));
+    }
+
+    #[tokio::test]
+    async fn a_failed_first_check_finds_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("update-check.json");
+        let now = DateTime::from_timestamp(1_000_000, 0).unwrap();
+
+        let found = available(&http_client(), UNREACHABLE, &path, &version("0.9.0"), now).await;
+
+        assert_eq!(found, None);
     }
 
     #[test]
