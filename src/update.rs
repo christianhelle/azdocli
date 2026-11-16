@@ -75,12 +75,14 @@ pub fn binary_name(target: &str) -> &'static str {
     }
 }
 
-/// The last check that worked, kept so that azdocli does not ask GitHub on
-/// every run.
+/// The last check, kept so that azdocli does not ask GitHub on every run.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Saved {
+    /// When GitHub was last asked, whether or not it answered.
     pub checked_at: DateTime<Utc>,
-    pub latest: Version,
+    /// The latest release GitHub last answered with, if it ever has.
+    #[serde(default)]
+    pub latest: Option<Version>,
 }
 
 impl Saved {
@@ -274,7 +276,7 @@ async fn check_with(
     let release = latest(client, base_url, timeout).await?;
     let saved = Saved {
         checked_at: now,
-        latest: release.version.clone(),
+        latest: Some(release.version.clone()),
     };
     // Failing to remember only means asking again next time.
     let _ = saved.save(path);
@@ -294,6 +296,8 @@ pub async fn check(
 /// The newer version to tell the user about, if any, asking GitHub only when
 /// the check saved at `path` has gone stale. Nothing here is worth failing a
 /// command for, so a failed check goes unmentioned and the last answer stands.
+/// A failed check is remembered too, so GitHub being down or limiting azdocli
+/// does not slow every command until it answers again.
 pub async fn available(
     client: &Client,
     base_url: &str,
@@ -304,10 +308,17 @@ pub async fn available(
     let latest = match Saved::load(path) {
         Some(saved) if !saved.is_due(now) => saved.latest,
         saved => match check_with(client, base_url, path, now, QUIET_TIMEOUT).await {
-            Ok(release) => release.version,
-            Err(_) => saved?.latest,
+            Ok(release) => Some(release.version),
+            Err(_) => {
+                let attempt = Saved {
+                    checked_at: now,
+                    latest: saved.and_then(|saved| saved.latest),
+                };
+                let _ = attempt.save(path);
+                attempt.latest
+            }
         },
-    };
+    }?;
     newer(current, &latest).then_some(latest)
 }
 
@@ -629,7 +640,7 @@ mod tests {
     fn saved_at(checked_at: DateTime<Utc>) -> Saved {
         Saved {
             checked_at,
-            latest: version("1.0.0"),
+            latest: Some(version("1.0.0")),
         }
     }
 
@@ -695,7 +706,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_failed_first_check_finds_nothing() {
+    async fn a_failed_check_is_not_retried_for_a_day() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("update-check.json");
+        let checked_at = DateTime::from_timestamp(1_000_000, 0).unwrap();
+        saved_at(checked_at).save(&path).unwrap();
+        let later = checked_at + Duration::hours(48);
+
+        available(&http_client(), UNREACHABLE, &path, &version("0.9.0"), later).await;
+
+        assert_eq!(
+            Saved::load(&path),
+            Some(Saved {
+                checked_at: later,
+                latest: Some(version("1.0.0")),
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn a_failed_first_check_finds_nothing_and_is_remembered() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("update-check.json");
         let now = DateTime::from_timestamp(1_000_000, 0).unwrap();
@@ -703,6 +733,29 @@ mod tests {
         let found = available(&http_client(), UNREACHABLE, &path, &version("0.9.0"), now).await;
 
         assert_eq!(found, None);
+        assert_eq!(
+            Saved::load(&path),
+            Some(Saved {
+                checked_at: now,
+                latest: None,
+            })
+        );
+    }
+
+    #[test]
+    fn a_check_saved_before_failures_were_kept_still_reads() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("update-check.json");
+        std::fs::write(
+            &path,
+            r#"{"checked_at":"1970-01-12T13:46:40Z","latest":"1.0.0"}"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            Saved::load(&path),
+            Some(saved_at(DateTime::from_timestamp(1_000_000, 0).unwrap()))
+        );
     }
 
     #[test]
