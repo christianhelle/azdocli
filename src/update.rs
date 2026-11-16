@@ -361,20 +361,30 @@ pub async fn fetch_newer(
 }
 
 /// Puts `binary` in place of the running `exe`. It is written next to it
-/// first, so the swap never crosses file systems.
+/// first, so the swap never crosses file systems, in a file created afresh
+/// under a unique name, so nothing already there (such as a planted symlink)
+/// is written through and concurrent updates don't share it. The file is
+/// kept open until the swap is done and removed afterwards.
 pub fn replace_running(exe: &Path, binary: &[u8]) -> Result<()> {
-    let staged = exe.with_file_name(".azdocli-update");
-    std::fs::write(&staged, binary)
-        .with_context(|| format!("could not write to {}", staged.display()))?;
+    use std::io::Write;
+    let dir = exe
+        .parent()
+        .with_context(|| format!("{} is in no directory", exe.display()))?;
+    let mut staged = tempfile::Builder::new()
+        .prefix(".azdocli-update-")
+        .tempfile_in(dir)
+        .with_context(|| format!("could not write to {}", dir.display()))?;
+    staged.write_all(binary)?;
+    staged.as_file().sync_all()?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&staged, std::fs::Permissions::from_mode(0o755))?;
+        staged
+            .as_file()
+            .set_permissions(std::fs::Permissions::from_mode(0o755))?;
     }
-    let replaced = self_replace::self_replace(&staged)
-        .with_context(|| format!("could not replace {}", exe.display()));
-    let _ = std::fs::remove_file(&staged);
-    replaced
+    self_replace::self_replace(staged.path())
+        .with_context(|| format!("could not replace {}", exe.display()))
 }
 
 /// Replaces the running azdocli with the latest release, unless it already
