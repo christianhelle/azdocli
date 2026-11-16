@@ -2,6 +2,12 @@ fn main() {
     println!("cargo:rerun-if-changed=images/icon.ico");
     println!("cargo:rerun-if-changed=Cargo.toml");
 
+    // Lets `azdocli update` pick the release archive built for this target.
+    println!(
+        "cargo:rustc-env=AZDOCLI_TARGET={}",
+        std::env::var("TARGET").expect("Cargo sets TARGET for build scripts")
+    );
+
     // Only PE executables carry an icon resource; check the target, not the host, so cross-compiles work.
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         // winresource fills ProductName and the versions from Cargo, but defaults FileDescription to the package name.
