@@ -521,7 +521,11 @@ mod tests {
                 PackageManager::Chocolatey,
             ),
         ] {
-            assert_eq!(package_manager(Path::new(exe), None), Some(manager), "{exe}");
+            assert_eq!(
+                package_manager(Path::new(exe), None),
+                Some(manager),
+                "{exe}"
+            );
         }
     }
 
