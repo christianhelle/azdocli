@@ -1,7 +1,10 @@
 use crate::auth::{login, logout};
 use crate::output::OutputFormat;
 use crate::project::{get_default_project, save_default_project};
+use anyhow::Context;
 use clap::{ArgMatches, CommandFactory, FromArgMatches, Parser, Subcommand};
+use colored::Colorize;
+use std::io::IsTerminal;
 
 mod artifacts;
 mod auth;
@@ -17,6 +20,7 @@ mod projects;
 mod releases;
 mod repos;
 mod text;
+mod update;
 mod user;
 mod wiki;
 
@@ -26,6 +30,11 @@ struct Cli {
     /// Output format
     #[clap(short, long, global = true, value_enum, default_value_t)]
     output: OutputFormat,
+
+    /// Don't check for a newer azdocli after a command
+    /// (or set AZDOCLI_NO_UPDATE_CHECK)
+    #[clap(long, global = true)]
+    no_update_check: bool,
 
     #[clap(subcommand)]
     command: Option<Commands>,
@@ -145,6 +154,90 @@ enum Commands {
         #[clap(subcommand)]
         subcommand: migrate::MigrateSubCommands,
     },
+    /// Check whether a newer azdocli has been released
+    CheckUpdate,
+    /// Install the latest azdocli release in place of this one
+    Update,
+}
+
+/// Whether to tell the user, unasked, about a newer azdocli once `cli` has
+/// run: only for a person reading text output, and not for the commands
+/// that already deal with updates.
+fn wants_update_notice(cli: &Cli, opted_out_by_env: bool, stderr_is_terminal: bool) -> bool {
+    let update_command = matches!(
+        cli.command,
+        None | Some(Commands::CheckUpdate) | Some(Commands::Update)
+    );
+    !cli.no_update_check
+        && !opted_out_by_env
+        && stderr_is_terminal
+        && cli.output == OutputFormat::Text
+        && !update_command
+}
+
+/// Mentions a newer azdocli on stderr, if there is one. Never fails.
+async fn notify_of_update() {
+    let Ok(path) = update::check_path() else {
+        return;
+    };
+    let current = update::current();
+    if let Some(latest) = update::available(
+        &update::http_client(),
+        update::GITHUB_API,
+        &path,
+        &current,
+        chrono::Utc::now(),
+    )
+    .await
+    {
+        eprintln!(
+            "{}",
+            format!(
+                "azdocli {latest} is available (you have {current}). Run `azdocli update` to install it."
+            )
+            .yellow()
+        );
+    }
+}
+
+async fn check_update() -> anyhow::Result<()> {
+    let release = update::check(
+        &update::http_client(),
+        update::GITHUB_API,
+        &update::check_path()?,
+        chrono::Utc::now(),
+    )
+    .await
+    .context("could not check for updates")?;
+    let current = update::current();
+    if update::newer(&current, &release.version) {
+        println!(
+            "azdocli {} is available (you have {current}): {}",
+            release.version, release.url
+        );
+        println!("Run `azdocli update` to install it.");
+    } else {
+        println!("azdocli {current} is up to date.");
+    }
+    Ok(())
+}
+
+async fn install_update() -> anyhow::Result<()> {
+    let outcome = update::update_running(
+        &update::http_client(),
+        update::GITHUB_API,
+        &update::check_path()?,
+    )
+    .await?;
+    match outcome {
+        update::Outcome::Installed(version) => {
+            println!("✅ azdocli {version} is installed.");
+        }
+        update::Outcome::UpToDate(version) => {
+            println!("azdocli {version} is up to date.");
+        }
+    }
+    Ok(())
 }
 
 #[tokio::main]
@@ -197,9 +290,20 @@ async fn main() -> anyhow::Result<()> {
         Some(Commands::Migrate { subcommand }) => {
             migrate::handle_command(subcommand).await?;
         }
+        Some(Commands::CheckUpdate) => {
+            check_update().await?;
+        }
+        Some(Commands::Update) => {
+            install_update().await?;
+        }
         None => {
             Cli::command().print_help()?;
         }
+    }
+
+    let opted_out_by_env = std::env::var_os("AZDOCLI_NO_UPDATE_CHECK").is_some();
+    if wants_update_notice(&cli, opted_out_by_env, std::io::stderr().is_terminal()) {
+        notify_of_update().await;
     }
 
     Ok(())
@@ -317,6 +421,64 @@ mod tests {
     fn structured_output_is_fine_without_browser_flags() {
         let matches = matches(&["azdocli", "repos", "list", "-o", "json"]);
         assert!(check_browser_flags(OutputFormat::Json, &matches).is_ok());
+    }
+
+    #[test]
+    fn update_commands_parse() {
+        let cli = Cli::try_parse_from(["azdocli", "check-update"]).unwrap();
+        assert!(matches!(cli.command, Some(Commands::CheckUpdate)));
+        let cli = Cli::try_parse_from(["azdocli", "update"]).unwrap();
+        assert!(matches!(cli.command, Some(Commands::Update)));
+    }
+
+    fn cli(args: &[&str]) -> Cli {
+        Cli::try_parse_from(args).unwrap()
+    }
+
+    #[test]
+    fn a_person_running_a_command_hears_of_updates() {
+        assert!(wants_update_notice(
+            &cli(&["azdocli", "repos", "list"]),
+            false,
+            true
+        ));
+    }
+
+    #[test]
+    fn the_update_notice_can_be_turned_off() {
+        let opted_out = cli(&["azdocli", "repos", "list", "--no-update-check"]);
+        assert!(opted_out.no_update_check);
+        assert!(!wants_update_notice(&opted_out, false, true));
+        assert!(!wants_update_notice(
+            &cli(&["azdocli", "repos", "list"]),
+            true,
+            true
+        ));
+    }
+
+    #[test]
+    fn scripts_and_structured_output_get_no_update_notice() {
+        assert!(!wants_update_notice(
+            &cli(&["azdocli", "repos", "list"]),
+            false,
+            false
+        ));
+        assert!(!wants_update_notice(
+            &cli(&["azdocli", "repos", "list", "-o", "json"]),
+            false,
+            true
+        ));
+    }
+
+    #[test]
+    fn update_commands_and_help_get_no_update_notice() {
+        for args in [
+            &["azdocli"][..],
+            &["azdocli", "check-update"],
+            &["azdocli", "update"],
+        ] {
+            assert!(!wants_update_notice(&cli(args), false, true), "{args:?}");
+        }
     }
 
     #[test]
