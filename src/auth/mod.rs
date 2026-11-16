@@ -8,7 +8,7 @@ use crate::auth::url::{
 use crate::config::get_config_dir;
 use anyhow::{anyhow, Context, Result};
 use colored::Colorize;
-use dialoguer::{Input, Password};
+use dialoguer::Input;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
@@ -222,6 +222,15 @@ fn save_pat(pat: &str, base_url: &str) -> Result<()> {
     write_credentials_file(&get_credentials_file_path()?, &credentials)
 }
 
+/// Rejects a blank Personal Access Token so the user is re-prompted instead of
+/// storing an empty credential.
+fn validate_pat(pat: &str) -> Result<()> {
+    if pat.trim().is_empty() {
+        return Err(anyhow!("PAT cannot be empty"));
+    }
+    Ok(())
+}
+
 fn show_pat_instructions() {
     println!();
     println!("{}", "Create a Personal Access Token".bold());
@@ -237,6 +246,10 @@ fn show_pat_instructions() {
     println!();
     println!(
         "{} Store your PAT securely and never commit it to version control.",
+        "⚠️ Important:".yellow().bold()
+    );
+    println!(
+        "{} The PAT is shown as you type it, so it stays visible in terminal scrollback.",
         "⚠️ Important:".yellow().bold()
     );
     println!();
@@ -268,12 +281,13 @@ pub async fn login(profile: Option<&str>) -> Result<()> {
             .interact_text()?;
     }
 
-    let pat: String = Password::new()
+    let pat: String = Input::new()
         .with_prompt("Personal Access Token (PAT)")
-        .interact()?;
+        .validate_with(|pat: &String| validate_pat(pat))
+        .interact_text()?;
     let creds = Credentials {
         organization,
-        pat,
+        pat: pat.trim().to_string(),
         base_url,
     };
 
@@ -416,6 +430,21 @@ pub fn get_credentials_for(profile: Option<&str>) -> Result<Credentials> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn validate_pat_accepts_a_token() {
+        assert!(validate_pat("abc123").is_ok());
+    }
+
+    #[test]
+    fn validate_pat_rejects_an_empty_token() {
+        assert!(validate_pat("").is_err());
+    }
+
+    #[test]
+    fn validate_pat_rejects_a_whitespace_only_token() {
+        assert!(validate_pat("   ").is_err());
+    }
 
     fn sample() -> Credentials {
         Credentials {
