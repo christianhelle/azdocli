@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased Changes]
+## [0.7.0](https://github.com/christianhelle/azdocli/releases/tag/0.7.0) (2026-11-17)
 
 ### Features
 - Check for and install updates ([#148](https://github.com/christianhelle/azdocli/pull/148)) ([@christianhelle](https://github.com/christianhelle/))
@@ -15,6 +15,10 @@
 - Add --assigned-to and --all options to boards work-item list ([#139](https://github.com/christianhelle/azdocli/pull/139)) ([@christianhelle](https://github.com/christianhelle/))
 - Fix variable-group show for unknown IDs and substring --name filter ([#138](https://github.com/christianhelle/azdocli/pull/138)) ([@christianhelle](https://github.com/christianhelle/))
 - Add support for managing releases ([#137](https://github.com/christianhelle/azdocli/pull/137)) ([@christianhelle](https://github.com/christianhelle/))
+
+### Closed Issues
+- azdocli doesn't trust the on-prem server certificate, but Windows does ([#146](https://github.com/christianhelle/azdocli/issues/146)) ([@christianhelle](https://github.com/christianhelle/))
+- Reconcile the documented terminal icon set with actual usage ([#130](https://github.com/christianhelle/azdocli/issues/130)) ([@christianhelle](https://github.com/christianhelle/))
 
 
 ## [0.6.4](https://github.com/christianhelle/azdocli/releases/tag/0.6.4) (2026-10-19)
