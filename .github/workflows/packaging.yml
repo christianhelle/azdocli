@@ -1,6 +1,6 @@
 name: Packaging
 
-# Generates validated package manager artifacts (Homebrew, Chocolatey, WinGet)
+# Generates validated package manager artifacts (Homebrew, Chocolatey, WinGet, Snap)
 # from a published GitHub release. Artifacts are NOT auto-published; they are
 # uploaded as workflow artifacts for manual submission to the respective
 # package managers.
@@ -113,6 +113,34 @@ jobs:
           path: |
             output/chocolatey/**
             !output/chocolatey/**/*.tmp
+
+  snap:
+    name: Generate & build Snap package
+    needs: prepare
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Checkout release source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.VERSION }}
+          path: src
+      - name: Generate snapcraft.yaml
+        run: |
+          ./scripts/generate-snapcraft.sh "$VERSION"
+          cp output/snap/snapcraft.yaml src/snapcraft.yaml
+      - name: Build snap (validates snapcraft.yaml)
+        id: build
+        uses: snapcore/action-build@v1
+        with:
+          path: src
+      - name: Upload Snap artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: snap-package
+          path: ${{ steps.build.outputs.snap }}
 
   winget:
     name: Generate & validate WinGet manifests
