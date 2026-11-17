@@ -174,15 +174,20 @@ pub fn delete_profile(name: &str) -> Result<()> {
 }
 
 fn save_organization(organization: &str) -> Result<()> {
-    let config_dir = get_config_dir()?;
-    let config_file = config_dir.join("config.json");
+    write_organization_file(&get_config_dir()?.join("config.json"), organization)
+}
 
-    let config = serde_json::json!({
-        "organization": organization
-    });
-
-    fs::write(config_file, serde_json::to_string_pretty(&config)?)?;
-
+/// Sets the organization in the config file at `path`, keeping its other
+/// settings (such as the default project). A missing or unreadable file is
+/// replaced by a new one.
+fn write_organization_file(path: &Path, organization: &str) -> Result<()> {
+    let mut config = fs::read_to_string(path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
+        .filter(serde_json::Value::is_object)
+        .unwrap_or_else(|| serde_json::json!({}));
+    config["organization"] = serde_json::Value::String(organization.to_string());
+    fs::write(path, serde_json::to_string_pretty(&config)?)?;
     Ok(())
 }
 
@@ -543,6 +548,32 @@ mod tests {
         let entries: Vec<_> = fs::read_dir(dir.path()).unwrap().collect();
         assert_eq!(entries.len(), 1);
         assert!(!credentials_temp_path(&path).exists());
+    }
+
+    #[test]
+    fn writing_the_organization_keeps_the_default_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        fs::write(
+            &path,
+            r#"{"organization":"old-org","default_project":"MyProject"}"#,
+        )
+        .unwrap();
+        write_organization_file(&path, "contoso").unwrap();
+        let config: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(config["organization"], "contoso");
+        assert_eq!(config["default_project"], "MyProject");
+    }
+
+    #[test]
+    fn writing_the_organization_creates_a_missing_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        write_organization_file(&path, "contoso").unwrap();
+        let config: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(config, serde_json::json!({"organization": "contoso"}));
     }
 
     #[cfg(unix)]
