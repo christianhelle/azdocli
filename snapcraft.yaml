@@ -34,7 +34,7 @@ description: |
   Usage examples:
   - azdocli projects list
   - azdocli repos clone --parallel --concurrency 6
-  - azdocli pipelines runs --id 42
+  - azdocli pipelines runs list --pipeline-ids 42
 
   Notes:
   - azdocli favors speed, predictability, and safe automation. Integration tests
