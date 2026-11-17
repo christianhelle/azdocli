@@ -8,12 +8,24 @@ if [ -z "$VERSION" ]; then
     exit 1
 fi
 
-# Create Snapcraft package
-mkdir -p snap-package-$VERSION
-cp -r snap/* snap-package-$VERSION/
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+SOURCE_FILE="$REPO_ROOT/snapcraft.yaml"
+OUTPUT_DIR="${OUTPUT_DIR:-$REPO_ROOT/output}/snap"
 
-# Update version
-sed -i "s/version: '0.2.0'/version: '$VERSION'/g" snap-package-$VERSION/snapcraft.yaml
+rm -rf "$OUTPUT_DIR"
+mkdir -p "$OUTPUT_DIR"
 
-echo "Snapcraft package created in snap-package-$VERSION/"
-cat snap-package-$VERSION/snapcraft.yaml
+# Copy snapcraft.yaml from the repo root
+cp "$SOURCE_FILE" "$OUTPUT_DIR/snapcraft.yaml"
+
+# Update version (handles quoted and unquoted values)
+sed -i -E "s/^version:.*/version: '$VERSION'/" "$OUTPUT_DIR/snapcraft.yaml"
+
+if ! grep -q "^version: '$VERSION'$" "$OUTPUT_DIR/snapcraft.yaml"; then
+    echo "Failed to set version in $OUTPUT_DIR/snapcraft.yaml" >&2
+    exit 1
+fi
+
+echo "Snapcraft config created in $OUTPUT_DIR/"
+cat "$OUTPUT_DIR/snapcraft.yaml"
