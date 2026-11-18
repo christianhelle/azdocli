@@ -233,6 +233,8 @@ Fixes #<issue-number>
 - **Building from Source**: Update if build process changes
 - **Examples**: Ensure all examples work with current code
 
+**README.crates.md** is the shorter README shown on crates.io. It only covers installing with Cargo. Update its command list and features when you add a subcommand or a major feature.
+
 ## Getting Help
 
 - Create an issue for bugs or feature requests
