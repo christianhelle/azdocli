@@ -54,6 +54,16 @@ snap install azdocli
 
 This will install the latest stable version and automatically handle updates.
 
+### Install using WinGet (Windows)
+
+On Windows, you can install azdocli with WinGet:
+
+```powershell
+winget install ChristianHelle.AzureDevOpsCLI
+```
+
+Update it later with `winget upgrade ChristianHelle.AzureDevOpsCLI`.
+
 ### Install from GitHub Releases
 
 You can also download pre-built binaries from the [GitHub Releases page](https://github.com/christianhelle/azdocli/releases):
