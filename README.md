@@ -54,6 +54,16 @@ snap install azdocli
 
 This will install the latest stable version and automatically handle updates.
 
+### Install using WinGet (Windows)
+
+On Windows, you can install azdocli with WinGet:
+
+```powershell
+winget install ChristianHelle.AzureDevOpsCLI
+```
+
+Update it later with `winget upgrade ChristianHelle.AzureDevOpsCLI`.
+
 ### Install from GitHub Releases
 
 You can also download pre-built binaries from the [GitHub Releases page](https://github.com/christianhelle/azdocli/releases):
@@ -91,7 +101,7 @@ azdocli check-update
 azdocli update
 ```
 
-`azdocli update` checks the download against GitHub's SHA-256 checksum before installing it. If azdocli was installed by Cargo, Snap, Homebrew or Chocolatey, it tells you to update through that package manager instead.
+`azdocli update` checks the download against GitHub's SHA-256 checksum before installing it. If azdocli was installed by Cargo, Snap, Homebrew, Chocolatey or WinGet, it tells you to update through that package manager instead.
 
 Once a day, after a command, azdocli also checks for a newer release and mentions it on stderr. The notice is skipped when stderr isn't a terminal or `--output` isn't `text`. Turn it off with `--no-update-check` or by setting `AZDOCLI_NO_UPDATE_CHECK`.
 
