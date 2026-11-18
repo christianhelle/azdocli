@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased Changes]
+
+### Features
+- Set up WinGet distribution ([#151](https://github.com/christianhelle/azdocli/pull/151)) ([@christianhelle](https://github.com/christianhelle/))
+
+
 ## [0.7.0](https://github.com/christianhelle/azdocli/releases/tag/0.7.0) (2026-11-17)
 
 ### Features
