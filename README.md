@@ -59,10 +59,10 @@ This will install the latest stable version and automatically handle updates.
 On Windows, you can install azdocli with WinGet:
 
 ```powershell
-winget install ChristianHelle.AzureDevOpsCLI
+winget install azdocli
 ```
 
-Update it later with `winget upgrade ChristianHelle.AzureDevOpsCLI`.
+Update it later with `winget upgrade azdocli`. If WinGet finds more than one match, use the full package ID: `winget install --id ChristianHelle.AzureDevOpsCLI`.
 
 ### Install from GitHub Releases
 
