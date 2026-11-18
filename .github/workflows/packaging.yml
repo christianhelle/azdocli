@@ -1,7 +1,8 @@
 name: Packaging
 
 # Generates validated package manager artifacts (Homebrew, Chocolatey, WinGet)
-# from a published GitHub release. Artifacts are NOT auto-published; they are
+# from a published GitHub release. WinGet is auto-submitted to winget-pkgs when
+# the WINGET_TOKEN secret is set; the rest are NOT auto-published and are
 # uploaded as workflow artifacts for manual submission to the respective
 # package managers.
 
@@ -121,6 +122,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.prepare.outputs.version }}
+      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
     steps:
       - uses: actions/checkout@v6
       - name: Download release assets
@@ -152,3 +154,12 @@ jobs:
         with:
           name: winget-manifests
           path: output/winget-${{ env.VERSION }}/
+      - name: Submit to winget-pkgs
+        if: env.WINGET_TOKEN != ''
+        uses: vedantmgoyal9/winget-releaser@main
+        with:
+          identifier: ChristianHelle.AzureDevOpsCLI
+          version: ${{ env.VERSION }}
+          release-tag: ${{ env.VERSION }}
+          installers-regex: '^windows-(x64|arm64)\.zip$'
+          token: ${{ secrets.WINGET_TOKEN }}
