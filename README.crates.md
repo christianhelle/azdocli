@@ -13,7 +13,7 @@ Full documentation: <https://github.com/christianhelle/azdocli#readme>
 cargo install azdocli
 ```
 
-To update, run the same command again. `azdocli update` detects a Cargo install and tells you to do this.
+To update, run the same command again. `azdocli update` recognises a binary in Cargo's bin directory (`$CARGO_HOME/bin`, by default `~/.cargo/bin`) and tells you to do this. It doesn't recognise a custom `--root` or `CARGO_INSTALL_ROOT`.
 
 ## Authentication
 
@@ -24,7 +24,7 @@ Create a Personal Access Token (PAT) in Azure DevOps (profile picture → **Pers
 - **Work Items**: Read & write (boards)
 - **Project and Team**: Read (projects)
 
-Then log in. The PAT is stored encrypted and bound to your machine, never in plaintext.
+Then log in. The PAT is never stored in plaintext. On Windows it is encrypted with DPAPI. On macOS and Linux it is encrypted with a key derived from the machine id and home directory, which are not secret, so the real protection is the credential file's `0600` permissions.
 
 ```sh
 azdocli login
@@ -91,7 +91,7 @@ Formats other than `text` are supported by `repos list`, `repos show`, `repos pr
 - **Release Management**: List release definitions and releases, and create a release from a build
 - **Artifacts**: Browse feeds and packages, and download or publish Universal Packages
 - **Project Management**: Create, delete, list and show team projects, teams, members and process templates
-- **Migration**: Cross-tenant team-project migration with `azdocli migrate`
+- **Migration (experimental)**: Cross-tenant team-project migration with `azdocli migrate`
 - **Board Management**: Work items, queries, area and iteration paths
 - **User Management**: Add, list, show, remove and update organization users
 - **Default Project**: Set a default project to avoid passing `--project` every time
