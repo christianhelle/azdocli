@@ -54,16 +54,20 @@ OPTIONS:
     -o, --output <OUTPUT>    Output format [default: text] [possible values: text, json, yaml, markdown]
 
 SUBCOMMANDS:
-    artifacts    Manage Azure Artifacts feeds and Universal Packages
-    boards       Manage Azure DevOps boards
-    login        Login to Azure DevOps with a Personal Access Token (PAT)
-    logout       Logout from Azure DevOps
-    migrate      Migrate one or more team projects between organizations
-    pipelines    Manage Azure DevOps pipelines
-    project      Set or view the default project
-    releases     Manage Azure DevOps classic releases
-    repos        Manage Azure DevOps repos
-    user         Manage user entitlements
+    artifacts       Manage Azure Artifacts feeds and Universal Packages
+    boards          Manage Azure DevOps boards
+    check-update    Check whether a newer azdocli has been released
+    login           Login to Azure DevOps with a Personal Access Token (PAT)
+    logout          Logout from Azure DevOps
+    migrate         Migrate one or more team projects between organizations (Experimental)
+    pipelines       Manage Azure DevOps pipelines
+    project         Set or view the default project
+    projects        Manage Azure DevOps team projects, teams and process templates
+    releases        Manage Azure DevOps classic releases
+    repos           Manage Azure DevOps repos
+    update          Install the latest azdocli release in place of this one
+    user            Manage user entitlements
+    wiki            Manage Azure DevOps wikis
 ```
 
 Run `azdocli <SUBCOMMAND> --help` for details.
@@ -77,6 +81,8 @@ azdocli repos list -o json | jq -r '.[].name'
 azdocli repos pr list --output markdown
 azdocli boards work-item show --id 42 -o yaml
 ```
+
+Formats other than `text` are supported by `repos list`, `repos show`, `repos pr list`, `repos pr show`, `pipelines list`, `pipelines show`, `pipelines runs list`, `boards work-item list`, `boards work-item show` and `boards query`. Other commands accept only `text` and fail with a clear error for any other format.
 
 ## Features
 
