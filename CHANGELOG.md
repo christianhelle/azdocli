@@ -3,6 +3,7 @@
 ## [Unreleased Changes]
 
 ### Features
+- Add PowerShell WinGet script and fix manifest validation ([#152](https://github.com/christianhelle/azdocli/pull/152)) ([@christianhelle](https://github.com/christianhelle/))
 - Set up WinGet distribution ([#151](https://github.com/christianhelle/azdocli/pull/151)) ([@christianhelle](https://github.com/christianhelle/))
 
 
