@@ -1226,9 +1226,9 @@ async fn handle_work_item_command(
             }
 
             // Setting System.Tags replaces them, so new tags join the existing
-            // ones. The revision they were read at guards the update, so tags
-            // another client adds in between fail the update instead of being lost.
-            // --effort needs the item's type to pick its effort field.
+            // ones, and --effort needs the item's type to pick its effort field.
+            // The revision these were read at guards the update, so a change by
+            // another client in between fails it instead of being lost or misread.
             let current = if content.tags.is_empty() && content.effort.is_none() {
                 None
             } else {
@@ -1240,11 +1240,11 @@ async fn handle_work_item_command(
                     .and_then(|item| item.fields.get(name))
                     .and_then(|v| v.as_str())
             };
-            let (tags, read_at) = if content.tags.is_empty() {
-                (None, None)
+            let read_at = current.as_ref().and_then(|item| item.rev);
+            let tags = if content.tags.is_empty() {
+                None
             } else {
-                let tags = merge_tags(field("System.Tags"), &content.tags);
-                (tags, current.as_ref().and_then(|item| item.rev))
+                merge_tags(field("System.Tags"), &content.tags)
             };
             let effort = match field("System.WorkItemType") {
                 Some(work_item_type) => {
