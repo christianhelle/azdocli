@@ -40,9 +40,9 @@ impl Render for WorkItemList<'_> {
         }
         for work_item in self.work_items {
             let (work_item_type, state, title) = summary(work_item);
-            // Truncate title if too long
-            let truncated_title = if title.len() > 30 {
-                format!("{}...", &title[..27])
+            // Truncate title if too long, on a character boundary
+            let truncated_title = if title.chars().count() > 30 {
+                format!("{}...", title.chars().take(27).collect::<String>())
             } else {
                 title.to_string()
             };
@@ -291,6 +291,16 @@ mod tests {
             work_items: &items,
         };
         assert!(text(&list).contains(&format!("{}...", "x".repeat(27))));
+    }
+
+    #[test]
+    fn work_item_list_text_truncates_unicode_titles_on_character_boundaries() {
+        let items = [work_item(5, &"🚀".repeat(40))];
+        let list = WorkItemList {
+            heading: "My Work Items",
+            work_items: &items,
+        };
+        assert!(text(&list).contains(&format!("{}...", "🚀".repeat(27))));
     }
 
     #[test]

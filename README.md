@@ -244,7 +244,7 @@ piped. Errors still go to stderr.
 These commands support every format so far: `repos list`, `repos show`, `repos pr list`,
 `repos pr show`, `pipelines list`, `pipelines show`, `pipelines runs list`, `boards work-item list`,
 `boards work-item show`, `boards work-item create`, `boards work-item update`,
-`boards work-item attachment list` and `boards query`. The other commands accept only `text` and fail with a
+`boards work-item attachment list`, `boards query` and `boards sprint show`. The other commands accept only `text` and fail with a
 clear error for any other format.
 
 ## Features
@@ -923,6 +923,9 @@ azdocli boards work-item create pbi --title "Sign up" --iteration "@current" --a
 azdocli boards work-item create task --title "Write tests" --parent 1234 --iteration "@current" --remaining-work 4
 azdocli boards work-item update --id 123 --iteration "@current" --team "Web Team"
 
+# Create a backlog item and its tasks in one go; the tasks share its sprint and area
+azdocli boards work-item create pbi --title "Sign up" --iteration "@current" --task "Write tests" --task "Implement"
+
 # Take a task and track its hours
 azdocli boards work-item update --id 124 --assigned-to "@me" --original-estimate 8 --completed-work 3 --remaining-work 5
 
@@ -1028,6 +1031,18 @@ The `boards work-item states` command lists the states a type moves through, wit
 ```sh
 # New, Approved, Committed, Done and Removed in a Scrum project
 azdocli boards work-item states pbi
+```
+
+#### Sprint Overview
+
+The `boards sprint show` command shows how a team's current sprint is going: its work items grouped by state, with effort (Effort, Story Points or Size) and remaining work totals per state.
+
+```sh
+# The current sprint of the project's default team
+azdocli boards sprint show
+
+# Another team's sprint, as JSON for scripts
+azdocli boards sprint show --team "Web Team" -o json
 ```
 
 #### WIQL Queries
