@@ -183,6 +183,15 @@ pub enum WorkItemSubCommands {
         #[clap(short, long)]
         project: Option<String>,
     },
+    /// List the states a work item type moves through, e.g. New, Approved,
+    /// Committed and Done for a Scrum product backlog item
+    States {
+        /// Work item type: a short name such as pbi or bug, or any type name
+        work_item_type: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
     /// Read and write the comments on a work item
     Comment {
         #[clap(subcommand)]
@@ -320,6 +329,50 @@ async fn list_work_item_types(project: &str) -> Result<Vec<models::WorkItemType>
         .list(creds.organization, project)
         .await?
         .value)
+}
+
+async fn list_work_item_states(
+    project: &str,
+    work_item_type: &str,
+) -> Result<Vec<models::WorkItemStateColor>> {
+    let creds = get_credentials()?;
+    Ok(create_wit_client()?
+        .work_item_type_states_client()
+        .list(creds.organization, project, work_item_type)
+        .await?
+        .value)
+}
+
+/// The states as a name and category table, in workflow order.
+fn states_table(states: &[models::WorkItemStateColor]) -> String {
+    if states.is_empty() {
+        return "No states found.
+"
+        .to_string();
+    }
+    let mut table = format!(
+        "{:<20} {}
+{}
+",
+        "Name".bold(),
+        "Category".bold(),
+        "-".repeat(40)
+    );
+    for state in states {
+        table += &format!(
+            "{:<20} {}
+",
+            escape_control_characters(state.name.as_deref().unwrap_or("-")),
+            escape_control_characters(state.category.as_deref().unwrap_or("")),
+        );
+    }
+    table
+        + &format!(
+            "
+{} state(s)
+",
+            states.len()
+        )
 }
 
 fn display_work_item_types(work_item_types: &[models::WorkItemType]) {
@@ -1245,6 +1298,21 @@ async fn handle_work_item_command(
                 }
             }
         }
+        WorkItemSubCommands::States {
+            work_item_type,
+            project,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            let work_item_type = resolve_work_item_type(work_item_type);
+            match list_work_item_states(&project_name, &work_item_type).await {
+                Ok(states) => print!("{}", states_table(&states)),
+                Err(e) => {
+                    eprintln!("❌ Failed to list the states of '{work_item_type}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
         WorkItemSubCommands::Comment { subcommand } => {
             return handle_work_item_comment_command(subcommand).await;
         }
@@ -1617,6 +1685,33 @@ mod tests {
     fn merge_tags_with_nothing_to_add_is_none() {
         assert_eq!(merge_tags(Some("api"), &[]), None);
         assert_eq!(merge_tags(None, &[" ".into()]), None);
+    }
+
+    #[test]
+    fn states_takes_a_type_alias() {
+        let WorkItemSubCommands::States { work_item_type, .. } =
+            parse(&["states", "pbi", "-p", "Proj"]).unwrap()
+        else {
+            panic!("expected States");
+        };
+        assert_eq!(
+            resolve_work_item_type(&work_item_type),
+            "Product Backlog Item"
+        );
+    }
+
+    #[test]
+    fn states_table_lists_each_state_with_its_category() {
+        let state = |name: &str, category: &str| {
+            let mut state = models::WorkItemStateColor::new();
+            state.name = Some(name.into());
+            state.category = Some(category.into());
+            state
+        };
+        let table = states_table(&[state("New", "Proposed"), state("Committed", "InProgress")]);
+        assert!(table.contains(&format!("{:<20} {}\n", "New", "Proposed")));
+        assert!(table.contains(&format!("{:<20} {}\n", "Committed", "InProgress")));
+        assert!(table.ends_with("\n2 state(s)\n"));
     }
 
     #[test]
