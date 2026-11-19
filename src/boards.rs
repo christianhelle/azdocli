@@ -517,7 +517,15 @@ async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<
                     .and_then(|v| v.as_str());
                 let state = work_item_type
                     .map(|wt| {
-                        if wt == "Task" || wt == "User Story" || wt == "Feature" || wt == "Epic" {
+                        if [
+                            "Task",
+                            "User Story",
+                            "Product Backlog Item",
+                            "Feature",
+                            "Epic",
+                        ]
+                        .contains(&wt)
+                        {
                             "Removed"
                         } else {
                             "Closed"
