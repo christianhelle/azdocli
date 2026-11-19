@@ -124,7 +124,7 @@ impl Render for WorkItemDetails<'_> {
             writeln!(w, "📝 Title: {title}")?;
         }
         for (field, label, _) in DETAIL_FIELDS {
-            if let Some(value) = field_str(work_item, field) {
+            if let Some(value) = field_display(work_item, field) {
                 writeln!(w, "{label}: {value}")?;
             }
         }
@@ -154,7 +154,7 @@ impl Render for WorkItemDetails<'_> {
             writeln!(w, "- **Revision:** {rev}")?;
         }
         for (field, _, label) in DETAIL_FIELDS {
-            if let Some(value) = field_str(work_item, field) {
+            if let Some(value) = field_display(work_item, field) {
                 writeln!(w, "- **{label}:** {value}")?;
             }
         }
@@ -168,6 +168,19 @@ impl Render for WorkItemDetails<'_> {
             writeln!(w, "\n### Acceptance Criteria\n\n{criteria}")?;
         }
         Ok(())
+    }
+}
+
+/// A field as text: strings as they are, people by display name, numbers as written.
+fn field_display(work_item: &WorkItem, field: &str) -> Option<String> {
+    match work_item.fields.get(field)? {
+        serde_json::Value::String(text) => Some(text.clone()),
+        serde_json::Value::Number(number) => Some(number.to_string()),
+        serde_json::Value::Object(identity) => identity
+            .get("displayName")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string),
+        _ => None,
     }
 }
 
@@ -337,6 +350,15 @@ mod tests {
         let markdown = markdown(&WorkItemDetails(&item));
         assert!(markdown.contains("- **Tags:** api; auth\n"));
         assert!(markdown.ends_with("\n### Acceptance Criteria\n\nGiven a user\n"));
+    }
+
+    #[test]
+    fn work_item_details_show_people_by_display_name() {
+        let mut item = work_item(5, "Sign up");
+        item.fields["System.CreatedBy"] =
+            json!({"displayName": "Ada Lovelace", "uniqueName": "ada@example.com"});
+        assert!(text(&WorkItemDetails(&item)).contains("👤 Created By: Ada Lovelace\n"));
+        assert!(markdown(&WorkItemDetails(&item)).contains("- **Created by:** Ada Lovelace\n"));
     }
 
     #[test]
