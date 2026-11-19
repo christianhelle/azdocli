@@ -830,6 +830,17 @@ fn child_task_patch(
     create_work_item_patch(&fields, Some(parent_url))
 }
 
+/// Says what a create already made when reading the result back fails, so
+/// the user knows not to create it again.
+fn read_back_failure(parent: i32, tasks: &[i32]) -> String {
+    let tasks = tasks
+        .iter()
+        .map(|id| format!("#{id}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("Created #{parent} with tasks {tasks}, but could not read it back")
+}
+
 async fn get_work_item_with_relations(project: &str, id: i32) -> Result<models::WorkItem> {
     let creds = get_credentials()?;
     Ok(create_wit_client()?
@@ -1316,7 +1327,13 @@ async fn handle_work_item_command(
                 let work_item = if tasks.is_empty() {
                     work_item
                 } else {
-                    get_work_item_with_relations(&project_name, work_item.id).await?
+                    get_work_item_with_relations(&project_name, work_item.id)
+                        .await
+                        .map_err(|e| {
+                            let task_ids: Vec<i32> =
+                                created_tasks.iter().map(|task| task.id).collect();
+                            e.context(read_back_failure(work_item.id, &task_ids))
+                        })?
                 };
                 output::emit(&WorkItemDetails(&work_item), format)?;
             } else {
@@ -1847,6 +1864,14 @@ mod tests {
         };
         assert_eq!(iteration_path.as_deref(), Some("@current"));
         assert_eq!(content.team.as_deref(), Some("Web"));
+    }
+
+    #[test]
+    fn read_back_failure_names_what_was_created() {
+        assert_eq!(
+            read_back_failure(314, &[315, 316]),
+            "Created #314 with tasks #315, #316, but could not read it back"
+        );
     }
 
     #[test]
