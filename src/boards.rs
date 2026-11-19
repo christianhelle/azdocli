@@ -17,6 +17,7 @@ mod area;
 mod attachment;
 mod classification;
 mod iteration;
+mod link;
 mod sprint;
 mod views;
 
@@ -211,6 +212,12 @@ pub enum WorkItemSubCommands {
     Attachment {
         #[clap(subcommand)]
         subcommand: attachment::AttachmentSubCommands,
+    },
+    /// List, add and remove links to other work items, such as a parent,
+    /// children, related items and dependencies
+    Link {
+        #[clap(subcommand)]
+        subcommand: link::LinkSubCommands,
     },
     /// Update a work item
     Update {
@@ -1487,6 +1494,9 @@ async fn handle_work_item_command(
         }
         WorkItemSubCommands::Attachment { subcommand } => {
             return attachment::handle_command(subcommand, format).await;
+        }
+        WorkItemSubCommands::Link { subcommand } => {
+            return link::handle_command(subcommand, format).await;
         }
         WorkItemSubCommands::Update {
             id,
