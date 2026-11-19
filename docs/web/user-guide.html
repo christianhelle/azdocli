@@ -1085,6 +1085,7 @@ azdocli boards work-item create pbi --title "Sign up with email" --description "
 # Plan into the current sprint: assign, size (Effort, Story Points or Size) and estimate
 azdocli boards work-item create pbi --title "Sign up" --iteration "@current" --assigned-to ada@example.com --effort 5
 azdocli boards work-item create task --title "Write tests" --parent 1234 --iteration "@current" --remaining-work 4
+azdocli boards work-item create task --title "Review" --assigned-to "@me" --original-estimate 2
 
 # Any type name from 'boards work-item types', and any field by reference name
 azdocli boards work-item create "Product Backlog Item" --title "Sign up" --field Microsoft.VSTS.Common.BusinessValue=50
@@ -1105,6 +1106,10 @@ azdocli boards work-item update --id 123 --title "New title" --state "Active" --
 
 # Add tags (existing tags are kept), acceptance criteria and attachments
 azdocli boards work-item update --id 123 --tag needs-review --acceptance-criteria-file criteria.md --attachment design.png
+
+# Swap a tag, and log hours on a task
+azdocli boards work-item update --id 123 --tag ready --remove-tag needs-review
+azdocli boards work-item update --id 124 --completed-work 3 --remaining-work 5
 
 # Move to another team's current sprint and reassign
 azdocli boards work-item update --id 123 --iteration "@current" --team "Web Team" --assigned-to ada@example.com</code></pre>
@@ -1213,6 +1218,12 @@ azdocli boards work-item types
 
 # With specific project
 azdocli boards work-item types --project MyProject</code></pre>
+          </div>
+
+          <div class="command-example">
+            <h4>List Work Item States</h4>
+            <pre><code># New, Approved, Committed, Done and Removed in a Scrum project
+azdocli boards work-item states pbi</code></pre>
           </div>
         </div>
 

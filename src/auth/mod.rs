@@ -319,6 +319,29 @@ fn connection_data_url(creds: &Credentials) -> String {
     )
 }
 
+/// Fetches `connectionData`, which describes the user the PAT belongs to.
+pub(crate) async fn connection_data(creds: &Credentials) -> Result<serde_json::Value> {
+    let response = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(30))
+        .build()?
+        .get(connection_data_url(creds))
+        .basic_auth("", Some(&creds.pat))
+        .send()
+        .await
+        .context("Requesting connection data")?;
+    if response.status() != reqwest::StatusCode::OK {
+        return Err(anyhow!(
+            "Unable to determine the signed-in user ({})",
+            response.status()
+        ));
+    }
+    response
+        .json()
+        .await
+        .context("Parsing connection data response")
+}
+
 /// Checks the PAT against Azure DevOps so a wrong token is rejected before
 /// anything is saved.
 async fn validate_credentials(creds: &Credentials) -> Result<()> {

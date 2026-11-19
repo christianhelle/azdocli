@@ -183,6 +183,15 @@ pub enum WorkItemSubCommands {
         #[clap(short, long)]
         project: Option<String>,
     },
+    /// List the states a work item type moves through, e.g. New, Approved,
+    /// Committed and Done for a Scrum product backlog item
+    States {
+        /// Work item type: a short name such as pbi or bug, or any type name
+        work_item_type: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
     /// Read and write the comments on a work item
     Comment {
         #[clap(subcommand)]
@@ -213,6 +222,9 @@ pub enum WorkItemSubCommands {
         /// New area path for the work item
         #[clap(long = "area")]
         area_path: Option<String>,
+        /// Tag to remove; repeat the flag or separate tags with commas
+        #[clap(long = "remove-tag", value_name = "TAG", value_delimiter = ',')]
+        remove_tags: Vec<String>,
         #[clap(flatten)]
         content: WorkItemContentArgs,
     },
@@ -224,7 +236,7 @@ pub struct WorkItemContentArgs {
     /// Priority (e.g., 1, 2, 3, 4)
     #[clap(long)]
     priority: Option<i32>,
-    /// User to assign the work item to, e.g. ada@example.com; "" unassigns
+    /// User to assign the work item to, e.g. ada@example.com or @me; "" unassigns
     #[clap(long, value_name = "USER")]
     assigned_to: Option<String>,
     /// Team whose current sprint `--iteration @current` means (default: the project's default team)
@@ -237,6 +249,12 @@ pub struct WorkItemContentArgs {
     /// Hours of work left on a task
     #[clap(long, value_name = "HOURS", value_parser = parse_non_negative, allow_hyphen_values = true)]
     remaining_work: Option<f64>,
+    /// Hours a task was first estimated to take
+    #[clap(long, value_name = "HOURS", value_parser = parse_non_negative, allow_hyphen_values = true)]
+    original_estimate: Option<f64>,
+    /// Hours of work done on a task
+    #[clap(long, value_name = "HOURS", value_parser = parse_non_negative, allow_hyphen_values = true)]
+    completed_work: Option<f64>,
     /// Description (HTML or plain text)
     #[clap(long, conflicts_with = "description_file")]
     description: Option<String>,
@@ -297,6 +315,32 @@ impl WorkItemContentArgs {
     }
 }
 
+/// `--assigned-to` value meaning the signed-in user.
+fn is_me(value: &str) -> bool {
+    value.trim().eq_ignore_ascii_case("@me")
+}
+
+/// The account name (usually the email) of the user `connectionData` describes.
+fn signed_in_account(connection_data: &serde_json::Value) -> Option<String> {
+    connection_data
+        .pointer("/authenticatedUser/properties/Account/$value")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
+}
+
+/// `assignee`, with `@me` swapped for the signed-in user's account name.
+async fn resolve_assignee(assignee: Option<&str>) -> Result<Option<String>> {
+    match assignee {
+        Some(value) if is_me(value) => {
+            let data = crate::auth::connection_data(&get_credentials()?).await?;
+            signed_in_account(&data)
+                .map(Some)
+                .ok_or_else(|| anyhow!("Could not tell which account the PAT belongs to"))
+        }
+        other => Ok(other.map(str::to_string)),
+    }
+}
+
 /// The text given inline, or else the contents of the file given.
 fn text_or_file(text: Option<&str>, file: Option<&Path>) -> Result<Option<String>> {
     match (text, file) {
@@ -317,6 +361,50 @@ async fn list_work_item_types(project: &str) -> Result<Vec<models::WorkItemType>
         .list(creds.organization, project)
         .await?
         .value)
+}
+
+async fn list_work_item_states(
+    project: &str,
+    work_item_type: &str,
+) -> Result<Vec<models::WorkItemStateColor>> {
+    let creds = get_credentials()?;
+    Ok(create_wit_client()?
+        .work_item_type_states_client()
+        .list(creds.organization, project, work_item_type)
+        .await?
+        .value)
+}
+
+/// `states`, or an error naming the type when there are none: the API answers
+/// an unknown type with an empty list, and every real type has states.
+fn require_states(
+    states: Vec<models::WorkItemStateColor>,
+    work_item_type: &str,
+) -> Result<Vec<models::WorkItemStateColor>> {
+    if states.is_empty() {
+        return Err(anyhow!(
+            "Work item type '{work_item_type}' was not found; 'boards work-item types' lists them"
+        ));
+    }
+    Ok(states)
+}
+
+/// The states as a name and category table, in workflow order.
+fn states_table(states: &[models::WorkItemStateColor]) -> String {
+    let mut table = format!(
+        "{:<20} {}\n{}\n",
+        "Name".bold(),
+        "Category".bold(),
+        "-".repeat(40)
+    );
+    for state in states {
+        table += &format!(
+            "{:<20} {}\n",
+            escape_control_characters(state.name.as_deref().unwrap_or("-")),
+            escape_control_characters(state.category.as_deref().unwrap_or("")),
+        );
+    }
+    table + &format!("\n{} state(s)\n", states.len())
 }
 
 fn display_work_item_types(work_item_types: &[models::WorkItemType]) {
@@ -469,12 +557,17 @@ struct WorkItemFields {
     assigned_to: Option<String>,
     priority: Option<i32>,
     remaining_work: Option<f64>,
+    original_estimate: Option<f64>,
+    completed_work: Option<f64>,
     /// The work item type's effort field and the value for it.
     effort: Option<(&'static str, f64)>,
     iteration_path: Option<String>,
     area_path: Option<String>,
     /// `System.Tags`, already joined with "; ".
     tags: Option<String>,
+    /// Whether `tags` replaces the item's tags. Azure DevOps merges tags set
+    /// with `add`, so dropping one takes `replace`, or `remove` to clear them.
+    replace_tags: bool,
     /// Further fields as (reference name, value), set after the named ones.
     extra: Vec<(String, String)>,
 }
@@ -483,18 +576,47 @@ struct WorkItemFields {
 /// dropping blanks and case-insensitive duplicates. `None` when there are no
 /// tags to add.
 fn merge_tags(existing: Option<&str>, added: &[String]) -> Option<String> {
-    if added.iter().all(|tag| tag.trim().is_empty()) {
+    edit_tags(existing, added, &[])
+}
+
+/// Whether two tags are the same, ignoring case in any script. Like .NET's
+/// OrdinalIgnoreCase, which Azure DevOps uses, each character is uppercased on
+/// its own: σ, ς and Σ match, while ß (whose uppercase is two letters) stays ß.
+fn same_tag(a: &str, b: &str) -> bool {
+    fn upper(c: char) -> char {
+        let mut upper = c.to_uppercase();
+        match (upper.next(), upper.next()) {
+            (Some(single), None) => single,
+            _ => c,
+        }
+    }
+    a.chars().map(upper).eq(b.chars().map(upper))
+}
+
+/// `existing` tags with `added` joined and `removed` dropped, both matched
+/// case-insensitively. `Some("")` when no tags are left; `None` when there is
+/// nothing to add or remove.
+fn edit_tags(existing: Option<&str>, added: &[String], removed: &[String]) -> Option<String> {
+    let given = |tags: &[String]| -> Vec<String> {
+        tags.iter()
+            .map(|tag| tag.trim().to_string())
+            .filter(|tag| !tag.is_empty())
+            .collect()
+    };
+    let (added, removed) = (given(added), given(removed));
+    if added.is_empty() && removed.is_empty() {
         return None;
     }
     let mut tags: Vec<&str> = Vec::new();
     for tag in existing
         .unwrap_or("")
         .split(';')
-        .chain(added.iter().map(String::as_str))
         .map(str::trim)
+        .chain(added.iter().map(String::as_str))
         .filter(|tag| !tag.is_empty())
     {
-        if !tags.iter().any(|kept| kept.eq_ignore_ascii_case(tag)) {
+        let dropped = removed.iter().any(|gone| same_tag(gone, tag));
+        if !dropped && !tags.iter().any(|kept| same_tag(kept, tag)) {
             tags.push(tag);
         }
     }
@@ -529,8 +651,16 @@ impl WorkItemFields {
                         self.priority.map(|priority| json!(priority)),
                     ),
                     (
+                        "Microsoft.VSTS.Scheduling.OriginalEstimate",
+                        self.original_estimate.map(|hours| json!(hours)),
+                    ),
+                    (
                         "Microsoft.VSTS.Scheduling.RemainingWork",
                         self.remaining_work.map(|hours| json!(hours)),
+                    ),
+                    (
+                        "Microsoft.VSTS.Scheduling.CompletedWork",
+                        self.completed_work.map(|hours| json!(hours)),
                     ),
                 ]
                 .into_iter()
@@ -541,12 +671,27 @@ impl WorkItemFields {
                 .chain([
                     ("System.IterationPath", text(&self.iteration_path)),
                     ("System.AreaPath", text(&self.area_path)),
-                    ("System.Tags", text(&self.tags)),
                 ])
                 .filter_map(|(field, value)| value.map(|value| set_field_op(field, value))),
             )
+            .chain(self.tags.as_deref().map(|tags| self.tags_op(tags)))
             .chain(extra.into_iter().map(extra_op))
             .collect()
+    }
+}
+
+impl WorkItemFields {
+    fn tags_op(&self, tags: &str) -> JsonPatchOperation {
+        let mut op = set_field_op("System.Tags", json!(tags));
+        if self.replace_tags {
+            if tags.is_empty() {
+                op.op = Some(Op::Remove);
+                op.value = None;
+            } else {
+                op.op = Some(Op::Replace);
+            }
+        }
+        op
     }
 }
 
@@ -1078,9 +1223,11 @@ async fn handle_work_item_command(
                 description: content.description()?,
                 acceptance_criteria: content.acceptance_criteria()?,
                 tags: merge_tags(None, &content.tags),
-                assigned_to: content.assigned_to.clone(),
+                assigned_to: resolve_assignee(content.assigned_to.as_deref()).await?,
                 priority: content.priority,
                 remaining_work: content.remaining_work,
+                original_estimate: content.original_estimate,
+                completed_work: content.completed_work,
                 extra: content.fields.clone(),
                 iteration_path,
                 area_path: area_path.clone(),
@@ -1227,6 +1374,24 @@ async fn handle_work_item_command(
                 }
             }
         }
+        WorkItemSubCommands::States {
+            work_item_type,
+            project,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            let work_item_type = resolve_work_item_type(work_item_type);
+            match list_work_item_states(&project_name, &work_item_type)
+                .await
+                .and_then(|states| require_states(states, &work_item_type))
+            {
+                Ok(states) => print!("{}", states_table(&states)),
+                Err(e) => {
+                    eprintln!("❌ Failed to list the states of '{work_item_type}'");
+                    eprintln!("   {e}");
+                    return Err(e);
+                }
+            }
+        }
         WorkItemSubCommands::Comment { subcommand } => {
             return handle_work_item_comment_command(subcommand).await;
         }
@@ -1240,6 +1405,7 @@ async fn handle_work_item_command(
             state,
             iteration_path,
             area_path,
+            remove_tags,
             content,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
@@ -1251,11 +1417,12 @@ async fn handle_work_item_command(
             // ones, and --effort needs the item's type to pick its effort field.
             // The revision these were read at guards the update, so a change by
             // another client in between fails it instead of being lost or misread.
-            let current = if content.tags.is_empty() && content.effort.is_none() {
-                None
-            } else {
-                Some(get_work_item(&project_name, id).await?)
-            };
+            let current =
+                if content.tags.is_empty() && remove_tags.is_empty() && content.effort.is_none() {
+                    None
+                } else {
+                    Some(get_work_item(&project_name, id).await?)
+                };
             let field = |name| {
                 current
                     .as_ref()
@@ -1263,11 +1430,7 @@ async fn handle_work_item_command(
                     .and_then(|v| v.as_str())
             };
             let read_at = current.as_ref().and_then(|item| item.rev);
-            let tags = if content.tags.is_empty() {
-                None
-            } else {
-                merge_tags(field("System.Tags"), &content.tags)
-            };
+            let tags = edit_tags(field("System.Tags"), &content.tags, remove_tags);
             let effort = match requested_type(&content.fields, field("System.WorkItemType")) {
                 Some(work_item_type) => {
                     effort_assignment(&project_name, work_item_type, content.effort).await?
@@ -1289,10 +1452,13 @@ async fn handle_work_item_command(
                     acceptance_criteria: content.acceptance_criteria()?,
                     tags,
                     state: state.clone(),
+                    replace_tags: !remove_tags.is_empty(),
                     effort,
-                    assigned_to: content.assigned_to.clone(),
+                    assigned_to: resolve_assignee(content.assigned_to.as_deref()).await?,
                     priority: content.priority,
                     remaining_work: content.remaining_work,
+                    original_estimate: content.original_estimate,
+                    completed_work: content.completed_work,
                     extra: content.fields.clone(),
                     iteration_path,
                     area_path: area_path.clone(),
@@ -1528,6 +1694,46 @@ mod tests {
     }
 
     #[test]
+    fn task_estimates_set_their_fields() {
+        let WorkItemSubCommands::Update { content, .. } = parse(&[
+            "update",
+            "--id",
+            "1",
+            "--original-estimate",
+            "8",
+            "--completed-work",
+            "3.5",
+        ])
+        .unwrap() else {
+            panic!("expected Update");
+        };
+        let patch = WorkItemFields {
+            original_estimate: content.original_estimate,
+            completed_work: content.completed_work,
+            ..Default::default()
+        }
+        .patch();
+        let set: Vec<_> = patch
+            .iter()
+            .map(|op| (op.path.as_deref().unwrap(), op.value.clone().unwrap()))
+            .collect();
+        assert_eq!(
+            set,
+            [
+                (
+                    "/fields/Microsoft.VSTS.Scheduling.OriginalEstimate",
+                    json!(8.0)
+                ),
+                (
+                    "/fields/Microsoft.VSTS.Scheduling.CompletedWork",
+                    json!(3.5)
+                ),
+            ]
+        );
+        assert!(parse(&["update", "--id", "1", "--completed-work", "NaN"]).is_err());
+    }
+
+    #[test]
     fn remaining_work_sets_its_field() {
         let WorkItemSubCommands::Update { content, .. } =
             parse(&["update", "--id", "1", "--remaining-work", "2.5"]).unwrap()
@@ -1601,6 +1807,151 @@ mod tests {
     fn merge_tags_with_nothing_to_add_is_none() {
         assert_eq!(merge_tags(Some("api"), &[]), None);
         assert_eq!(merge_tags(None, &[" ".into()]), None);
+    }
+
+    #[test]
+    fn signed_in_account_comes_from_connection_data() {
+        let data = json!({
+            "authenticatedUser": {
+                "id": "3d22",
+                "properties": {"Account": {"$type": "System.String", "$value": "ada@example.com"}}
+            }
+        });
+        assert_eq!(signed_in_account(&data).as_deref(), Some("ada@example.com"));
+        assert_eq!(signed_in_account(&json!({"authenticatedUser": {}})), None);
+    }
+
+    #[test]
+    fn only_at_me_needs_a_lookup() {
+        assert!(is_me("@me"));
+        assert!(is_me(" @Me "));
+        assert!(!is_me("ada@example.com"));
+        assert!(!is_me(""));
+    }
+
+    #[test]
+    fn states_takes_a_type_alias() {
+        let WorkItemSubCommands::States { work_item_type, .. } =
+            parse(&["states", "pbi", "-p", "Proj"]).unwrap()
+        else {
+            panic!("expected States");
+        };
+        assert_eq!(
+            resolve_work_item_type(&work_item_type),
+            "Product Backlog Item"
+        );
+    }
+
+    #[test]
+    fn no_states_means_an_unknown_type() {
+        let error = require_states(Vec::new(), "Story").unwrap_err();
+        assert!(error.to_string().contains("'Story'"));
+        assert!(error.to_string().contains("boards work-item types"));
+        assert_eq!(
+            require_states(vec![models::WorkItemStateColor::new()], "Bug")
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn states_table_lists_each_state_with_its_category() {
+        let state = |name: &str, category: &str| {
+            let mut state = models::WorkItemStateColor::new();
+            state.name = Some(name.into());
+            state.category = Some(category.into());
+            state
+        };
+        let table = states_table(&[state("New", "Proposed"), state("Committed", "InProgress")]);
+        assert!(table.contains(&format!("{:<20} {}\n", "New", "Proposed")));
+        assert!(table.contains(&format!("{:<20} {}\n", "Committed", "InProgress")));
+        assert!(table.ends_with("\n2 state(s)\n"));
+    }
+
+    #[test]
+    fn replacing_tags_uses_replace_or_remove() {
+        let tags_op = |tags: &str, replace_tags| {
+            WorkItemFields {
+                tags: Some(tags.into()),
+                replace_tags,
+                ..Default::default()
+            }
+            .patch()
+            .remove(0)
+        };
+        let added = tags_op("a; b", false);
+        assert_eq!(
+            (added.op, added.value),
+            (Some(Op::Add), Some(json!("a; b")))
+        );
+        let replaced = tags_op("a", true);
+        assert_eq!(
+            (replaced.op, replaced.value),
+            (Some(Op::Replace), Some(json!("a")))
+        );
+        let cleared = tags_op("", true);
+        assert_eq!((cleared.op, cleared.value), (Some(Op::Remove), None));
+        assert_eq!(cleared.path.as_deref(), Some("/fields/System.Tags"));
+    }
+
+    #[test]
+    fn edit_tags_removes_case_insensitively() {
+        assert_eq!(
+            edit_tags(
+                Some("api; Backend; auth"),
+                &["new".into()],
+                &["backend".into()]
+            )
+            .as_deref(),
+            Some("api; auth; new")
+        );
+    }
+
+    #[test]
+    fn edit_tags_matches_non_ascii_case_insensitively() {
+        assert_eq!(
+            edit_tags(Some("Équipe; api"), &["API".into()], &["équipe".into()]).as_deref(),
+            Some("api")
+        );
+    }
+
+    #[test]
+    fn same_tag_compares_like_dotnet_ignore_case() {
+        assert!(same_tag("ΟΔΟΣ", "οδος"));
+        assert!(same_tag("σ", "ς"));
+        assert!(!same_tag("ß", "ss"));
+        assert!(!same_tag("api", "apis"));
+    }
+
+    #[test]
+    fn edit_tags_removing_the_last_tag_clears_them() {
+        assert_eq!(
+            edit_tags(Some("api"), &[], &["API".into()]).as_deref(),
+            Some("")
+        );
+    }
+
+    #[test]
+    fn edit_tags_with_nothing_to_change_is_none() {
+        assert_eq!(edit_tags(Some("api"), &[], &[" ".into()]), None);
+    }
+
+    #[test]
+    fn remove_tag_is_repeatable_and_comma_separated() {
+        let WorkItemSubCommands::Update { remove_tags, .. } = parse(&[
+            "update",
+            "--id",
+            "1",
+            "--remove-tag",
+            "a",
+            "--remove-tag",
+            "b,c",
+        ])
+        .unwrap() else {
+            panic!("expected Update");
+        };
+        assert_eq!(remove_tags, ["a", "b", "c"]);
     }
 
     #[test]
