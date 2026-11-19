@@ -3,6 +3,7 @@
 ## [Unreleased Changes]
 
 ### Features
+- Sprint planning flags for work items: --assigned-to, --iteration @current, --effort, --remaining-work ([#156](https://github.com/christianhelle/azdocli/pull/156)) ([@christianhelle](https://github.com/christianhelle/))
 - Support Scrum work item types, acceptance criteria, tags, fields and attachments ([#155](https://github.com/christianhelle/azdocli/pull/155)) ([@christianhelle](https://github.com/christianhelle/))
 - Add PowerShell WinGet script and fix manifest validation ([#152](https://github.com/christianhelle/azdocli/pull/152)) ([@christianhelle](https://github.com/christianhelle/))
 - Set up WinGet distribution ([#151](https://github.com/christianhelle/azdocli/pull/151)) ([@christianhelle](https://github.com/christianhelle/))
