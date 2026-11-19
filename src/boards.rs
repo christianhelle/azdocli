@@ -213,6 +213,9 @@ pub enum WorkItemSubCommands {
         /// New area path for the work item
         #[clap(long = "area")]
         area_path: Option<String>,
+        /// Tag to remove; repeat the flag or separate tags with commas
+        #[clap(long = "remove-tag", value_name = "TAG", value_delimiter = ',')]
+        remove_tags: Vec<String>,
         #[clap(flatten)]
         content: WorkItemContentArgs,
     },
@@ -483,18 +486,33 @@ struct WorkItemFields {
 /// dropping blanks and case-insensitive duplicates. `None` when there are no
 /// tags to add.
 fn merge_tags(existing: Option<&str>, added: &[String]) -> Option<String> {
-    if added.iter().all(|tag| tag.trim().is_empty()) {
+    edit_tags(existing, added, &[])
+}
+
+/// `existing` tags with `added` joined and `removed` dropped, both matched
+/// case-insensitively. `Some("")` when no tags are left; `None` when there is
+/// nothing to add or remove.
+fn edit_tags(existing: Option<&str>, added: &[String], removed: &[String]) -> Option<String> {
+    let given = |tags: &[String]| -> Vec<String> {
+        tags.iter()
+            .map(|tag| tag.trim().to_string())
+            .filter(|tag| !tag.is_empty())
+            .collect()
+    };
+    let (added, removed) = (given(added), given(removed));
+    if added.is_empty() && removed.is_empty() {
         return None;
     }
     let mut tags: Vec<&str> = Vec::new();
     for tag in existing
         .unwrap_or("")
         .split(';')
-        .chain(added.iter().map(String::as_str))
         .map(str::trim)
+        .chain(added.iter().map(String::as_str))
         .filter(|tag| !tag.is_empty())
     {
-        if !tags.iter().any(|kept| kept.eq_ignore_ascii_case(tag)) {
+        let dropped = removed.iter().any(|gone| gone.eq_ignore_ascii_case(tag));
+        if !dropped && !tags.iter().any(|kept| kept.eq_ignore_ascii_case(tag)) {
             tags.push(tag);
         }
     }
@@ -1240,6 +1258,7 @@ async fn handle_work_item_command(
             state,
             iteration_path,
             area_path,
+            remove_tags,
             content,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
@@ -1251,11 +1270,12 @@ async fn handle_work_item_command(
             // ones, and --effort needs the item's type to pick its effort field.
             // The revision these were read at guards the update, so a change by
             // another client in between fails it instead of being lost or misread.
-            let current = if content.tags.is_empty() && content.effort.is_none() {
-                None
-            } else {
-                Some(get_work_item(&project_name, id).await?)
-            };
+            let current =
+                if content.tags.is_empty() && remove_tags.is_empty() && content.effort.is_none() {
+                    None
+                } else {
+                    Some(get_work_item(&project_name, id).await?)
+                };
             let field = |name| {
                 current
                     .as_ref()
@@ -1263,11 +1283,7 @@ async fn handle_work_item_command(
                     .and_then(|v| v.as_str())
             };
             let read_at = current.as_ref().and_then(|item| item.rev);
-            let tags = if content.tags.is_empty() {
-                None
-            } else {
-                merge_tags(field("System.Tags"), &content.tags)
-            };
+            let tags = edit_tags(field("System.Tags"), &content.tags, remove_tags);
             let effort = match requested_type(&content.fields, field("System.WorkItemType")) {
                 Some(work_item_type) => {
                     effort_assignment(&project_name, work_item_type, content.effort).await?
@@ -1601,6 +1617,49 @@ mod tests {
     fn merge_tags_with_nothing_to_add_is_none() {
         assert_eq!(merge_tags(Some("api"), &[]), None);
         assert_eq!(merge_tags(None, &[" ".into()]), None);
+    }
+
+    #[test]
+    fn edit_tags_removes_case_insensitively() {
+        assert_eq!(
+            edit_tags(
+                Some("api; Backend; auth"),
+                &["new".into()],
+                &["backend".into()]
+            )
+            .as_deref(),
+            Some("api; auth; new")
+        );
+    }
+
+    #[test]
+    fn edit_tags_removing_the_last_tag_clears_them() {
+        assert_eq!(
+            edit_tags(Some("api"), &[], &["API".into()]).as_deref(),
+            Some("")
+        );
+    }
+
+    #[test]
+    fn edit_tags_with_nothing_to_change_is_none() {
+        assert_eq!(edit_tags(Some("api"), &[], &[" ".into()]), None);
+    }
+
+    #[test]
+    fn remove_tag_is_repeatable_and_comma_separated() {
+        let WorkItemSubCommands::Update { remove_tags, .. } = parse(&[
+            "update",
+            "--id",
+            "1",
+            "--remove-tag",
+            "a",
+            "--remove-tag",
+            "b,c",
+        ])
+        .unwrap() else {
+            panic!("expected Update");
+        };
+        assert_eq!(remove_tags, ["a", "b", "c"]);
     }
 
     #[test]
