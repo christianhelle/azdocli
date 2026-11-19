@@ -232,10 +232,10 @@ pub struct WorkItemContentArgs {
     team: Option<String>,
     /// Size of the item: sets Effort (Scrum), Story Points (Agile) or Size (CMMI),
     /// whichever the work item type has
-    #[clap(long, value_name = "POINTS")]
+    #[clap(long, value_name = "POINTS", value_parser = parse_non_negative, allow_hyphen_values = true)]
     effort: Option<f64>,
     /// Hours of work left on a task
-    #[clap(long, value_name = "HOURS")]
+    #[clap(long, value_name = "HOURS", value_parser = parse_non_negative, allow_hyphen_values = true)]
     remaining_work: Option<f64>,
     /// Description (HTML or plain text)
     #[clap(long, conflicts_with = "description_file")]
@@ -258,6 +258,15 @@ pub struct WorkItemContentArgs {
     /// File to upload and attach; repeatable
     #[clap(long = "attachment", value_name = "PATH")]
     attachments: Vec<PathBuf>,
+}
+
+/// A finite, non-negative number. JSON has no NaN or infinity, so those would
+/// be sent as null and clear the field instead of setting it.
+fn parse_non_negative(input: &str) -> Result<f64, String> {
+    match input.trim().parse::<f64>() {
+        Ok(value) if value.is_finite() && value >= 0.0 => Ok(value),
+        _ => Err(format!("expected a non-negative number, got '{input}'")),
+    }
 }
 
 /// Splits `--field` input at its first `=` into reference name and value.
@@ -1451,6 +1460,19 @@ mod tests {
         };
         assert_eq!(content.effort, Some(5.0));
         assert!(parse(&["create", "pbi", "--title", "x", "--effort", "big"]).is_err());
+    }
+
+    #[test]
+    fn numeric_flags_reject_non_finite_and_negative_values() {
+        for flag in ["--effort", "--remaining-work"] {
+            for bad in ["NaN", "inf", "1e999", "-1"] {
+                assert!(
+                    parse(&["update", "--id", "1", flag, bad]).is_err(),
+                    "{flag} {bad} should be rejected"
+                );
+            }
+            assert!(parse(&["update", "--id", "1", flag, "0"]).is_ok());
+        }
     }
 
     #[test]
