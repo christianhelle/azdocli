@@ -97,9 +97,10 @@ fn attachment_id_from_url(url: &str) -> Option<String> {
 }
 
 /// The file name to save an attachment under: its last path component, so a
-/// name like `../../x` cannot write outside the target directory.
+/// name like `../../x` cannot write outside the target directory. Separators
+/// follow the host's path rules, so a backslash is kept in a Unix file name.
 fn safe_file_name(name: &str) -> Result<String> {
-    Path::new(&name.replace('\\', "/"))
+    Path::new(name)
         .file_name()
         .and_then(|name| name.to_str())
         .filter(|name| !name.is_empty() && *name != "." && *name != "..")
@@ -399,10 +400,21 @@ mod tests {
     #[test]
     fn safe_file_name_drops_directories() {
         assert_eq!(safe_file_name("../../etc/passwd").unwrap(), "passwd");
-        assert_eq!(safe_file_name("..\\..\\boot.ini").unwrap(), "boot.ini");
         assert_eq!(safe_file_name("spec.md").unwrap(), "spec.md");
         assert!(safe_file_name("..").is_err());
         assert!(safe_file_name("").is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn safe_file_name_treats_backslashes_as_separators_on_windows() {
+        assert_eq!(safe_file_name("..\\..\\boot.ini").unwrap(), "boot.ini");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn safe_file_name_keeps_backslashes_on_unix() {
+        assert_eq!(safe_file_name("weird\\name").unwrap(), "weird\\name");
     }
 
     #[test]
