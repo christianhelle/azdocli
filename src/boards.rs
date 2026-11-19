@@ -249,6 +249,12 @@ pub struct WorkItemContentArgs {
     /// Hours of work left on a task
     #[clap(long, value_name = "HOURS", value_parser = parse_non_negative, allow_hyphen_values = true)]
     remaining_work: Option<f64>,
+    /// Hours a task was first estimated to take
+    #[clap(long, value_name = "HOURS", value_parser = parse_non_negative, allow_hyphen_values = true)]
+    original_estimate: Option<f64>,
+    /// Hours of work done on a task
+    #[clap(long, value_name = "HOURS", value_parser = parse_non_negative, allow_hyphen_values = true)]
+    completed_work: Option<f64>,
     /// Description (HTML or plain text)
     #[clap(long, conflicts_with = "description_file")]
     description: Option<String>,
@@ -551,6 +557,8 @@ struct WorkItemFields {
     assigned_to: Option<String>,
     priority: Option<i32>,
     remaining_work: Option<f64>,
+    original_estimate: Option<f64>,
+    completed_work: Option<f64>,
     /// The work item type's effort field and the value for it.
     effort: Option<(&'static str, f64)>,
     iteration_path: Option<String>,
@@ -626,8 +634,16 @@ impl WorkItemFields {
                         self.priority.map(|priority| json!(priority)),
                     ),
                     (
+                        "Microsoft.VSTS.Scheduling.OriginalEstimate",
+                        self.original_estimate.map(|hours| json!(hours)),
+                    ),
+                    (
                         "Microsoft.VSTS.Scheduling.RemainingWork",
                         self.remaining_work.map(|hours| json!(hours)),
+                    ),
+                    (
+                        "Microsoft.VSTS.Scheduling.CompletedWork",
+                        self.completed_work.map(|hours| json!(hours)),
                     ),
                 ]
                 .into_iter()
@@ -1178,6 +1194,8 @@ async fn handle_work_item_command(
                 assigned_to: resolve_assignee(content.assigned_to.as_deref()).await?,
                 priority: content.priority,
                 remaining_work: content.remaining_work,
+                original_estimate: content.original_estimate,
+                completed_work: content.completed_work,
                 extra: content.fields.clone(),
                 iteration_path,
                 area_path: area_path.clone(),
@@ -1403,6 +1421,8 @@ async fn handle_work_item_command(
                     assigned_to: resolve_assignee(content.assigned_to.as_deref()).await?,
                     priority: content.priority,
                     remaining_work: content.remaining_work,
+                    original_estimate: content.original_estimate,
+                    completed_work: content.completed_work,
                     extra: content.fields.clone(),
                     iteration_path,
                     area_path: area_path.clone(),
@@ -1635,6 +1655,46 @@ mod tests {
             }
             assert!(parse(&["update", "--id", "1", flag, "0"]).is_ok());
         }
+    }
+
+    #[test]
+    fn task_estimates_set_their_fields() {
+        let WorkItemSubCommands::Update { content, .. } = parse(&[
+            "update",
+            "--id",
+            "1",
+            "--original-estimate",
+            "8",
+            "--completed-work",
+            "3.5",
+        ])
+        .unwrap() else {
+            panic!("expected Update");
+        };
+        let patch = WorkItemFields {
+            original_estimate: content.original_estimate,
+            completed_work: content.completed_work,
+            ..Default::default()
+        }
+        .patch();
+        let set: Vec<_> = patch
+            .iter()
+            .map(|op| (op.path.as_deref().unwrap(), op.value.clone().unwrap()))
+            .collect();
+        assert_eq!(
+            set,
+            [
+                (
+                    "/fields/Microsoft.VSTS.Scheduling.OriginalEstimate",
+                    json!(8.0)
+                ),
+                (
+                    "/fields/Microsoft.VSTS.Scheduling.CompletedWork",
+                    json!(3.5)
+                ),
+            ]
+        );
+        assert!(parse(&["update", "--id", "1", "--completed-work", "NaN"]).is_err());
     }
 
     #[test]
