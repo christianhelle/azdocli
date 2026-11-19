@@ -8,7 +8,7 @@ use anyhow::{anyhow, Result};
 use azure_devops_rust_api::wit::models::json_patch_operation::Op;
 use azure_devops_rust_api::wit::models::JsonPatchOperation;
 use azure_devops_rust_api::wit::{self, models};
-use clap::{Subcommand, ValueEnum};
+use clap::Subcommand;
 use colored::Colorize;
 use serde_json::json;
 
@@ -50,18 +50,30 @@ pub enum BoardsSubCommands {
     },
 }
 
-#[derive(ValueEnum, Clone, Debug)]
-pub enum WorkItemType {
-    /// Bug work item type
-    Bug,
-    /// Task work item type
-    Task,
-    /// User Story work item type
-    UserStory,
-    /// Feature work item type
-    Feature,
-    /// Epic work item type
-    Epic,
+/// Short names for the work item types of the built-in processes, as
+/// (alias, Azure DevOps name).
+const WORK_ITEM_TYPE_ALIASES: &[(&str, &str)] = &[
+    ("bug", "Bug"),
+    ("task", "Task"),
+    ("user-story", "User Story"),
+    ("feature", "Feature"),
+    ("epic", "Epic"),
+    ("pbi", "Product Backlog Item"),
+    ("product-backlog-item", "Product Backlog Item"),
+    ("issue", "Issue"),
+    ("impediment", "Impediment"),
+    ("requirement", "Requirement"),
+    ("test-case", "Test Case"),
+];
+
+/// Maps a short alias such as `pbi` to its Azure DevOps type name. Any other
+/// name, e.g. one from `work-item types`, is used as given.
+fn resolve_work_item_type(name: &str) -> String {
+    WORK_ITEM_TYPE_ALIASES
+        .iter()
+        .find(|(alias, _)| alias.eq_ignore_ascii_case(name))
+        .map(|(_, type_name)| type_name.to_string())
+        .unwrap_or_else(|| name.to_string())
 }
 
 #[derive(Subcommand, Clone)]
@@ -96,9 +108,10 @@ pub enum WorkItemCommentSubCommands {
 pub enum WorkItemSubCommands {
     /// Create a new work item
     Create {
-        /// Work item type
-        #[clap(value_enum)]
-        work_item_type: WorkItemType,
+        /// Work item type: bug, task, user-story, feature, epic, pbi, issue,
+        /// impediment, requirement, test-case, or any type name listed by
+        /// `boards work-item types` (e.g. "Product Backlog Item")
+        work_item_type: String,
         /// Work item title
         #[clap(short, long)]
         title: String,
@@ -397,7 +410,7 @@ fn create_work_item_patch(
 
 async fn create_work_item(
     project: &str,
-    work_item_type: &WorkItemType,
+    work_item_type: &str,
     title: &str,
     parent: Option<i32>,
     iteration_path: Option<&str>,
@@ -414,13 +427,7 @@ async fn create_work_item(
                     creds.organization.clone(),
                     create_work_item_patch(title, parent_url.as_deref(), iteration_path, area_path),
                     project.to_string(),
-                    match work_item_type {
-                        WorkItemType::Bug => "Bug",
-                        WorkItemType::Task => "Task",
-                        WorkItemType::UserStory => "User Story",
-                        WorkItemType::Feature => "Feature",
-                        WorkItemType::Epic => "Epic",
-                    },
+                    work_item_type,
                 )
                 .await?;
 
@@ -829,11 +836,12 @@ async fn handle_work_item_command(
             area_path,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
-            println!("Creating a {work_item_type:?} work item in project: {project_name}");
+            let work_item_type = resolve_work_item_type(work_item_type);
+            println!("Creating a {work_item_type} work item in project: {project_name}");
 
             match create_work_item(
                 &project_name,
-                work_item_type,
+                &work_item_type,
                 title,
                 *parent,
                 iteration_path.as_deref(),
@@ -1046,6 +1054,38 @@ mod tests {
     }
 
     #[test]
+    fn work_item_type_aliases_resolve_to_azure_devops_names() {
+        assert_eq!(resolve_work_item_type("bug"), "Bug");
+        assert_eq!(resolve_work_item_type("user-story"), "User Story");
+        assert_eq!(resolve_work_item_type("pbi"), "Product Backlog Item");
+        assert_eq!(
+            resolve_work_item_type("product-backlog-item"),
+            "Product Backlog Item"
+        );
+        assert_eq!(resolve_work_item_type("Impediment"), "Impediment");
+        assert_eq!(resolve_work_item_type("test-case"), "Test Case");
+    }
+
+    #[test]
+    fn unknown_work_item_types_pass_through_verbatim() {
+        assert_eq!(
+            resolve_work_item_type("Product Backlog Item"),
+            "Product Backlog Item"
+        );
+        assert_eq!(resolve_work_item_type("Custom Thing"), "Custom Thing");
+    }
+
+    #[test]
+    fn create_accepts_any_work_item_type_name() {
+        let WorkItemSubCommands::Create { work_item_type, .. } =
+            parse(&["create", "Product Backlog Item", "--title", "Sign up"]).unwrap()
+        else {
+            panic!("expected Create");
+        };
+        assert_eq!(work_item_type, "Product Backlog Item");
+    }
+
+    #[test]
     fn create_accepts_iteration_and_area_paths() {
         let command = parse(&[
             "create",
@@ -1146,7 +1186,7 @@ mod tests {
         else {
             panic!("expected Create");
         };
-        assert!(matches!(work_item_type, WorkItemType::Task));
+        assert_eq!(work_item_type, "task");
         assert_eq!(parent, Some(42));
     }
 
@@ -1171,7 +1211,7 @@ mod tests {
         else {
             panic!("expected Create");
         };
-        assert!(matches!(work_item_type, WorkItemType::UserStory));
+        assert_eq!(work_item_type, "user-story");
         assert_eq!(title, "Sign up");
         assert_eq!(parent, Some(42));
     }
