@@ -507,12 +507,33 @@ pub(super) fn is_current_iteration(path: &str) -> bool {
     path.eq_ignore_ascii_case(CURRENT_ITERATION)
 }
 
-/// The path of the team's current iteration, from its `current` timeframe listing.
-fn current_path(iterations: &[TeamSettingsIteration], team: &str) -> Result<String> {
+/// The team's current iteration, from its `current` timeframe listing.
+fn current(iterations: Vec<TeamSettingsIteration>, team: &str) -> Result<TeamSettingsIteration> {
     iterations
-        .iter()
-        .find_map(|iteration| iteration.path.clone())
+        .into_iter()
+        .find(|iteration| iteration.path.is_some())
         .ok_or_else(|| anyhow!("Team '{team}' has no current iteration"))
+}
+
+/// The current iteration of `team`, or of the project's default team, along
+/// with the team's name.
+pub(super) async fn current_iteration(
+    project: &str,
+    team: Option<&str>,
+) -> Result<(String, TeamSettingsIteration)> {
+    let team = match team {
+        Some(team) => team.to_string(),
+        None => default_team(project).await?,
+    };
+    let iterations = list_team_iterations(project, &team, Some("current"))
+        .await
+        .map_err(|e| {
+            e.context(format!(
+                "Failed to find the current iteration of team '{team}'"
+            ))
+        })?;
+    let iteration = current(iterations, &team)?;
+    Ok((team, iteration))
 }
 
 /// `path`, with `@current` swapped for the current iteration of `team`, or of
@@ -528,18 +549,8 @@ pub(super) async fn resolve_iteration_path(
     if !is_current_iteration(path) {
         return Ok(Some(path.to_string()));
     }
-    let team = match team {
-        Some(team) => team.to_string(),
-        None => default_team(project).await?,
-    };
-    let iterations = list_team_iterations(project, &team, Some("current"))
-        .await
-        .map_err(|e| {
-            e.context(format!(
-                "Failed to find the current iteration of team '{team}'"
-            ))
-        })?;
-    current_path(&iterations, &team).map(Some)
+    let (_, iteration) = current_iteration(project, team).await?;
+    Ok(iteration.path)
 }
 
 async fn default_team(project: &str) -> Result<String> {
@@ -608,7 +619,23 @@ async fn list_iteration_work_items(
     selector: &IterationSelector,
 ) -> Result<()> {
     let id = resolve_iteration_id(project, selector).await?;
+    let work_items = iteration_work_items(project, team, &id).await?;
 
+    let heading = "Iteration Work Items";
+    if work_items.is_empty() {
+        display_empty_work_items_table(heading);
+    } else {
+        display_work_items_list(heading, &work_items);
+    }
+    Ok(())
+}
+
+/// The work items in a team's iteration, by the iteration's id.
+pub(super) async fn iteration_work_items(
+    project: &str,
+    team: &str,
+    id: &str,
+) -> Result<Vec<azure_devops_rust_api::wit::models::WorkItem>> {
     let creds = get_credentials()?;
     let relations = create_work_client()?
         .iterations_client()
@@ -627,12 +654,6 @@ async fn list_iteration_work_items(
         }
     }
 
-    let heading = "Iteration Work Items";
-    if ids.is_empty() {
-        display_empty_work_items_table(heading);
-        return Ok(());
-    }
-
     let client = create_wit_client()?;
     let mut work_items = Vec::with_capacity(ids.len());
     for chunk in ids.chunks(WORK_ITEMS_PER_REQUEST) {
@@ -649,9 +670,7 @@ async fn list_iteration_work_items(
                 .value,
         );
     }
-
-    display_work_items_list(heading, &work_items);
-    Ok(())
+    Ok(work_items)
 }
 
 async fn get_team_settings(project: &str, team: &str) -> Result<TeamSetting> {
@@ -807,17 +826,17 @@ mod tests {
     }
 
     #[test]
-    fn current_path_is_the_current_iterations_path() {
-        let iterations = [team_iteration(Some("Proj\\Sprint 3"))];
+    fn current_is_the_first_iteration_with_a_path() {
+        let iterations = vec![team_iteration(None), team_iteration(Some("Proj\\Sprint 3"))];
         assert_eq!(
-            current_path(&iterations, "Proj Team").unwrap(),
-            "Proj\\Sprint 3"
+            current(iterations, "Proj Team").unwrap().path.as_deref(),
+            Some("Proj\\Sprint 3")
         );
     }
 
     #[test]
-    fn current_path_fails_when_the_team_has_no_current_iteration() {
-        let error = current_path(&[team_iteration(None)], "Proj Team").unwrap_err();
+    fn current_fails_when_the_team_has_no_current_iteration() {
+        let error = current(vec![team_iteration(None)], "Proj Team").unwrap_err();
         assert!(error.to_string().contains("Proj Team"));
     }
 

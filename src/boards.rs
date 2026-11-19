@@ -17,6 +17,7 @@ mod area;
 mod attachment;
 mod classification;
 mod iteration;
+mod sprint;
 mod views;
 
 use views::{WorkItemDetails, WorkItemList};
@@ -37,6 +38,11 @@ pub enum BoardsSubCommands {
     Iteration {
         #[clap(subcommand)]
         subcommand: iteration::IterationSubCommands,
+    },
+    /// See how a team's current sprint is going
+    Sprint {
+        #[clap(subcommand)]
+        subcommand: sprint::SprintSubCommands,
     },
     /// Run a WIQL query and list the work items it returns
     Query {
@@ -1130,6 +1136,9 @@ pub async fn handle_command(subcommand: &BoardsSubCommands, format: OutputFormat
         }
         BoardsSubCommands::Area { subcommand } => area::handle_command(subcommand).await,
         BoardsSubCommands::Iteration { subcommand } => iteration::handle_command(subcommand).await,
+        BoardsSubCommands::Sprint { subcommand } => {
+            sprint::handle_command(subcommand, format).await
+        }
         BoardsSubCommands::Query {
             wiql,
             project,
