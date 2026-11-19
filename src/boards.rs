@@ -579,6 +579,11 @@ fn merge_tags(existing: Option<&str>, added: &[String]) -> Option<String> {
     edit_tags(existing, added, &[])
 }
 
+/// Whether two tags are the same, ignoring case in any script, as Azure DevOps does.
+fn same_tag(a: &str, b: &str) -> bool {
+    a.to_lowercase() == b.to_lowercase()
+}
+
 /// `existing` tags with `added` joined and `removed` dropped, both matched
 /// case-insensitively. `Some("")` when no tags are left; `None` when there is
 /// nothing to add or remove.
@@ -601,8 +606,8 @@ fn edit_tags(existing: Option<&str>, added: &[String], removed: &[String]) -> Op
         .chain(added.iter().map(String::as_str))
         .filter(|tag| !tag.is_empty())
     {
-        let dropped = removed.iter().any(|gone| gone.eq_ignore_ascii_case(tag));
-        if !dropped && !tags.iter().any(|kept| kept.eq_ignore_ascii_case(tag)) {
+        let dropped = removed.iter().any(|gone| same_tag(gone, tag));
+        if !dropped && !tags.iter().any(|kept| same_tag(kept, tag)) {
             tags.push(tag);
         }
     }
@@ -1875,6 +1880,14 @@ mod tests {
             )
             .as_deref(),
             Some("api; auth; new")
+        );
+    }
+
+    #[test]
+    fn edit_tags_matches_non_ascii_case_insensitively() {
+        assert_eq!(
+            edit_tags(Some("Équipe; api"), &["API".into()], &["équipe".into()]).as_deref(),
+            Some("api")
         );
     }
 
