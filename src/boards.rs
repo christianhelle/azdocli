@@ -230,6 +230,9 @@ pub struct WorkItemContentArgs {
     /// Read the acceptance criteria from a file
     #[clap(long, value_name = "PATH")]
     acceptance_criteria_file: Option<PathBuf>,
+    /// Tag to add; repeat the flag or separate tags with commas. Update keeps existing tags
+    #[clap(long = "tag", value_name = "TAG", value_delimiter = ',')]
+    tags: Vec<String>,
 }
 
 impl WorkItemContentArgs {
@@ -420,6 +423,30 @@ struct WorkItemFields {
     priority: Option<i32>,
     iteration_path: Option<String>,
     area_path: Option<String>,
+    /// `System.Tags`, already joined with "; ".
+    tags: Option<String>,
+}
+
+/// Joins `existing` tags (as Azure DevOps stores them, "a; b") with `added`,
+/// dropping blanks and case-insensitive duplicates. `None` when there are no
+/// tags to add.
+fn merge_tags(existing: Option<&str>, added: &[String]) -> Option<String> {
+    if added.iter().all(|tag| tag.trim().is_empty()) {
+        return None;
+    }
+    let mut tags: Vec<&str> = Vec::new();
+    for tag in existing
+        .unwrap_or("")
+        .split(';')
+        .chain(added.iter().map(String::as_str))
+        .map(str::trim)
+        .filter(|tag| !tag.is_empty())
+    {
+        if !tags.iter().any(|kept| kept.eq_ignore_ascii_case(tag)) {
+            tags.push(tag);
+        }
+    }
+    Some(tags.join("; "))
 }
 
 impl WorkItemFields {
@@ -440,6 +467,7 @@ impl WorkItemFields {
             ),
             ("System.IterationPath", text(&self.iteration_path)),
             ("System.AreaPath", text(&self.area_path)),
+            ("System.Tags", text(&self.tags)),
         ]
         .into_iter()
         .filter_map(|(field, value)| value.map(|value| set_field_op(field, value)))
@@ -890,6 +918,7 @@ async fn handle_work_item_command(
                 title: Some(title.clone()),
                 description: content.description()?,
                 acceptance_criteria: content.acceptance_criteria()?,
+                tags: merge_tags(None, &content.tags),
                 iteration_path: iteration_path.clone(),
                 area_path: area_path.clone(),
                 ..Default::default()
@@ -1050,6 +1079,17 @@ async fn handle_work_item_command(
             let project_name = get_project_or_default(project.as_deref())?;
             println!("Updating work item with id: {id} in project: {project_name}");
 
+            // Setting System.Tags replaces them, so new tags join the existing ones.
+            let tags = if content.tags.is_empty() {
+                None
+            } else {
+                let current = get_work_item(&project_name, id).await?;
+                merge_tags(
+                    current.fields.get("System.Tags").and_then(|v| v.as_str()),
+                    &content.tags,
+                )
+            };
+
             match update_work_item(
                 &project_name,
                 id,
@@ -1057,6 +1097,7 @@ async fn handle_work_item_command(
                     title: title.clone(),
                     description: content.description()?,
                     acceptance_criteria: content.acceptance_criteria()?,
+                    tags,
                     state: state.clone(),
                     priority: *priority,
                     iteration_path: iteration_path.clone(),
@@ -1198,6 +1239,50 @@ mod tests {
             "y.md"
         ])
         .is_err());
+    }
+
+    #[test]
+    fn tags_are_repeatable_and_comma_separated() {
+        let WorkItemSubCommands::Create { content, .. } = parse(&[
+            "create", "pbi", "--title", "Sign up", "--tag", "backend", "--tag", "api,auth",
+        ])
+        .unwrap() else {
+            panic!("expected Create");
+        };
+        assert_eq!(content.tags, ["backend", "api", "auth"]);
+    }
+
+    #[test]
+    fn merge_tags_without_existing_joins_the_new_ones() {
+        assert_eq!(
+            merge_tags(None, &["a".into(), "b".into()]).as_deref(),
+            Some("a; b")
+        );
+    }
+
+    #[test]
+    fn merge_tags_keeps_existing_and_drops_duplicates() {
+        assert_eq!(
+            merge_tags(Some("api; Backend"), &["backend".into(), "auth".into()]).as_deref(),
+            Some("api; Backend; auth")
+        );
+    }
+
+    #[test]
+    fn merge_tags_with_nothing_to_add_is_none() {
+        assert_eq!(merge_tags(Some("api"), &[]), None);
+        assert_eq!(merge_tags(None, &[" ".into()]), None);
+    }
+
+    #[test]
+    fn tags_set_the_tags_field() {
+        let patch = WorkItemFields {
+            tags: Some("a; b".into()),
+            ..Default::default()
+        }
+        .patch();
+        assert_eq!(patch[0].path.as_deref(), Some("/fields/System.Tags"));
+        assert_eq!(patch[0].value, Some(json!("a; b")));
     }
 
     #[test]
