@@ -1,15 +1,18 @@
 //! Links between work items: parents and children, related items and
 //! dependencies.
 
-use super::{create_wit_client, parse_work_item_id};
+use super::{add_relation_op, create_wit_client, parse_work_item_id, update_work_item};
 use crate::auth::get_credentials;
+use crate::auth::url::api_work_item_url;
 use crate::output::{self, md_table, OutputFormat, Render};
 use crate::project::get_project_or_default;
 use crate::text::escape_control_characters;
-use anyhow::Result;
-use azure_devops_rust_api::wit::models::WorkItem;
+use anyhow::{bail, Result};
+use azure_devops_rust_api::wit::models::{JsonPatchOperation, WorkItem};
 use clap::{Subcommand, ValueEnum};
+use colored::Colorize;
 use serde::Serialize;
+use serde_json::json;
 use std::io::{self, Write};
 
 #[derive(Subcommand, Clone)]
@@ -19,6 +22,30 @@ pub enum LinkSubCommands {
         /// ID of the work item
         #[clap(short, long)]
         id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
+    /// Link a work item to other work items
+    Add {
+        /// ID of the work item to add the links to
+        #[clap(short, long)]
+        id: String,
+        /// What the other work items are to this one
+        #[clap(long = "type", value_enum)]
+        link_type: LinkType,
+        /// IDs of the work items to link to; repeat the flag or separate IDs
+        /// with commas
+        #[clap(
+            long = "target",
+            value_name = "ID",
+            value_delimiter = ',',
+            required = true
+        )]
+        targets: Vec<i32>,
+        /// Comment to put on the links
+        #[clap(long)]
+        comment: Option<String>,
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
@@ -56,6 +83,28 @@ const LINK_TYPES: &[(LinkType, &str)] = &[
 ];
 
 impl LinkType {
+    /// The relation type Azure DevOps stores this link as.
+    fn rel(self) -> &'static str {
+        LINK_TYPES
+            .iter()
+            .find(|(link_type, _)| *link_type == self)
+            .map(|(_, rel)| *rel)
+            .expect("every link type has a relation")
+    }
+
+    /// What the linked item is, as in "#5 is now the parent of #7".
+    fn role(self) -> &'static str {
+        match self {
+            LinkType::Parent => "the parent of",
+            LinkType::Child => "a child of",
+            LinkType::Related => "related to",
+            LinkType::Predecessor => "a predecessor of",
+            LinkType::Successor => "a successor of",
+            LinkType::Duplicate => "a duplicate of",
+            LinkType::DuplicateOf => "the original of",
+        }
+    }
+
     fn from_rel(rel: &str) -> Option<Self> {
         LINK_TYPES
             .iter()
@@ -148,15 +197,63 @@ fn describe(links: &mut [WorkItemLink], linked: &[WorkItem]) {
 
 async fn get_links(project: &str, id: &str) -> Result<Vec<WorkItemLink>> {
     let creds = get_credentials()?;
-    let client = create_wit_client()?.work_items_client();
-    let work_item = client
-        .get_work_item(creds.organization.clone(), parse_work_item_id(id)?, project)
+    let work_item = create_wit_client()?
+        .work_items_client()
+        .get_work_item(creds.organization, parse_work_item_id(id)?, project)
         .expand("relations")
         .await?;
-    let mut links = links(&work_item);
+    with_details(project, links(&work_item)).await
+}
+
+/// The patch that links work item `id` to each of `targets` as `link_type`.
+fn add_links_patch(
+    id: i32,
+    link_type: LinkType,
+    targets: &[i32],
+    target_url: impl Fn(i32) -> String,
+    comment: Option<&str>,
+) -> Result<Vec<JsonPatchOperation>> {
+    if targets.contains(&id) {
+        bail!("Work item {id} cannot be linked to itself");
+    }
+    let attributes = comment.map(|comment| json!({ "comment": comment }));
+    Ok(targets
+        .iter()
+        .map(|target| add_relation_op(link_type.rel(), &target_url(*target), attributes.clone()))
+        .collect())
+}
+
+async fn add_links(
+    project: &str,
+    id: &str,
+    link_type: LinkType,
+    targets: &[i32],
+    comment: Option<&str>,
+) -> Result<Vec<WorkItemLink>> {
+    let creds = get_credentials()?;
+    let target_url = |target| api_work_item_url(&creds.base_url, &creds.organization, target);
+    let patch = add_links_patch(
+        parse_work_item_id(id)?,
+        link_type,
+        targets,
+        target_url,
+        comment,
+    )?;
+    let updated = update_work_item(project, id, patch).await?;
+    let added = links(&updated)
+        .into_iter()
+        .filter(|link| link.link_type == link_type && targets.contains(&link.id))
+        .collect();
+    with_details(project, added).await
+}
+
+/// Fills in the type, state and title of the linked work items.
+async fn with_details(project: &str, mut links: Vec<WorkItemLink>) -> Result<Vec<WorkItemLink>> {
     if links.is_empty() {
         return Ok(links);
     }
+    let creds = get_credentials()?;
+    let client = create_wit_client()?.work_items_client();
     // One request for up to 200 linked items, which covers any real backlog
     // item; the rest are listed by id alone.
     let ids: Vec<String> = links.iter().take(200).map(|l| l.id.to_string()).collect();
@@ -246,13 +343,36 @@ pub async fn handle_command(subcommand: &LinkSubCommands, format: OutputFormat) 
                 }
             }
         }
+        LinkSubCommands::Add {
+            id,
+            link_type,
+            targets,
+            comment,
+            project,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match add_links(&project_name, id, *link_type, targets, comment.as_deref()).await {
+                Ok(added) if format == OutputFormat::Text => {
+                    for link in &added {
+                        println!("🔗 #{} is now {} #{id}", link.id, link_type.role());
+                    }
+                    println!("{}", format!("✅ Added {} link(s)", added.len()).green());
+                    Ok(())
+                }
+                Ok(added) => output::emit(&LinkList(added), format),
+                Err(e) => {
+                    eprintln!("❌ Failed to link work item {id}");
+                    eprintln!("   {e}");
+                    Err(e)
+                }
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     fn work_item(value: serde_json::Value) -> WorkItem {
         serde_json::from_value(value).unwrap()
@@ -268,10 +388,41 @@ mod tests {
     }
 
     #[test]
-    fn every_relation_maps_to_its_link_type() {
+    fn every_link_type_round_trips_through_its_relation() {
         for (link_type, rel) in LINK_TYPES {
             assert_eq!(LinkType::from_rel(rel), Some(*link_type));
+            assert_eq!(link_type.rel(), *rel);
         }
+    }
+
+    #[test]
+    fn add_links_patch_adds_a_relation_per_target() {
+        let patch = add_links_patch(
+            7,
+            LinkType::Predecessor,
+            &[1, 2],
+            |id| format!("https://x/_apis/wit/workItems/{id}"),
+            Some("API first"),
+        )
+        .unwrap();
+
+        assert_eq!(patch.len(), 2);
+        assert_eq!(patch[0].path.as_deref(), Some("/relations/-"));
+        assert_eq!(
+            patch[1].value,
+            Some(json!({
+                "rel": "System.LinkTypes.Dependency-Reverse",
+                "url": "https://x/_apis/wit/workItems/2",
+                "attributes": { "comment": "API first" }
+            }))
+        );
+    }
+
+    #[test]
+    fn add_links_patch_refuses_a_link_to_itself() {
+        let err =
+            add_links_patch(7, LinkType::Related, &[3, 7], |id| id.to_string(), None).unwrap_err();
+        assert!(err.to_string().contains("cannot be linked to itself"));
     }
 
     #[test]
