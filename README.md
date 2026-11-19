@@ -923,6 +923,9 @@ azdocli boards work-item create pbi --title "Sign up" --iteration "@current" --a
 azdocli boards work-item create task --title "Write tests" --parent 1234 --iteration "@current" --remaining-work 4
 azdocli boards work-item update --id 123 --iteration "@current" --team "Web Team"
 
+# Take a task and track its hours
+azdocli boards work-item update --id 124 --assigned-to "@me" --original-estimate 8 --completed-work 3 --remaining-work 5
+
 # Set any field by reference name
 azdocli boards work-item create pbi --title "Sign up" --field Microsoft.VSTS.Common.BusinessValue=50
 
@@ -942,6 +945,9 @@ azdocli boards work-item update --id 123 --title "New title" --state "Active" --
 # Add tags (existing tags are kept), acceptance criteria and attachments
 azdocli boards work-item update --id 123 --tag needs-review --acceptance-criteria "Given ..." --attachment design.png
 
+# Swap one tag for another
+azdocli boards work-item update --id 123 --tag ready --remove-tag needs-review
+
 # Delete a work item permanently (using default project)
 azdocli boards work-item delete --id 123
 
@@ -955,7 +961,9 @@ azdocli boards work-item delete --id 123 --soft-delete
 - **List work items**: View work items assigned to you (default), to someone else with `--assigned-to <name or email>`, or to anyone with `--all`
 - **Any work item type**: Short names for the built-in Agile, Scrum, Basic and CMMI types (e.g. `pbi` for Product Backlog Item), or any type name from `boards work-item types`
 - **Rich content**: Description and acceptance criteria inline or from a file (`--description-file`, `--acceptance-criteria-file`), tags with `--tag`, priority, and any field with `--field <ReferenceName>=<value>`
-- **Sprint planning**: `--assigned-to <user>`, `--iteration "@current"` for the team's current sprint (default team, or `--team <name>`), `--effort` (Effort in Scrum, Story Points in Agile, Size in CMMI) and `--remaining-work <hours>`
+- **Sprint planning**: `--assigned-to <user>` (or `"@me"`), `--iteration "@current"` for the team's current sprint (default team, or `--team <name>`), `--effort` (Effort in Scrum, Story Points in Agile, Size in CMMI), and `--original-estimate`, `--remaining-work` and `--completed-work` in hours
+- **Tags**: `--tag` adds and `--remove-tag` removes, keeping the other tags
+- **Details**: `show` includes the assignee, iteration, area, effort and hours
 - **Attachments**: Attach files with `--attachment <path>` on create or update
 - **Script friendly**: `create` and `update` support `-o json|yaml|markdown`
 - **Parent links**: Create a work item as a child of another with `--parent <ID>`, e.g. tasks under a product backlog item
@@ -1013,6 +1021,13 @@ azdocli boards work-item types
 
 # Or specify a project explicitly
 azdocli boards work-item types --project MyProject
+```
+
+The `boards work-item states` command lists the states a type moves through, with their category:
+
+```sh
+# New, Approved, Committed, Done and Removed in a Scrum project
+azdocli boards work-item states pbi
 ```
 
 #### WIQL Queries
