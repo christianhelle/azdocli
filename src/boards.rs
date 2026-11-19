@@ -26,7 +26,7 @@ pub enum BoardsSubCommands {
     /// Manage work items
     WorkItem {
         #[clap(subcommand)]
-        subcommand: WorkItemSubCommands,
+        subcommand: Box<WorkItemSubCommands>,
     },
     /// Manage area paths of a project and its teams
     Area {
