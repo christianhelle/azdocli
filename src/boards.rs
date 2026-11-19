@@ -242,6 +242,9 @@ pub struct WorkItemContentArgs {
     /// Any field by reference name, e.g. Microsoft.VSTS.Scheduling.Effort=5; repeatable
     #[clap(long = "field", value_name = "REFERENCE_NAME=VALUE", value_parser = parse_field_assignment)]
     fields: Vec<(String, String)>,
+    /// File to upload and attach; repeatable
+    #[clap(long = "attachment", value_name = "PATH")]
+    attachments: Vec<PathBuf>,
 }
 
 /// Splits `--field` input at its first `=` into reference name and value.
@@ -956,13 +959,11 @@ async fn handle_work_item_command(
                 ..Default::default()
             };
 
-            match create_work_item(
-                &project_name,
-                &work_item_type,
-                create_work_item_patch(&fields, parent_url.as_deref()),
-            )
-            .await
-            {
+            let mut patch = create_work_item_patch(&fields, parent_url.as_deref());
+            patch
+                .extend(attachment::upload_all(&project_name, &content.attachments, format).await?);
+
+            match create_work_item(&project_name, &work_item_type, patch).await {
                 Ok(work_item) if format != OutputFormat::Text => {
                     output::emit(&WorkItemDetails(&work_item), format)?;
                 }
@@ -1129,24 +1130,22 @@ async fn handle_work_item_command(
                 )
             };
 
-            match update_work_item(
-                &project_name,
-                id,
-                WorkItemFields {
-                    title: title.clone(),
-                    description: content.description()?,
-                    acceptance_criteria: content.acceptance_criteria()?,
-                    tags,
-                    state: state.clone(),
-                    priority: content.priority,
-                    extra: content.fields.clone(),
-                    iteration_path: iteration_path.clone(),
-                    area_path: area_path.clone(),
-                }
-                .patch(),
-            )
-            .await
-            {
+            let mut patch = WorkItemFields {
+                title: title.clone(),
+                description: content.description()?,
+                acceptance_criteria: content.acceptance_criteria()?,
+                tags,
+                state: state.clone(),
+                priority: content.priority,
+                extra: content.fields.clone(),
+                iteration_path: iteration_path.clone(),
+                area_path: area_path.clone(),
+            }
+            .patch();
+            patch
+                .extend(attachment::upload_all(&project_name, &content.attachments, format).await?);
+
+            match update_work_item(&project_name, id, patch).await {
                 Ok(work_item) if format != OutputFormat::Text => {
                     output::emit(&WorkItemDetails(&work_item), format)?;
                 }
@@ -1377,6 +1376,27 @@ mod tests {
         .patch();
         assert_eq!(patch[1].path.as_deref(), Some("/fields/Custom.Thing"));
         assert_eq!(patch[1].value, Some(json!("x")));
+    }
+
+    #[test]
+    fn attachments_are_repeatable() {
+        let WorkItemSubCommands::Create { content, .. } = parse(&[
+            "create",
+            "pbi",
+            "--title",
+            "Sign up",
+            "--attachment",
+            "spec.md",
+            "--attachment",
+            "diagram.png",
+        ])
+        .unwrap() else {
+            panic!("expected Create");
+        };
+        assert_eq!(
+            content.attachments,
+            [PathBuf::from("spec.md"), PathBuf::from("diagram.png")]
+        );
     }
 
     #[test]
