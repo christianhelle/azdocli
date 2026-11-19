@@ -224,6 +224,9 @@ pub struct WorkItemContentArgs {
     /// Priority (e.g., 1, 2, 3, 4)
     #[clap(long)]
     priority: Option<i32>,
+    /// User to assign the work item to, e.g. ada@example.com; "" unassigns
+    #[clap(long, value_name = "USER")]
+    assigned_to: Option<String>,
     /// Description (HTML or plain text)
     #[clap(long, conflicts_with = "description_file")]
     description: Option<String>,
@@ -444,6 +447,7 @@ struct WorkItemFields {
     description: Option<String>,
     acceptance_criteria: Option<String>,
     state: Option<String>,
+    assigned_to: Option<String>,
     priority: Option<i32>,
     iteration_path: Option<String>,
     area_path: Option<String>,
@@ -487,6 +491,7 @@ impl WorkItemFields {
                 text(&self.acceptance_criteria),
             ),
             ("System.State", text(&self.state)),
+            ("System.AssignedTo", text(&self.assigned_to)),
             (
                 "Microsoft.VSTS.Common.Priority",
                 self.priority.map(|priority| json!(priority)),
@@ -962,6 +967,7 @@ async fn handle_work_item_command(
                 description: content.description()?,
                 acceptance_criteria: content.acceptance_criteria()?,
                 tags: merge_tags(None, &content.tags),
+                assigned_to: content.assigned_to.clone(),
                 priority: content.priority,
                 extra: content.fields.clone(),
                 iteration_path: iteration_path.clone(),
@@ -1151,6 +1157,7 @@ async fn handle_work_item_command(
                     acceptance_criteria: content.acceptance_criteria()?,
                     tags,
                     state: state.clone(),
+                    assigned_to: content.assigned_to.clone(),
                     priority: content.priority,
                     extra: content.fields.clone(),
                     iteration_path: iteration_path.clone(),
@@ -1297,6 +1304,22 @@ mod tests {
             "y.md"
         ])
         .is_err());
+    }
+
+    #[test]
+    fn assigned_to_sets_its_field() {
+        let WorkItemSubCommands::Update { content, .. } =
+            parse(&["update", "--id", "1", "--assigned-to", "ada@example.com"]).unwrap()
+        else {
+            panic!("expected Update");
+        };
+        let patch = WorkItemFields {
+            assigned_to: content.assigned_to.clone(),
+            ..Default::default()
+        }
+        .patch();
+        assert_eq!(patch[0].path.as_deref(), Some("/fields/System.AssignedTo"));
+        assert_eq!(patch[0].value, Some(json!("ada@example.com")));
     }
 
     #[test]
