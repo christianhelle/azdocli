@@ -364,7 +364,7 @@ async fn remove_links(
         .await?;
     let (patch, removed) = remove_links_patch(&work_item, targets, link_type)?;
     update_work_item(project, id, patch).await?;
-    Ok(removed)
+    with_details(project, removed).await
 }
 
 /// Fills in the type, state and title of the linked work items.
