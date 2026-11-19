@@ -364,117 +364,97 @@ async fn get_work_item(project: &str, id: &str) -> Result<models::WorkItem> {
     }
 }
 
+/// The fields a create or update sets. Unset fields are left alone.
+#[derive(Default, Debug)]
+struct WorkItemFields {
+    title: Option<String>,
+    description: Option<String>,
+    state: Option<String>,
+    priority: Option<i32>,
+    iteration_path: Option<String>,
+    area_path: Option<String>,
+}
+
+impl WorkItemFields {
+    /// The patch operations that set each field given.
+    fn patch(&self) -> Vec<JsonPatchOperation> {
+        let text = |value: &Option<String>| value.as_deref().map(|value| json!(value));
+        [
+            ("System.Title", text(&self.title)),
+            ("System.Description", text(&self.description)),
+            ("System.State", text(&self.state)),
+            (
+                "Microsoft.VSTS.Common.Priority",
+                self.priority.map(|priority| json!(priority)),
+            ),
+            ("System.IterationPath", text(&self.iteration_path)),
+            ("System.AreaPath", text(&self.area_path)),
+        ]
+        .into_iter()
+        .filter_map(|(field, value)| value.map(|value| set_field_op(field, value)))
+        .collect()
+    }
+}
+
+fn set_field_op(field: &str, value: serde_json::Value) -> JsonPatchOperation {
+    JsonPatchOperation {
+        from: None,
+        op: Some(Op::Add),
+        path: Some(format!("/fields/{field}")),
+        value: Some(value),
+    }
+}
+
+/// Adds a relation of type `rel` to `url`, with optional link attributes.
+fn add_relation_op(
+    rel: &str,
+    url: &str,
+    attributes: Option<serde_json::Value>,
+) -> JsonPatchOperation {
+    let mut relation = json!({ "rel": rel, "url": url });
+    if let Some(attributes) = attributes {
+        relation["attributes"] = attributes;
+    }
+    JsonPatchOperation {
+        from: None,
+        op: Some(Op::Add),
+        path: Some("/relations/-".to_owned()),
+        value: Some(relation),
+    }
+}
+
 /// Builds the patch that creates a work item, optionally as a child of the
 /// work item at `parent_url`.
 fn create_work_item_patch(
-    title: &str,
+    fields: &WorkItemFields,
     parent_url: Option<&str>,
-    iteration_path: Option<&str>,
-    area_path: Option<&str>,
 ) -> Vec<JsonPatchOperation> {
-    let mut patch = vec![JsonPatchOperation {
-        from: None,
-        op: Some(Op::Add),
-        path: Some("/fields/System.Title".to_owned()),
-        value: Some(json!(title)),
-    }];
-
-    for (field, value) in [
-        ("System.IterationPath", iteration_path),
-        ("System.AreaPath", area_path),
-    ] {
-        if let Some(value) = value {
-            patch.push(JsonPatchOperation {
-                from: None,
-                op: Some(Op::Add),
-                path: Some(format!("/fields/{field}")),
-                value: Some(json!(value)),
-            });
-        }
-    }
-
+    let mut patch = fields.patch();
     if let Some(parent_url) = parent_url {
-        patch.push(JsonPatchOperation {
-            from: None,
-            op: Some(Op::Add),
-            path: Some("/relations/-".to_owned()),
-            value: Some(json!({
-                "rel": "System.LinkTypes.Hierarchy-Reverse",
-                "url": parent_url,
-            })),
-        });
+        patch.push(add_relation_op(
+            "System.LinkTypes.Hierarchy-Reverse",
+            parent_url,
+            None,
+        ));
     }
-
     patch
 }
 
 async fn create_work_item(
     project: &str,
     work_item_type: &str,
-    title: &str,
-    parent: Option<i32>,
-    iteration_path: Option<&str>,
-    area_path: Option<&str>,
+    patch: Vec<JsonPatchOperation>,
 ) -> Result<models::WorkItem> {
-    match get_credentials() {
-        Ok(creds) => {
-            let client = create_wit_client()?;
-            let parent_url =
-                parent.map(|id| api_work_item_url(&creds.base_url, &creds.organization, id));
-            let work_item = client
-                .work_items_client()
-                .create(
-                    creds.organization.clone(),
-                    create_work_item_patch(title, parent_url.as_deref(), iteration_path, area_path),
-                    project.to_string(),
-                    work_item_type,
-                )
-                .await?;
-
-            Ok(work_item)
-        }
-        Err(e) => {
-            eprintln!("Unable to create work item");
-            Err(e)
-        }
-    }
-}
-
-fn update_work_item_patch(
-    title: Option<&str>,
-    description: Option<&str>,
-    state: Option<&str>,
-    priority: Option<i32>,
-    iteration_path: Option<&str>,
-    area_path: Option<&str>,
-) -> Vec<JsonPatchOperation> {
-    let mut patch_operations = Vec::new();
-
-    for (field, value) in [
-        ("System.Title", title.map(|value| json!(value))),
-        ("System.Description", description.map(|value| json!(value))),
-        ("System.State", state.map(|value| json!(value))),
-        (
-            "Microsoft.VSTS.Common.Priority",
-            priority.map(|priority| json!(priority)),
-        ),
-        (
-            "System.IterationPath",
-            iteration_path.map(|value| json!(value)),
-        ),
-        ("System.AreaPath", area_path.map(|value| json!(value))),
-    ] {
-        if let Some(value) = value {
-            patch_operations.push(JsonPatchOperation {
-                from: None,
-                op: Some(Op::Add),
-                path: Some(format!("/fields/{field}")),
-                value: Some(value),
-            });
-        }
-    }
-
-    patch_operations
+    let creds = get_credentials()?;
+    Ok(create_wit_client()?
+        .work_items_client()
+        .create(
+            creds.organization,
+            patch,
+            project.to_string(),
+            work_item_type,
+        )
+        .await?)
 }
 
 async fn update_work_item(
@@ -535,7 +515,11 @@ async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<
                 update_work_item(
                     project,
                     id,
-                    update_work_item_patch(None, None, Some(state), None, None, None),
+                    WorkItemFields {
+                        state: Some(state.to_string()),
+                        ..Default::default()
+                    }
+                    .patch(),
                 )
                 .await?;
             } else {
@@ -847,13 +831,20 @@ async fn handle_work_item_command(
             let work_item_type = resolve_work_item_type(work_item_type);
             println!("Creating a {work_item_type} work item in project: {project_name}");
 
+            let creds = get_credentials()?;
+            let parent_url =
+                parent.map(|id| api_work_item_url(&creds.base_url, &creds.organization, id));
+            let fields = WorkItemFields {
+                title: Some(title.clone()),
+                iteration_path: iteration_path.clone(),
+                area_path: area_path.clone(),
+                ..Default::default()
+            };
+
             match create_work_item(
                 &project_name,
                 &work_item_type,
-                title,
-                *parent,
-                iteration_path.as_deref(),
-                area_path.as_deref(),
+                create_work_item_patch(&fields, parent_url.as_deref()),
             )
             .await
             {
@@ -1008,14 +999,15 @@ async fn handle_work_item_command(
             match update_work_item(
                 &project_name,
                 id,
-                update_work_item_patch(
-                    title.as_deref(),
-                    description.as_deref(),
-                    state.as_deref(),
-                    *priority,
-                    iteration_path.as_deref(),
-                    area_path.as_deref(),
-                ),
+                WorkItemFields {
+                    title: title.clone(),
+                    description: description.clone(),
+                    state: state.clone(),
+                    priority: *priority,
+                    iteration_path: iteration_path.clone(),
+                    area_path: area_path.clone(),
+                }
+                .patch(),
             )
             .await
             {
@@ -1059,6 +1051,13 @@ mod tests {
     fn parse(args: &[&str]) -> Result<WorkItemSubCommands, clap::Error> {
         TestCli::try_parse_from(std::iter::once("work-item").chain(args.iter().copied()))
             .map(|cli| cli.command)
+    }
+
+    fn titled(title: &str) -> WorkItemFields {
+        WorkItemFields {
+            title: Some(title.to_string()),
+            ..Default::default()
+        }
     }
 
     #[test]
@@ -1121,10 +1120,13 @@ mod tests {
     #[test]
     fn create_patch_sets_iteration_and_area_paths() {
         let patch = create_work_item_patch(
-            "Write tests",
+            &WorkItemFields {
+                title: Some("Write tests".into()),
+                iteration_path: Some("Project\\Sprint 1".into()),
+                area_path: Some("Project\\Team A".into()),
+                ..Default::default()
+            },
             None,
-            Some("Project\\Sprint 1"),
-            Some("Project\\Team A"),
         );
 
         assert_eq!(
@@ -1162,14 +1164,12 @@ mod tests {
 
     #[test]
     fn update_patch_sets_iteration_and_area_paths() {
-        let patch = update_work_item_patch(
-            None,
-            None,
-            None,
-            None,
-            Some("Project\\Sprint 1"),
-            Some("Project\\Team A"),
-        );
+        let patch = WorkItemFields {
+            iteration_path: Some("Project\\Sprint 1".into()),
+            area_path: Some("Project\\Team A".into()),
+            ..Default::default()
+        }
+        .patch();
 
         assert_eq!(patch.len(), 2);
         assert_eq!(
@@ -1249,7 +1249,7 @@ mod tests {
 
     #[test]
     fn create_patch_sets_the_title() {
-        let patch = create_work_item_patch("Write tests", None, None, None);
+        let patch = create_work_item_patch(&titled("Write tests"), None);
 
         assert_eq!(patch.len(), 1);
         assert_eq!(patch[0].op, Some(Op::Add));
@@ -1260,10 +1260,8 @@ mod tests {
     #[test]
     fn create_patch_links_the_new_work_item_to_its_parent() {
         let patch = create_work_item_patch(
-            "Write tests",
+            &titled("Write tests"),
             Some("https://dev.azure.com/mycompany/_apis/wit/workItems/42"),
-            None,
-            None,
         );
 
         assert_eq!(patch.len(), 2);
