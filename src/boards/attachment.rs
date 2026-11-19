@@ -199,12 +199,34 @@ async fn download(project: &str, id: &str, name: Option<&str>, dir: &Path) -> Re
             .bytes()
             .await
             .with_context(|| format!("Failed to download '{}'", attachment.name))?;
-        tokio::fs::write(&target, &bytes)
-            .await
-            .with_context(|| format!("Failed to write '{}'", target.display()))?;
+        save_new(&target, &bytes).await?;
         saved.push(target);
     }
     Ok(saved)
+}
+
+/// Writes `bytes` to a file that must not exist yet. Creating it exclusively
+/// never follows a symlink at `target` and never overwrites a local file or
+/// an earlier attachment with the same name.
+async fn save_new(target: &Path, bytes: &[u8]) -> Result<()> {
+    use tokio::io::AsyncWriteExt;
+    let mut file = tokio::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(target)
+        .await
+        .map_err(|e| match e.kind() {
+            io::ErrorKind::AlreadyExists => anyhow!(
+                "'{}' already exists; remove it or pick another --dir",
+                target.display()
+            ),
+            _ => anyhow!("Failed to create '{}': {e}", target.display()),
+        })?;
+    file.write_all(bytes)
+        .await
+        .with_context(|| format!("Failed to write '{}'", target.display()))?;
+    file.flush().await?;
+    Ok(())
 }
 
 /// The attachments of a work item, as `attachment list` prints them.
@@ -344,6 +366,26 @@ mod tests {
             attachment_id_from_url("https://x/_apis/wit/workItems/1"),
             None
         );
+    }
+
+    #[tokio::test]
+    async fn save_new_writes_a_new_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("spec.md");
+        save_new(&target, b"spec").await.unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"spec");
+    }
+
+    #[tokio::test]
+    async fn save_new_refuses_to_overwrite() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("spec.md");
+        std::fs::write(&target, b"local").unwrap();
+
+        let err = save_new(&target, b"remote").await.unwrap_err();
+
+        assert!(err.to_string().contains("already exists"));
+        assert_eq!(std::fs::read(&target).unwrap(), b"local");
     }
 
     #[test]
