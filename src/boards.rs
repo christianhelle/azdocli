@@ -123,7 +123,7 @@ pub enum WorkItemSubCommands {
         /// ID of the parent work item, e.g. the product backlog item a task belongs to
         #[clap(long, value_parser = clap::value_parser!(i32).range(1..))]
         parent: Option<i32>,
-        /// Iteration path for the work item
+        /// Iteration path for the work item, or @current for the team's current sprint
         #[clap(long = "iteration")]
         iteration_path: Option<String>,
         /// Area path for the work item
@@ -207,7 +207,7 @@ pub enum WorkItemSubCommands {
         /// New state for the work item (e.g., 'New', 'Active', 'Resolved', 'Closed')
         #[clap(long)]
         state: Option<String>,
-        /// New iteration path for the work item
+        /// New iteration path for the work item, or @current for the team's current sprint
         #[clap(long = "iteration")]
         iteration_path: Option<String>,
         /// New area path for the work item
@@ -227,6 +227,9 @@ pub struct WorkItemContentArgs {
     /// User to assign the work item to, e.g. ada@example.com; "" unassigns
     #[clap(long, value_name = "USER")]
     assigned_to: Option<String>,
+    /// Team whose current sprint `--iteration @current` means (default: the project's default team)
+    #[clap(long)]
+    team: Option<String>,
     /// Description (HTML or plain text)
     #[clap(long, conflicts_with = "description_file")]
     description: Option<String>,
@@ -962,6 +965,12 @@ async fn handle_work_item_command(
             let creds = get_credentials()?;
             let parent_url =
                 parent.map(|id| api_work_item_url(&creds.base_url, &creds.organization, id));
+            let iteration_path = iteration::resolve_iteration_path(
+                &project_name,
+                content.team.as_deref(),
+                iteration_path.as_deref(),
+            )
+            .await?;
             let fields = WorkItemFields {
                 title: Some(title.clone()),
                 description: content.description()?,
@@ -970,7 +979,7 @@ async fn handle_work_item_command(
                 assigned_to: content.assigned_to.clone(),
                 priority: content.priority,
                 extra: content.fields.clone(),
-                iteration_path: iteration_path.clone(),
+                iteration_path,
                 area_path: area_path.clone(),
                 ..Default::default()
             };
@@ -1149,6 +1158,12 @@ async fn handle_work_item_command(
                 (tags, current.rev)
             };
 
+            let iteration_path = iteration::resolve_iteration_path(
+                &project_name,
+                content.team.as_deref(),
+                iteration_path.as_deref(),
+            )
+            .await?;
             let mut patch: Vec<_> = read_at.map(revision_test_op).into_iter().collect();
             patch.extend(
                 WorkItemFields {
@@ -1160,7 +1175,7 @@ async fn handle_work_item_command(
                     assigned_to: content.assigned_to.clone(),
                     priority: content.priority,
                     extra: content.fields.clone(),
-                    iteration_path: iteration_path.clone(),
+                    iteration_path,
                     area_path: area_path.clone(),
                 }
                 .patch(),
@@ -1320,6 +1335,30 @@ mod tests {
         .patch();
         assert_eq!(patch[0].path.as_deref(), Some("/fields/System.AssignedTo"));
         assert_eq!(patch[0].value, Some(json!("ada@example.com")));
+    }
+
+    #[test]
+    fn team_picks_whose_current_iteration_to_use() {
+        let WorkItemSubCommands::Create {
+            iteration_path,
+            content,
+            ..
+        } = parse(&[
+            "create",
+            "pbi",
+            "--title",
+            "Sign up",
+            "--iteration",
+            "@current",
+            "--team",
+            "Web",
+        ])
+        .unwrap()
+        else {
+            panic!("expected Create");
+        };
+        assert_eq!(iteration_path.as_deref(), Some("@current"));
+        assert_eq!(content.team.as_deref(), Some("Web"));
     }
 
     #[test]
