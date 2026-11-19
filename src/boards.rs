@@ -579,9 +579,18 @@ fn merge_tags(existing: Option<&str>, added: &[String]) -> Option<String> {
     edit_tags(existing, added, &[])
 }
 
-/// Whether two tags are the same, ignoring case in any script, as Azure DevOps does.
+/// Whether two tags are the same, ignoring case in any script. Like .NET's
+/// OrdinalIgnoreCase, which Azure DevOps uses, each character is uppercased on
+/// its own: σ, ς and Σ match, while ß (whose uppercase is two letters) stays ß.
 fn same_tag(a: &str, b: &str) -> bool {
-    a.to_lowercase() == b.to_lowercase()
+    fn upper(c: char) -> char {
+        let mut upper = c.to_uppercase();
+        match (upper.next(), upper.next()) {
+            (Some(single), None) => single,
+            _ => c,
+        }
+    }
+    a.chars().map(upper).eq(b.chars().map(upper))
 }
 
 /// `existing` tags with `added` joined and `removed` dropped, both matched
@@ -1889,6 +1898,14 @@ mod tests {
             edit_tags(Some("Équipe; api"), &["API".into()], &["équipe".into()]).as_deref(),
             Some("api")
         );
+    }
+
+    #[test]
+    fn same_tag_compares_like_dotnet_ignore_case() {
+        assert!(same_tag("ΟΔΟΣ", "οδος"));
+        assert!(same_tag("σ", "ς"));
+        assert!(!same_tag("ß", "ss"));
+        assert!(!same_tag("api", "apis"));
     }
 
     #[test]
