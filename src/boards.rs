@@ -8,9 +8,10 @@ use anyhow::{anyhow, Result};
 use azure_devops_rust_api::wit::models::json_patch_operation::Op;
 use azure_devops_rust_api::wit::models::JsonPatchOperation;
 use azure_devops_rust_api::wit::{self, models};
-use clap::Subcommand;
+use clap::{Args, Subcommand};
 use colored::Colorize;
 use serde_json::json;
+use std::path::{Path, PathBuf};
 
 mod area;
 mod classification;
@@ -127,6 +128,8 @@ pub enum WorkItemSubCommands {
         /// Area path for the work item
         #[clap(long = "area")]
         area_path: Option<String>,
+        #[clap(flatten)]
+        content: WorkItemContentArgs,
     },
     /// Delete a work item
     Delete {
@@ -195,9 +198,6 @@ pub enum WorkItemSubCommands {
         /// New title for the work item
         #[clap(long)]
         title: Option<String>,
-        /// New description for the work item
-        #[clap(long)]
-        description: Option<String>,
         /// New state for the work item (e.g., 'New', 'Active', 'Resolved', 'Closed')
         #[clap(long)]
         state: Option<String>,
@@ -210,7 +210,40 @@ pub enum WorkItemSubCommands {
         /// New area path for the work item
         #[clap(long = "area")]
         area_path: Option<String>,
+        #[clap(flatten)]
+        content: WorkItemContentArgs,
     },
+}
+
+/// Content options shared by `work-item create` and `work-item update`.
+#[derive(Args, Clone, Debug, Default)]
+pub struct WorkItemContentArgs {
+    /// Description (HTML or plain text)
+    #[clap(long, conflicts_with = "description_file")]
+    description: Option<String>,
+    /// Read the description from a file
+    #[clap(long, value_name = "PATH")]
+    description_file: Option<PathBuf>,
+}
+
+impl WorkItemContentArgs {
+    fn description(&self) -> Result<Option<String>> {
+        text_or_file(
+            self.description.as_deref(),
+            self.description_file.as_deref(),
+        )
+    }
+}
+
+/// The text given inline, or else the contents of the file given.
+fn text_or_file(text: Option<&str>, file: Option<&Path>) -> Result<Option<String>> {
+    match (text, file) {
+        (Some(text), _) => Ok(Some(text.to_string())),
+        (None, Some(file)) => std::fs::read_to_string(file)
+            .map(Some)
+            .map_err(|e| anyhow!("Failed to read '{}': {e}", file.display())),
+        (None, None) => Ok(None),
+    }
 }
 
 async fn list_work_item_types(project: &str) -> Result<Vec<models::WorkItemType>> {
@@ -826,6 +859,7 @@ async fn handle_work_item_command(
             parent,
             iteration_path,
             area_path,
+            content,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
             let work_item_type = resolve_work_item_type(work_item_type);
@@ -836,6 +870,7 @@ async fn handle_work_item_command(
                 parent.map(|id| api_work_item_url(&creds.base_url, &creds.organization, id));
             let fields = WorkItemFields {
                 title: Some(title.clone()),
+                description: content.description()?,
                 iteration_path: iteration_path.clone(),
                 area_path: area_path.clone(),
                 ..Default::default()
@@ -987,11 +1022,11 @@ async fn handle_work_item_command(
             id,
             project,
             title,
-            description,
             state,
             priority,
             iteration_path,
             area_path,
+            content,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
             println!("Updating work item with id: {id} in project: {project_name}");
@@ -1001,7 +1036,7 @@ async fn handle_work_item_command(
                 id,
                 WorkItemFields {
                     title: title.clone(),
-                    description: description.clone(),
+                    description: content.description()?,
                     state: state.clone(),
                     priority: *priority,
                     iteration_path: iteration_path.clone(),
@@ -1058,6 +1093,57 @@ mod tests {
             title: Some(title.to_string()),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn create_accepts_a_description() {
+        let WorkItemSubCommands::Create { content, .. } = parse(&[
+            "create",
+            "bug",
+            "--title",
+            "Crash",
+            "--description",
+            "It breaks",
+        ])
+        .unwrap() else {
+            panic!("expected Create");
+        };
+        assert_eq!(content.description().unwrap().as_deref(), Some("It breaks"));
+    }
+
+    #[test]
+    fn description_file_is_read() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), "# Spec\nDetails").unwrap();
+        let path = file.path().to_str().unwrap();
+        let WorkItemSubCommands::Update { content, .. } =
+            parse(&["update", "--id", "1", "--description-file", path]).unwrap()
+        else {
+            panic!("expected Update");
+        };
+        assert_eq!(
+            content.description().unwrap().as_deref(),
+            Some("# Spec\nDetails")
+        );
+    }
+
+    #[test]
+    fn description_and_description_file_conflict() {
+        assert!(parse(&[
+            "update",
+            "--id",
+            "1",
+            "--description",
+            "x",
+            "--description-file",
+            "y.md"
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn missing_description_file_is_an_error() {
+        assert!(text_or_file(None, Some(Path::new("does-not-exist.md"))).is_err());
     }
 
     #[test]
