@@ -2,6 +2,7 @@ use super::classification::{self, NodePath, StructureGroup};
 use super::{
     create_wit_client, create_work_client, display_empty_work_items_table, display_work_items_list,
 };
+use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::project::get_project_or_default;
 use crate::text::escape_control_characters;
@@ -499,6 +500,60 @@ async fn resolve_iteration_id(project: &str, selector: &IterationSelector) -> Re
         .ok_or_else(|| anyhow!("Iteration '{path}' has no identifier"))
 }
 
+/// The `--iteration` value that stands for a team's current sprint.
+pub(super) const CURRENT_ITERATION: &str = "@current";
+
+pub(super) fn is_current_iteration(path: &str) -> bool {
+    path.eq_ignore_ascii_case(CURRENT_ITERATION)
+}
+
+/// The path of the team's current iteration, from its `current` timeframe listing.
+fn current_path(iterations: &[TeamSettingsIteration], team: &str) -> Result<String> {
+    iterations
+        .iter()
+        .find_map(|iteration| iteration.path.clone())
+        .ok_or_else(|| anyhow!("Team '{team}' has no current iteration"))
+}
+
+/// `path`, with `@current` swapped for the current iteration of `team`, or of
+/// the project's default team when no team is given.
+pub(super) async fn resolve_iteration_path(
+    project: &str,
+    team: Option<&str>,
+    path: Option<&str>,
+) -> Result<Option<String>> {
+    let Some(path) = path else {
+        return Ok(None);
+    };
+    if !is_current_iteration(path) {
+        return Ok(Some(path.to_string()));
+    }
+    let team = match team {
+        Some(team) => team.to_string(),
+        None => default_team(project).await?,
+    };
+    let iterations = list_team_iterations(project, &team, Some("current"))
+        .await
+        .map_err(|e| {
+            e.context(format!(
+                "Failed to find the current iteration of team '{team}'"
+            ))
+        })?;
+    current_path(&iterations, &team).map(Some)
+}
+
+async fn default_team(project: &str) -> Result<String> {
+    let creds = get_credentials()?;
+    let client = CredentialClientFactory::new(&creds)?.build_core();
+    client
+        .projects_client()
+        .get(creds.organization, project)
+        .await?
+        .default_team
+        .and_then(|team| team.name)
+        .ok_or_else(|| anyhow!("Project '{project}' has no default team; pass --team"))
+}
+
 async fn list_team_iterations(
     project: &str,
     team: &str,
@@ -736,6 +791,34 @@ mod tests {
     struct TestCli {
         #[clap(subcommand)]
         command: IterationSubCommands,
+    }
+
+    #[test]
+    fn current_iteration_macro_is_case_insensitive() {
+        assert!(is_current_iteration("@current"));
+        assert!(is_current_iteration("@Current"));
+        assert!(!is_current_iteration("Proj\\Sprint 1"));
+    }
+
+    fn team_iteration(path: Option<&str>) -> TeamSettingsIteration {
+        let mut iteration = TeamSettingsIteration::new();
+        iteration.path = path.map(str::to_string);
+        iteration
+    }
+
+    #[test]
+    fn current_path_is_the_current_iterations_path() {
+        let iterations = [team_iteration(Some("Proj\\Sprint 3"))];
+        assert_eq!(
+            current_path(&iterations, "Proj Team").unwrap(),
+            "Proj\\Sprint 3"
+        );
+    }
+
+    #[test]
+    fn current_path_fails_when_the_team_has_no_current_iteration() {
+        let error = current_path(&[team_iteration(None)], "Proj Team").unwrap_err();
+        assert!(error.to_string().contains("Proj Team"));
     }
 
     fn parse(args: &[&str]) -> Result<IterationSubCommands, clap::Error> {
