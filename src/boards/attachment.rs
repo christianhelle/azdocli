@@ -87,8 +87,10 @@ fn attachments(work_item: &WorkItem) -> Vec<Attachment> {
 
 /// The attachment id in an `.../_apis/wit/attachments/{id}` URL.
 fn attachment_id_from_url(url: &str) -> Option<String> {
-    let marker = "/attachments/";
-    let start = url.find(marker)? + marker.len();
+    // The full route, so a collection or organization named "attachments"
+    // earlier in the URL is not mistaken for it.
+    let marker = "/_apis/wit/attachments/";
+    let start = url.rfind(marker)? + marker.len();
     let rest = &url[start..];
     let id = &rest[..rest.find(['?', '/', '&']).unwrap_or(rest.len())];
     (!id.is_empty()).then(|| id.to_string())
@@ -341,6 +343,14 @@ mod tests {
         assert_eq!(
             attachment_id_from_url("https://x/_apis/wit/workItems/1"),
             None
+        );
+    }
+
+    #[test]
+    fn attachment_id_ignores_a_collection_named_attachments() {
+        assert_eq!(
+            attachment_id_from_url("https://server/tfs/attachments/_apis/wit/attachments/abc"),
+            Some("abc".into())
         );
     }
 
