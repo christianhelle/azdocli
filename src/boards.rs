@@ -129,6 +129,10 @@ pub enum WorkItemSubCommands {
         /// ID of the parent work item, e.g. the product backlog item a task belongs to
         #[clap(long, value_parser = clap::value_parser!(i32).range(1..))]
         parent: Option<i32>,
+        /// Child task to create under the new work item, in the same sprint and
+        /// area; repeat for more tasks
+        #[clap(long = "task", value_name = "TITLE")]
+        tasks: Vec<String>,
         /// Iteration path for the work item, or @current for the team's current sprint
         #[clap(long = "iteration")]
         iteration_path: Option<String>,
@@ -802,6 +806,31 @@ fn add_relation_op(
     }
 }
 
+/// The patch that creates a task called `title` under the work item at
+/// `parent_url`, in the parent's iteration and area.
+fn child_task_patch(
+    title: &str,
+    parent: &WorkItemFields,
+    parent_url: &str,
+) -> Vec<JsonPatchOperation> {
+    let fields = WorkItemFields {
+        title: Some(title.to_string()),
+        iteration_path: parent.iteration_path.clone(),
+        area_path: parent.area_path.clone(),
+        ..Default::default()
+    };
+    create_work_item_patch(&fields, Some(parent_url))
+}
+
+async fn get_work_item_with_relations(project: &str, id: i32) -> Result<models::WorkItem> {
+    let creds = get_credentials()?;
+    Ok(create_wit_client()?
+        .work_items_client()
+        .get_work_item(creds.organization, id, project)
+        .expand("relations")
+        .await?)
+}
+
 /// Builds the patch that creates a work item, optionally as a child of the
 /// work item at `parent_url`.
 fn create_work_item_patch(
@@ -1206,6 +1235,7 @@ async fn handle_work_item_command(
             title,
             project,
             parent,
+            tasks,
             iteration_path,
             area_path,
             content,
@@ -1247,28 +1277,54 @@ async fn handle_work_item_command(
             patch
                 .extend(attachment::upload_all(&project_name, &content.attachments, format).await?);
 
-            match create_work_item(&project_name, &work_item_type, patch).await {
-                Ok(work_item) if format != OutputFormat::Text => {
-                    output::emit(&WorkItemDetails(&work_item), format)?;
-                }
-                Ok(work_item) => {
-                    println!("{}", "✅ Work item created successfully!".green());
-                    println!("Created work item with ID: {}", work_item.id);
-                    println!("Title: {title}");
-                    if let Some(parent) = parent {
-                        println!("Parent: #{parent}");
-                    }
-                    if let Some(fields) = work_item.fields.as_object() {
-                        if let Some(desc) =
-                            fields.get("System.Description").and_then(|v| v.as_str())
-                        {
-                            println!("Description: {desc}");
-                        }
-                    }
-                }
+            let work_item = match create_work_item(&project_name, &work_item_type, patch).await {
+                Ok(work_item) => work_item,
                 Err(e) => {
                     eprintln!("❌ Failed to create work item: {e}");
                     return Err(e);
+                }
+            };
+
+            let new_url = api_work_item_url(&creds.base_url, &creds.organization, work_item.id);
+            let mut created_tasks = Vec::with_capacity(tasks.len());
+            for task in tasks {
+                let created = create_work_item(
+                    &project_name,
+                    "Task",
+                    child_task_patch(task, &fields, &new_url),
+                )
+                .await
+                .map_err(|e| {
+                    e.context(format!(
+                        "Created #{} but not its task '{task}'",
+                        work_item.id
+                    ))
+                })?;
+                created_tasks.push(created);
+            }
+
+            if format != OutputFormat::Text {
+                // With tasks, read the item back so its child links are included.
+                let work_item = if tasks.is_empty() {
+                    work_item
+                } else {
+                    get_work_item_with_relations(&project_name, work_item.id).await?
+                };
+                output::emit(&WorkItemDetails(&work_item), format)?;
+            } else {
+                println!("{}", "✅ Work item created successfully!".green());
+                println!("Created work item with ID: {}", work_item.id);
+                println!("Title: {title}");
+                if let Some(parent) = parent {
+                    println!("Parent: #{parent}");
+                }
+                if let Some(fields) = work_item.fields.as_object() {
+                    if let Some(desc) = fields.get("System.Description").and_then(|v| v.as_str()) {
+                        println!("Description: {desc}");
+                    }
+                }
+                for (task, title) in created_tasks.iter().zip(tasks) {
+                    println!("  ↳ Task #{}: {title}", task.id);
                 }
             }
         }
@@ -1783,6 +1839,56 @@ mod tests {
         };
         assert_eq!(iteration_path.as_deref(), Some("@current"));
         assert_eq!(content.team.as_deref(), Some("Web"));
+    }
+
+    #[test]
+    fn task_is_repeatable_on_create() {
+        let WorkItemSubCommands::Create { tasks, .. } = parse(&[
+            "create",
+            "pbi",
+            "--title",
+            "Sign up",
+            "--task",
+            "Write tests",
+            "--task",
+            "Implement, then review",
+        ])
+        .unwrap() else {
+            panic!("expected Create");
+        };
+        assert_eq!(tasks, ["Write tests", "Implement, then review"]);
+    }
+
+    #[test]
+    fn child_task_shares_the_parents_sprint_and_area() {
+        let parent = WorkItemFields {
+            title: Some("Sign up".into()),
+            iteration_path: Some("Proj\\Sprint 3".into()),
+            area_path: Some("Proj\\Web".into()),
+            assigned_to: Some("ada@example.com".into()),
+            tags: Some("auth".into()),
+            ..Default::default()
+        };
+        let patch = child_task_patch("Write tests", &parent, "https://parent");
+        let ops: Vec<_> = patch
+            .iter()
+            .map(|op| (op.path.clone().unwrap(), op.value.clone().unwrap()))
+            .collect();
+        assert_eq!(
+            ops,
+            [
+                ("/fields/System.Title".to_string(), json!("Write tests")),
+                (
+                    "/fields/System.IterationPath".to_string(),
+                    json!("Proj\\Sprint 3")
+                ),
+                ("/fields/System.AreaPath".to_string(), json!("Proj\\Web")),
+                (
+                    "/relations/-".to_string(),
+                    json!({"rel": "System.LinkTypes.Hierarchy-Reverse", "url": "https://parent"})
+                ),
+            ]
+        );
     }
 
     #[test]
