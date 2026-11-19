@@ -1,14 +1,17 @@
 //! Links between work items: parents and children, related items and
 //! dependencies.
 
-use super::{add_relation_op, create_wit_client, parse_work_item_id, update_work_item};
+use super::{
+    add_relation_op, create_wit_client, parse_work_item_id, revision_test_op, update_work_item,
+};
 use crate::auth::get_credentials;
 use crate::auth::url::api_work_item_url;
 use crate::output::{self, md_table, OutputFormat, Render};
 use crate::project::get_project_or_default;
 use crate::text::escape_control_characters;
 use anyhow::{bail, Result};
-use azure_devops_rust_api::wit::models::{JsonPatchOperation, WorkItem};
+use azure_devops_rust_api::wit::models::json_patch_operation::Op;
+use azure_devops_rust_api::wit::models::{JsonPatchOperation, WorkItem, WorkItemRelation};
 use clap::{Subcommand, ValueEnum};
 use colored::Colorize;
 use serde::Serialize;
@@ -46,6 +49,27 @@ pub enum LinkSubCommands {
         /// Comment to put on the links
         #[clap(long)]
         comment: Option<String>,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+    },
+    /// Remove the links between a work item and other work items
+    Remove {
+        /// ID of the work item to remove the links from
+        #[clap(short, long)]
+        id: String,
+        /// IDs of the linked work items; repeat the flag or separate IDs with
+        /// commas
+        #[clap(
+            long = "target",
+            value_name = "ID",
+            value_delimiter = ',',
+            required = true
+        )]
+        targets: Vec<i32>,
+        /// Only remove links of this type (default: every link to the targets)
+        #[clap(long = "type", value_enum)]
+        link_type: Option<LinkType>,
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
@@ -154,8 +178,11 @@ fn work_item_id_from_url(url: &str) -> Option<i32> {
 /// The links among a work item's relations, without its attachments,
 /// hyperlinks and links to commits or builds.
 fn links(work_item: &WorkItem) -> Vec<WorkItemLink> {
-    work_item
-        .relations
+    links_of(&work_item.relations)
+}
+
+fn links_of(relations: &[WorkItemRelation]) -> Vec<WorkItemLink> {
+    relations
         .iter()
         .map(|relation| &relation.link)
         .filter_map(|link| {
@@ -245,6 +272,62 @@ async fn add_links(
         .filter(|link| link.link_type == link_type && targets.contains(&link.id))
         .collect();
     with_details(project, added).await
+}
+
+/// The patch that removes the links from `work_item` to each of `targets`,
+/// of `link_type` only if one is given, and the links it removes. The patch
+/// fails if the work item changed since it was read, as the relations are
+/// removed by position.
+fn remove_links_patch(
+    work_item: &WorkItem,
+    targets: &[i32],
+    link_type: Option<LinkType>,
+) -> Result<(Vec<JsonPatchOperation>, Vec<WorkItemLink>)> {
+    let mut indices = Vec::new();
+    let mut removed = Vec::new();
+    for (index, relation) in work_item.relations.iter().enumerate() {
+        let Some(link) = links_of(std::slice::from_ref(relation)).pop() else {
+            continue;
+        };
+        if targets.contains(&link.id) && link_type.is_none_or(|t| t == link.link_type) {
+            indices.push(index);
+            removed.push(link);
+        }
+    }
+    if let Some(target) = targets
+        .iter()
+        .find(|target| !removed.iter().any(|link| link.id == **target))
+    {
+        let kind = link_type.map_or(String::new(), |t| format!("{} ", t.name().to_lowercase()));
+        bail!("Work item {} has no {kind}link to #{target}", work_item.id);
+    }
+    let mut patch: Vec<_> = work_item.rev.map(revision_test_op).into_iter().collect();
+    // From the last relation back, so each removal leaves the positions of
+    // the ones still to remove as they were.
+    patch.extend(indices.iter().rev().map(|index| JsonPatchOperation {
+        from: None,
+        op: Some(Op::Remove),
+        path: Some(format!("/relations/{index}")),
+        value: None,
+    }));
+    Ok((patch, removed))
+}
+
+async fn remove_links(
+    project: &str,
+    id: &str,
+    targets: &[i32],
+    link_type: Option<LinkType>,
+) -> Result<Vec<WorkItemLink>> {
+    let creds = get_credentials()?;
+    let work_item = create_wit_client()?
+        .work_items_client()
+        .get_work_item(creds.organization, parse_work_item_id(id)?, project)
+        .expand("relations")
+        .await?;
+    let (patch, removed) = remove_links_patch(&work_item, targets, link_type)?;
+    update_work_item(project, id, patch).await?;
+    Ok(removed)
 }
 
 /// Fills in the type, state and title of the linked work items.
@@ -367,6 +450,36 @@ pub async fn handle_command(subcommand: &LinkSubCommands, format: OutputFormat) 
                 }
             }
         }
+        LinkSubCommands::Remove {
+            id,
+            targets,
+            link_type,
+            project,
+        } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            match remove_links(&project_name, id, targets, *link_type).await {
+                Ok(removed) if format == OutputFormat::Text => {
+                    for link in &removed {
+                        println!(
+                            "✂️ #{} is no longer {} #{id}",
+                            link.id,
+                            link.link_type.role()
+                        );
+                    }
+                    println!(
+                        "{}",
+                        format!("✅ Removed {} link(s)", removed.len()).green()
+                    );
+                    Ok(())
+                }
+                Ok(removed) => output::emit(&LinkList(removed), format),
+                Err(e) => {
+                    eprintln!("❌ Failed to remove the links of work item {id}");
+                    eprintln!("   {e}");
+                    Err(e)
+                }
+            }
+        }
     }
 }
 
@@ -416,6 +529,55 @@ mod tests {
                 "attributes": { "comment": "API first" }
             }))
         );
+    }
+
+    fn linked_item() -> WorkItem {
+        work_item(json!({
+            "id": 7,
+            "rev": 4,
+            "url": "https://x/_apis/wit/workItems/7",
+            "fields": {},
+            "relations": [
+                { "rel": "System.LinkTypes.Related", "url": "https://x/_apis/wit/workItems/1", "attributes": {} },
+                { "rel": "AttachedFile", "url": "https://x/_apis/wit/attachments/a", "attributes": {} },
+                { "rel": "System.LinkTypes.Dependency-Reverse", "url": "https://x/_apis/wit/workItems/1", "attributes": {} },
+                { "rel": "System.LinkTypes.Hierarchy-Reverse", "url": "https://x/_apis/wit/workItems/2", "attributes": {} }
+            ]
+        }))
+    }
+
+    fn paths(patch: &[JsonPatchOperation]) -> Vec<&str> {
+        patch.iter().filter_map(|op| op.path.as_deref()).collect()
+    }
+
+    #[test]
+    fn remove_links_patch_removes_every_link_to_the_targets_last_first() {
+        let (patch, removed) = remove_links_patch(&linked_item(), &[1, 2], None).unwrap();
+
+        assert_eq!(
+            paths(&patch),
+            ["/rev", "/relations/3", "/relations/2", "/relations/0"]
+        );
+        assert_eq!(patch[1].op, Some(Op::Remove));
+        assert_eq!(removed.len(), 3);
+    }
+
+    #[test]
+    fn remove_links_patch_can_keep_other_link_types() {
+        let (patch, removed) =
+            remove_links_patch(&linked_item(), &[1], Some(LinkType::Predecessor)).unwrap();
+
+        assert_eq!(paths(&patch), ["/rev", "/relations/2"]);
+        assert_eq!(removed[0].link_type, LinkType::Predecessor);
+    }
+
+    #[test]
+    fn remove_links_patch_names_a_target_that_is_not_linked() {
+        let err = remove_links_patch(&linked_item(), &[1, 9], None).unwrap_err();
+        assert_eq!(err.to_string(), "Work item 7 has no link to #9");
+
+        let err = remove_links_patch(&linked_item(), &[2], Some(LinkType::Child)).unwrap_err();
+        assert_eq!(err.to_string(), "Work item 7 has no child link to #2");
     }
 
     #[test]
