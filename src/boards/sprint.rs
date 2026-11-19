@@ -35,7 +35,8 @@ pub(super) async fn handle_command(
             let project = get_project_or_default(project.as_deref())?;
             let (team, current) = iteration::current_iteration(&project, team.as_deref()).await?;
             let id = current.id.clone().unwrap_or_default();
-            let items = iteration::iteration_work_items(&project, &team, &id).await?;
+            let mut items = iteration::iteration_work_items(&project, &team, &id).await?;
+            sort_by_state(&mut items);
             let info = SprintInfo::from(&current);
             output::emit(&SprintOverview::new(&team, info, &items), format)
         }
@@ -231,15 +232,24 @@ fn state_rank(state: &str) -> (usize, String) {
     (known, state.to_lowercase())
 }
 
+fn state_of(item: &WorkItem) -> &str {
+    item.fields
+        .get("System.State")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("Unknown")
+}
+
+/// Orders the work items by state, in the same order as the summary; items
+/// in one state keep their order.
+pub(super) fn sort_by_state(items: &mut [WorkItem]) {
+    items.sort_by_cached_key(|item| state_rank(state_of(item)));
+}
+
 /// The work items grouped by state.
 pub(super) fn summarize(items: &[WorkItem]) -> Vec<StateSummary> {
     let mut summary: Vec<StateSummary> = Vec::new();
     for item in items {
-        let state = item
-            .fields
-            .get("System.State")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("Unknown");
+        let state = state_of(item);
         let index = match summary.iter().position(|row| row.state == state) {
             Some(index) => index,
             None => {
@@ -340,6 +350,19 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn items_sort_by_workflow_state_keeping_their_order_within_one() {
+        let mut items = [
+            item(1, "Done", json!({})),
+            item(2, "New", json!({})),
+            item(3, "Active", json!({})),
+            item(4, "New", json!({})),
+        ];
+        sort_by_state(&mut items);
+        let ids: Vec<_> = items.iter().map(|item| item.id).collect();
+        assert_eq!(ids, [2, 4, 3, 1]);
     }
 
     #[test]
