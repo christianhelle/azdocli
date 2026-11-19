@@ -230,6 +230,9 @@ pub struct WorkItemContentArgs {
     /// Team whose current sprint `--iteration @current` means (default: the project's default team)
     #[clap(long)]
     team: Option<String>,
+    /// Hours of work left on a task
+    #[clap(long, value_name = "HOURS")]
+    remaining_work: Option<f64>,
     /// Description (HTML or plain text)
     #[clap(long, conflicts_with = "description_file")]
     description: Option<String>,
@@ -452,6 +455,7 @@ struct WorkItemFields {
     state: Option<String>,
     assigned_to: Option<String>,
     priority: Option<i32>,
+    remaining_work: Option<f64>,
     iteration_path: Option<String>,
     area_path: Option<String>,
     /// `System.Tags`, already joined with "; ".
@@ -498,6 +502,10 @@ impl WorkItemFields {
             (
                 "Microsoft.VSTS.Common.Priority",
                 self.priority.map(|priority| json!(priority)),
+            ),
+            (
+                "Microsoft.VSTS.Scheduling.RemainingWork",
+                self.remaining_work.map(|hours| json!(hours)),
             ),
             ("System.IterationPath", text(&self.iteration_path)),
             ("System.AreaPath", text(&self.area_path)),
@@ -978,6 +986,7 @@ async fn handle_work_item_command(
                 tags: merge_tags(None, &content.tags),
                 assigned_to: content.assigned_to.clone(),
                 priority: content.priority,
+                remaining_work: content.remaining_work,
                 extra: content.fields.clone(),
                 iteration_path,
                 area_path: area_path.clone(),
@@ -1174,6 +1183,7 @@ async fn handle_work_item_command(
                     state: state.clone(),
                     assigned_to: content.assigned_to.clone(),
                     priority: content.priority,
+                    remaining_work: content.remaining_work,
                     extra: content.fields.clone(),
                     iteration_path,
                     area_path: area_path.clone(),
@@ -1335,6 +1345,25 @@ mod tests {
         .patch();
         assert_eq!(patch[0].path.as_deref(), Some("/fields/System.AssignedTo"));
         assert_eq!(patch[0].value, Some(json!("ada@example.com")));
+    }
+
+    #[test]
+    fn remaining_work_sets_its_field() {
+        let WorkItemSubCommands::Update { content, .. } =
+            parse(&["update", "--id", "1", "--remaining-work", "2.5"]).unwrap()
+        else {
+            panic!("expected Update");
+        };
+        let patch = WorkItemFields {
+            remaining_work: content.remaining_work,
+            ..Default::default()
+        }
+        .patch();
+        assert_eq!(
+            patch[0].path.as_deref(),
+            Some("/fields/Microsoft.VSTS.Scheduling.RemainingWork")
+        );
+        assert_eq!(patch[0].value, Some(json!(2.5)));
     }
 
     #[test]
