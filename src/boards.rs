@@ -14,6 +14,7 @@ use serde_json::json;
 use std::path::{Path, PathBuf};
 
 mod area;
+mod attachment;
 mod classification;
 mod iteration;
 mod views;
@@ -186,6 +187,11 @@ pub enum WorkItemSubCommands {
     Comment {
         #[clap(subcommand)]
         subcommand: WorkItemCommentSubCommands,
+    },
+    /// List and download the files attached to a work item
+    Attachment {
+        #[clap(subcommand)]
+        subcommand: attachment::AttachmentSubCommands,
     },
     /// Update a work item
     Update {
@@ -1094,6 +1100,9 @@ async fn handle_work_item_command(
         }
         WorkItemSubCommands::Comment { subcommand } => {
             return handle_work_item_comment_command(subcommand).await;
+        }
+        WorkItemSubCommands::Attachment { subcommand } => {
+            return attachment::handle_command(subcommand, format).await;
         }
         WorkItemSubCommands::Update {
             id,
