@@ -267,7 +267,11 @@ azdocli boards work-item show --id 42 -o yaml</code></pre>
               <code>pipelines list</code>, <code>pipelines show</code>,
               <code>pipelines runs list</code>,
               <code>boards work-item list</code>,
-              <code>boards work-item show</code> and <code>boards query</code>.
+              <code>boards work-item show</code>,
+              <code>boards work-item create</code>,
+              <code>boards work-item update</code>,
+              <code>boards work-item attachment list</code> and
+              <code>boards query</code>.
               The other commands accept only <code>text</code> and fail with a
               clear error for any other format.
             </p>
@@ -1073,14 +1077,40 @@ azdocli boards work-item create feature --title "New reporting dashboard"
 azdocli boards work-item create epic --title "Mobile application development"
 
 # Create a task under an existing work item, such as a product backlog item
-azdocli boards work-item create task --title "Write integration tests" --parent 1234</code></pre>
-            <p>Supported types: bug, task, user-story, feature, epic</p>
+azdocli boards work-item create task --title "Write integration tests" --parent 1234
+
+# Scrum product backlog item with acceptance criteria, tags, priority and an attached spec
+azdocli boards work-item create pbi --title "Sign up with email" --description "Short summary" --acceptance-criteria-file criteria.md --tag backend --tag auth --priority 2 --attachment spec.md
+
+# Any type name from 'boards work-item types', and any field by reference name
+azdocli boards work-item create "Product Backlog Item" --title "Sign up" --field Microsoft.VSTS.Scheduling.Effort=5
+
+# Capture the new ID in a script
+azdocli boards work-item create task --title "Write tests" -o json</code></pre>
+            <p>
+              Short type names: bug, task, user-story, feature, epic, pbi,
+              issue, impediment, requirement, test-case. Any other name is used
+              as given.
+            </p>
           </div>
 
           <div class="command-example">
             <h4>Update Work Item</h4>
             <pre><code># Update work item fields
-azdocli boards work-item update --id 123 --title "New title" --state "Active" --priority 2</code></pre>
+azdocli boards work-item update --id 123 --title "New title" --state "Active" --priority 2
+
+# Add tags (existing tags are kept), acceptance criteria and attachments
+azdocli boards work-item update --id 123 --tag needs-review --acceptance-criteria-file criteria.md --attachment design.png</code></pre>
+          </div>
+
+          <div class="command-example">
+            <h4>Work Item Attachments</h4>
+            <pre><code># List attachments
+azdocli boards work-item attachment list --id 123
+
+# Download all, or one by name into a directory
+azdocli boards work-item attachment download --id 123
+azdocli boards work-item attachment download --id 123 --name spec.md --dir ./specs</code></pre>
           </div>
 
           <div class="command-example">
@@ -1103,8 +1133,8 @@ azdocli boards work-item delete --id 123 --soft-delete</code></pre>
               you with advanced filtering options
             </li>
             <li>
-              <strong>Multiple work item types</strong>: Support for bug, task,
-              user story, feature, and epic
+              <strong>Any work item type</strong>: Short names for the built-in types (e.g. pbi), or any type name;
+              plus acceptance criteria, tags, any field and attachments
             </li>
             <li>
               <strong>Advanced filtering</strong>: Filter by state, work item
