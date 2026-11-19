@@ -375,36 +375,36 @@ async fn list_work_item_states(
         .value)
 }
 
+/// `states`, or an error naming the type when there are none: the API answers
+/// an unknown type with an empty list, and every real type has states.
+fn require_states(
+    states: Vec<models::WorkItemStateColor>,
+    work_item_type: &str,
+) -> Result<Vec<models::WorkItemStateColor>> {
+    if states.is_empty() {
+        return Err(anyhow!(
+            "Work item type '{work_item_type}' was not found; 'boards work-item types' lists them"
+        ));
+    }
+    Ok(states)
+}
+
 /// The states as a name and category table, in workflow order.
 fn states_table(states: &[models::WorkItemStateColor]) -> String {
-    if states.is_empty() {
-        return "No states found.
-"
-        .to_string();
-    }
     let mut table = format!(
-        "{:<20} {}
-{}
-",
+        "{:<20} {}\n{}\n",
         "Name".bold(),
         "Category".bold(),
         "-".repeat(40)
     );
     for state in states {
         table += &format!(
-            "{:<20} {}
-",
+            "{:<20} {}\n",
             escape_control_characters(state.name.as_deref().unwrap_or("-")),
             escape_control_characters(state.category.as_deref().unwrap_or("")),
         );
     }
-    table
-        + &format!(
-            "
-{} state(s)
-",
-            states.len()
-        )
+    table + &format!("\n{} state(s)\n", states.len())
 }
 
 fn display_work_item_types(work_item_types: &[models::WorkItemType]) {
@@ -1380,7 +1380,10 @@ async fn handle_work_item_command(
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
             let work_item_type = resolve_work_item_type(work_item_type);
-            match list_work_item_states(&project_name, &work_item_type).await {
+            match list_work_item_states(&project_name, &work_item_type)
+                .await
+                .and_then(|states| require_states(states, &work_item_type))
+            {
                 Ok(states) => print!("{}", states_table(&states)),
                 Err(e) => {
                     eprintln!("❌ Failed to list the states of '{work_item_type}'");
@@ -1836,6 +1839,19 @@ mod tests {
         assert_eq!(
             resolve_work_item_type(&work_item_type),
             "Product Backlog Item"
+        );
+    }
+
+    #[test]
+    fn no_states_means_an_unknown_type() {
+        let error = require_states(Vec::new(), "Story").unwrap_err();
+        assert!(error.to_string().contains("'Story'"));
+        assert!(error.to_string().contains("boards work-item types"));
+        assert_eq!(
+            require_states(vec![models::WorkItemStateColor::new()], "Bug")
+                .unwrap()
+                .len(),
+            1
         );
     }
 
