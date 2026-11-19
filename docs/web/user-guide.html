@@ -1083,8 +1083,8 @@ azdocli boards work-item create task --title "Write integration tests" --parent 
 azdocli boards work-item create pbi --title "Sign up with email" --description "Short summary" --acceptance-criteria-file criteria.md --tag backend --tag auth --priority 2 --attachment spec.md
 
 # Plan into the current sprint: assign, size (Effort, Story Points or Size) and estimate
-azdocli boards work-item create pbi --title "Sign up" --iteration @current --assigned-to ada@example.com --effort 5
-azdocli boards work-item create task --title "Write tests" --parent 1234 --iteration @current --remaining-work 4
+azdocli boards work-item create pbi --title "Sign up" --iteration "@current" --assigned-to ada@example.com --effort 5
+azdocli boards work-item create task --title "Write tests" --parent 1234 --iteration "@current" --remaining-work 4
 
 # Any type name from 'boards work-item types', and any field by reference name
 azdocli boards work-item create "Product Backlog Item" --title "Sign up" --field Microsoft.VSTS.Common.BusinessValue=50
@@ -1107,7 +1107,7 @@ azdocli boards work-item update --id 123 --title "New title" --state "Active" --
 azdocli boards work-item update --id 123 --tag needs-review --acceptance-criteria-file criteria.md --attachment design.png
 
 # Move to another team's current sprint and reassign
-azdocli boards work-item update --id 123 --iteration @current --team "Web Team" --assigned-to ada@example.com</code></pre>
+azdocli boards work-item update --id 123 --iteration "@current" --team "Web Team" --assigned-to ada@example.com</code></pre>
           </div>
 
           <div class="command-example">
