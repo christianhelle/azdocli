@@ -90,10 +90,35 @@ pub(crate) struct WorkItemDetails<'a>(pub &'a WorkItem);
 
 /// The string fields the details show, in order, as (field, console label,
 /// Markdown label).
-const DETAIL_FIELDS: [(&str, &str, &str); 7] = [
+const DETAIL_FIELDS: [(&str, &str, &str); 16] = [
     ("System.State", "🔄 State", "State"),
     ("System.WorkItemType", "📌 Type", "Type"),
+    ("System.AssignedTo", "🙋 Assigned To", "Assigned to"),
+    ("System.IterationPath", "🗓️ Iteration", "Iteration"),
+    ("System.AreaPath", "🗂️ Area", "Area"),
     ("System.Tags", "🏷️ Tags", "Tags"),
+    ("Microsoft.VSTS.Scheduling.Effort", "📏 Effort", "Effort"),
+    (
+        "Microsoft.VSTS.Scheduling.StoryPoints",
+        "📏 Story Points",
+        "Story points",
+    ),
+    ("Microsoft.VSTS.Scheduling.Size", "📏 Size", "Size"),
+    (
+        "Microsoft.VSTS.Scheduling.OriginalEstimate",
+        "⌛ Original Estimate",
+        "Original estimate",
+    ),
+    (
+        "Microsoft.VSTS.Scheduling.RemainingWork",
+        "⏳ Remaining Work",
+        "Remaining work",
+    ),
+    (
+        "Microsoft.VSTS.Scheduling.CompletedWork",
+        "✔️ Completed Work",
+        "Completed work",
+    ),
     ("System.CreatedBy", "👤 Created By", "Created by"),
     ("System.CreatedDate", "📅 Created Date", "Created"),
     ("System.ChangedBy", "🔄 Changed By", "Changed by"),
@@ -175,7 +200,11 @@ impl Render for WorkItemDetails<'_> {
 fn field_display(work_item: &WorkItem, field: &str) -> Option<String> {
     match work_item.fields.get(field)? {
         serde_json::Value::String(text) => Some(text.clone()),
-        serde_json::Value::Number(number) => Some(number.to_string()),
+        // Whole numbers come back as 5.0; show them as 5.
+        serde_json::Value::Number(number) => Some(match number.as_f64() {
+            Some(value) if value.fract() == 0.0 && value.abs() < 1e15 => format!("{value:.0}"),
+            _ => number.to_string(),
+        }),
         serde_json::Value::Object(identity) => identity
             .get("displayName")
             .and_then(serde_json::Value::as_str)
@@ -359,6 +388,26 @@ mod tests {
             json!({"displayName": "Ada Lovelace", "uniqueName": "ada@example.com"});
         assert!(text(&WorkItemDetails(&item)).contains("👤 Created By: Ada Lovelace\n"));
         assert!(markdown(&WorkItemDetails(&item)).contains("- **Created by:** Ada Lovelace\n"));
+    }
+
+    #[test]
+    fn work_item_details_show_sprint_fields() {
+        let mut item = work_item(5, "Sign up");
+        item.fields["System.AssignedTo"] = json!({"displayName": "Ada Lovelace"});
+        item.fields["System.IterationPath"] = json!("Proj\\Sprint 3");
+        item.fields["Microsoft.VSTS.Scheduling.StoryPoints"] = json!(5.0);
+        item.fields["Microsoft.VSTS.Scheduling.RemainingWork"] = json!(2.5);
+
+        let text = text(&WorkItemDetails(&item));
+        for line in [
+            "🙋 Assigned To: Ada Lovelace\n",
+            "🗓️ Iteration: Proj\\Sprint 3\n",
+            "📏 Story Points: 5\n",
+            "⏳ Remaining Work: 2.5\n",
+        ] {
+            assert!(text.contains(line), "missing {line:?} in {text}");
+        }
+        assert!(markdown(&WorkItemDetails(&item)).contains("- **Story points:** 5\n"));
     }
 
     #[test]
