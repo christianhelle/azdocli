@@ -236,7 +236,7 @@ pub struct WorkItemContentArgs {
     /// Priority (e.g., 1, 2, 3, 4)
     #[clap(long)]
     priority: Option<i32>,
-    /// User to assign the work item to, e.g. ada@example.com; "" unassigns
+    /// User to assign the work item to, e.g. ada@example.com or @me; "" unassigns
     #[clap(long, value_name = "USER")]
     assigned_to: Option<String>,
     /// Team whose current sprint `--iteration @current` means (default: the project's default team)
@@ -306,6 +306,32 @@ impl WorkItemContentArgs {
             self.acceptance_criteria.as_deref(),
             self.acceptance_criteria_file.as_deref(),
         )
+    }
+}
+
+/// `--assigned-to` value meaning the signed-in user.
+fn is_me(value: &str) -> bool {
+    value.trim().eq_ignore_ascii_case("@me")
+}
+
+/// The account name (usually the email) of the user `connectionData` describes.
+fn signed_in_account(connection_data: &serde_json::Value) -> Option<String> {
+    connection_data
+        .pointer("/authenticatedUser/properties/Account/$value")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
+}
+
+/// `assignee`, with `@me` swapped for the signed-in user's account name.
+async fn resolve_assignee(assignee: Option<&str>) -> Result<Option<String>> {
+    match assignee {
+        Some(value) if is_me(value) => {
+            let data = crate::auth::connection_data(&get_credentials()?).await?;
+            signed_in_account(&data)
+                .map(Some)
+                .ok_or_else(|| anyhow!("Could not tell which account the PAT belongs to"))
+        }
+        other => Ok(other.map(str::to_string)),
     }
 }
 
@@ -1149,7 +1175,7 @@ async fn handle_work_item_command(
                 description: content.description()?,
                 acceptance_criteria: content.acceptance_criteria()?,
                 tags: merge_tags(None, &content.tags),
-                assigned_to: content.assigned_to.clone(),
+                assigned_to: resolve_assignee(content.assigned_to.as_deref()).await?,
                 priority: content.priority,
                 remaining_work: content.remaining_work,
                 extra: content.fields.clone(),
@@ -1374,7 +1400,7 @@ async fn handle_work_item_command(
                     tags,
                     state: state.clone(),
                     effort,
-                    assigned_to: content.assigned_to.clone(),
+                    assigned_to: resolve_assignee(content.assigned_to.as_deref()).await?,
                     priority: content.priority,
                     remaining_work: content.remaining_work,
                     extra: content.fields.clone(),
@@ -1685,6 +1711,26 @@ mod tests {
     fn merge_tags_with_nothing_to_add_is_none() {
         assert_eq!(merge_tags(Some("api"), &[]), None);
         assert_eq!(merge_tags(None, &[" ".into()]), None);
+    }
+
+    #[test]
+    fn signed_in_account_comes_from_connection_data() {
+        let data = json!({
+            "authenticatedUser": {
+                "id": "3d22",
+                "properties": {"Account": {"$type": "System.String", "$value": "ada@example.com"}}
+            }
+        });
+        assert_eq!(signed_in_account(&data).as_deref(), Some("ada@example.com"));
+        assert_eq!(signed_in_account(&json!({"authenticatedUser": {}})), None);
+    }
+
+    #[test]
+    fn only_at_me_needs_a_lookup() {
+        assert!(is_me("@me"));
+        assert!(is_me(" @Me "));
+        assert!(!is_me("ada@example.com"));
+        assert!(!is_me(""));
     }
 
     #[test]
