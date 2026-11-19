@@ -283,17 +283,11 @@ fn remove_links_patch(
     targets: &[i32],
     link_type: Option<LinkType>,
 ) -> Result<(Vec<JsonPatchOperation>, Vec<WorkItemLink>)> {
-    let mut indices = Vec::new();
-    let mut removed = Vec::new();
-    for (index, relation) in work_item.relations.iter().enumerate() {
-        let Some(link) = links_of(std::slice::from_ref(relation)).pop() else {
-            continue;
-        };
-        if targets.contains(&link.id) && link_type.is_none_or(|t| t == link.link_type) {
-            indices.push(index);
-            removed.push(link);
-        }
-    }
+    let (indices, removed): (Vec<_>, Vec<_>) = matching_links(work_item, |link| {
+        targets.contains(&link.id) && link_type.is_none_or(|t| t == link.link_type)
+    })
+    .into_iter()
+    .unzip();
     if let Some(target) = targets
         .iter()
         .find(|target| !removed.iter().any(|link| link.id == **target))
@@ -302,15 +296,58 @@ fn remove_links_patch(
         bail!("Work item {} has no {kind}link to #{target}", work_item.id);
     }
     let mut patch: Vec<_> = work_item.rev.map(revision_test_op).into_iter().collect();
-    // From the last relation back, so each removal leaves the positions of
-    // the ones still to remove as they were.
-    patch.extend(indices.iter().rev().map(|index| JsonPatchOperation {
+    patch.extend(remove_relation_ops(&indices));
+    Ok((patch, removed))
+}
+
+/// The links of `work_item` that `keep` picks, with their relation positions.
+fn matching_links(
+    work_item: &WorkItem,
+    keep: impl Fn(&WorkItemLink) -> bool,
+) -> Vec<(usize, WorkItemLink)> {
+    work_item
+        .relations
+        .iter()
+        .enumerate()
+        .filter_map(|(index, relation)| {
+            let link = links_of(std::slice::from_ref(relation)).pop()?;
+            keep(&link).then_some((index, link))
+        })
+        .collect()
+}
+
+/// Removes the relations at `indices`, which are in ascending order. They
+/// go from the last back, so each removal leaves the positions of the ones
+/// still to remove as they were.
+fn remove_relation_ops(indices: &[usize]) -> impl Iterator<Item = JsonPatchOperation> + '_ {
+    indices.iter().rev().map(|index| JsonPatchOperation {
         from: None,
         op: Some(Op::Remove),
         path: Some(format!("/relations/{index}")),
         value: None,
-    }));
-    Ok((patch, removed))
+    })
+}
+
+/// The operations that make `parent_id`, at `parent_url`, the only parent of
+/// `work_item`; none when it already is.
+pub(super) fn set_parent_ops(
+    work_item: &WorkItem,
+    parent_id: i32,
+    parent_url: &str,
+) -> Result<Vec<JsonPatchOperation>> {
+    if parent_id == work_item.id {
+        bail!("Work item {parent_id} cannot be its own parent");
+    }
+    let parents = matching_links(work_item, |link| link.link_type == LinkType::Parent);
+    if let [(_, parent)] = parents.as_slice() {
+        if parent.id == parent_id {
+            return Ok(Vec::new());
+        }
+    }
+    let indices: Vec<usize> = parents.iter().map(|(index, _)| *index).collect();
+    let mut ops: Vec<_> = remove_relation_ops(&indices).collect();
+    ops.push(add_relation_op(LinkType::Parent.rel(), parent_url, None));
+    Ok(ops)
 }
 
 async fn remove_links(
@@ -578,6 +615,40 @@ mod tests {
 
         let err = remove_links_patch(&linked_item(), &[2], Some(LinkType::Child)).unwrap_err();
         assert_eq!(err.to_string(), "Work item 7 has no child link to #2");
+    }
+
+    #[test]
+    fn set_parent_ops_replace_the_current_parent() {
+        let ops = set_parent_ops(&linked_item(), 5, "https://x/_apis/wit/workItems/5").unwrap();
+
+        assert_eq!(paths(&ops), ["/relations/3", "/relations/-"]);
+        assert_eq!(ops[0].op, Some(Op::Remove));
+        assert_eq!(
+            ops[1].value,
+            Some(json!({
+                "rel": "System.LinkTypes.Hierarchy-Reverse",
+                "url": "https://x/_apis/wit/workItems/5"
+            }))
+        );
+    }
+
+    #[test]
+    fn set_parent_ops_add_a_first_parent() {
+        let orphan = with_relations(json!([]));
+        let ops = set_parent_ops(&orphan, 5, "https://p").unwrap();
+        assert_eq!(paths(&ops), ["/relations/-"]);
+    }
+
+    #[test]
+    fn set_parent_ops_leave_the_same_parent_alone() {
+        assert!(set_parent_ops(&linked_item(), 2, "https://p")
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn set_parent_ops_refuse_the_item_itself() {
+        assert!(set_parent_ops(&linked_item(), 7, "https://p").is_err());
     }
 
     #[test]
