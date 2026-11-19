@@ -506,6 +506,16 @@ impl WorkItemFields {
     }
 }
 
+/// Fails the patch unless the work item is still at revision `rev`.
+fn revision_test_op(rev: i32) -> JsonPatchOperation {
+    JsonPatchOperation {
+        from: None,
+        op: Some(Op::Test),
+        path: Some("/rev".to_owned()),
+        value: Some(json!(rev)),
+    }
+}
+
 fn set_field_op(field: &str, value: serde_json::Value) -> JsonPatchOperation {
     JsonPatchOperation {
         from: None,
@@ -1119,29 +1129,35 @@ async fn handle_work_item_command(
                 println!("Updating work item with id: {id} in project: {project_name}");
             }
 
-            // Setting System.Tags replaces them, so new tags join the existing ones.
-            let tags = if content.tags.is_empty() {
-                None
+            // Setting System.Tags replaces them, so new tags join the existing
+            // ones. The revision they were read at guards the update, so tags
+            // another client adds in between fail the update instead of being lost.
+            let (tags, read_at) = if content.tags.is_empty() {
+                (None, None)
             } else {
                 let current = get_work_item(&project_name, id).await?;
-                merge_tags(
+                let tags = merge_tags(
                     current.fields.get("System.Tags").and_then(|v| v.as_str()),
                     &content.tags,
-                )
+                );
+                (tags, current.rev)
             };
 
-            let mut patch = WorkItemFields {
-                title: title.clone(),
-                description: content.description()?,
-                acceptance_criteria: content.acceptance_criteria()?,
-                tags,
-                state: state.clone(),
-                priority: content.priority,
-                extra: content.fields.clone(),
-                iteration_path: iteration_path.clone(),
-                area_path: area_path.clone(),
-            }
-            .patch();
+            let mut patch: Vec<_> = read_at.map(revision_test_op).into_iter().collect();
+            patch.extend(
+                WorkItemFields {
+                    title: title.clone(),
+                    description: content.description()?,
+                    acceptance_criteria: content.acceptance_criteria()?,
+                    tags,
+                    state: state.clone(),
+                    priority: content.priority,
+                    extra: content.fields.clone(),
+                    iteration_path: iteration_path.clone(),
+                    area_path: area_path.clone(),
+                }
+                .patch(),
+            );
             patch
                 .extend(attachment::upload_all(&project_name, &content.attachments, format).await?);
 
@@ -1314,6 +1330,14 @@ mod tests {
     fn merge_tags_with_nothing_to_add_is_none() {
         assert_eq!(merge_tags(Some("api"), &[]), None);
         assert_eq!(merge_tags(None, &[" ".into()]), None);
+    }
+
+    #[test]
+    fn revision_test_op_checks_the_revision() {
+        let op = revision_test_op(7);
+        assert_eq!(op.op, Some(Op::Test));
+        assert_eq!(op.path.as_deref(), Some("/rev"));
+        assert_eq!(op.value, Some(json!(7)));
     }
 
     #[test]
