@@ -8,11 +8,13 @@ use anyhow::{anyhow, Result};
 use azure_devops_rust_api::wit::models::json_patch_operation::Op;
 use azure_devops_rust_api::wit::models::JsonPatchOperation;
 use azure_devops_rust_api::wit::{self, models};
-use clap::{Subcommand, ValueEnum};
+use clap::{Args, Subcommand};
 use colored::Colorize;
 use serde_json::json;
+use std::path::{Path, PathBuf};
 
 mod area;
+mod attachment;
 mod classification;
 mod iteration;
 mod views;
@@ -24,7 +26,7 @@ pub enum BoardsSubCommands {
     /// Manage work items
     WorkItem {
         #[clap(subcommand)]
-        subcommand: WorkItemSubCommands,
+        subcommand: Box<WorkItemSubCommands>,
     },
     /// Manage area paths of a project and its teams
     Area {
@@ -50,18 +52,30 @@ pub enum BoardsSubCommands {
     },
 }
 
-#[derive(ValueEnum, Clone, Debug)]
-pub enum WorkItemType {
-    /// Bug work item type
-    Bug,
-    /// Task work item type
-    Task,
-    /// User Story work item type
-    UserStory,
-    /// Feature work item type
-    Feature,
-    /// Epic work item type
-    Epic,
+/// Short names for the work item types of the built-in processes, as
+/// (alias, Azure DevOps name).
+const WORK_ITEM_TYPE_ALIASES: &[(&str, &str)] = &[
+    ("bug", "Bug"),
+    ("task", "Task"),
+    ("user-story", "User Story"),
+    ("feature", "Feature"),
+    ("epic", "Epic"),
+    ("pbi", "Product Backlog Item"),
+    ("product-backlog-item", "Product Backlog Item"),
+    ("issue", "Issue"),
+    ("impediment", "Impediment"),
+    ("requirement", "Requirement"),
+    ("test-case", "Test Case"),
+];
+
+/// Maps a short alias such as `pbi` to its Azure DevOps type name. Any other
+/// name, e.g. one from `work-item types`, is used as given.
+fn resolve_work_item_type(name: &str) -> String {
+    WORK_ITEM_TYPE_ALIASES
+        .iter()
+        .find(|(alias, _)| alias.eq_ignore_ascii_case(name))
+        .map(|(_, type_name)| type_name.to_string())
+        .unwrap_or_else(|| name.to_string())
 }
 
 #[derive(Subcommand, Clone)]
@@ -96,9 +110,10 @@ pub enum WorkItemCommentSubCommands {
 pub enum WorkItemSubCommands {
     /// Create a new work item
     Create {
-        /// Work item type
-        #[clap(value_enum)]
-        work_item_type: WorkItemType,
+        /// Work item type: bug, task, user-story, feature, epic, pbi, issue,
+        /// impediment, requirement, test-case, or any type name listed by
+        /// `boards work-item types` (e.g. "Product Backlog Item")
+        work_item_type: String,
         /// Work item title
         #[clap(short, long)]
         title: String,
@@ -114,6 +129,8 @@ pub enum WorkItemSubCommands {
         /// Area path for the work item
         #[clap(long = "area")]
         area_path: Option<String>,
+        #[clap(flatten)]
+        content: WorkItemContentArgs,
     },
     /// Delete a work item
     Delete {
@@ -171,6 +188,11 @@ pub enum WorkItemSubCommands {
         #[clap(subcommand)]
         subcommand: WorkItemCommentSubCommands,
     },
+    /// List and download the files attached to a work item
+    Attachment {
+        #[clap(subcommand)]
+        subcommand: attachment::AttachmentSubCommands,
+    },
     /// Update a work item
     Update {
         /// ID of the work item to update
@@ -182,22 +204,86 @@ pub enum WorkItemSubCommands {
         /// New title for the work item
         #[clap(long)]
         title: Option<String>,
-        /// New description for the work item
-        #[clap(long)]
-        description: Option<String>,
         /// New state for the work item (e.g., 'New', 'Active', 'Resolved', 'Closed')
         #[clap(long)]
         state: Option<String>,
-        /// New priority for the work item (e.g., 1, 2, 3, 4)
-        #[clap(long)]
-        priority: Option<i32>,
         /// New iteration path for the work item
         #[clap(long = "iteration")]
         iteration_path: Option<String>,
         /// New area path for the work item
         #[clap(long = "area")]
         area_path: Option<String>,
+        #[clap(flatten)]
+        content: WorkItemContentArgs,
     },
+}
+
+/// Content options shared by `work-item create` and `work-item update`.
+#[derive(Args, Clone, Debug, Default)]
+pub struct WorkItemContentArgs {
+    /// Priority (e.g., 1, 2, 3, 4)
+    #[clap(long)]
+    priority: Option<i32>,
+    /// Description (HTML or plain text)
+    #[clap(long, conflicts_with = "description_file")]
+    description: Option<String>,
+    /// Read the description from a file
+    #[clap(long, value_name = "PATH")]
+    description_file: Option<PathBuf>,
+    /// Acceptance criteria (HTML or plain text)
+    #[clap(long, conflicts_with = "acceptance_criteria_file")]
+    acceptance_criteria: Option<String>,
+    /// Read the acceptance criteria from a file
+    #[clap(long, value_name = "PATH")]
+    acceptance_criteria_file: Option<PathBuf>,
+    /// Tag to add; repeat the flag or separate tags with commas. Update keeps existing tags
+    #[clap(long = "tag", value_name = "TAG", value_delimiter = ',')]
+    tags: Vec<String>,
+    /// Any field by reference name, e.g. Microsoft.VSTS.Scheduling.Effort=5; repeatable
+    #[clap(long = "field", value_name = "REFERENCE_NAME=VALUE", value_parser = parse_field_assignment)]
+    fields: Vec<(String, String)>,
+    /// File to upload and attach; repeatable
+    #[clap(long = "attachment", value_name = "PATH")]
+    attachments: Vec<PathBuf>,
+}
+
+/// Splits `--field` input at its first `=` into reference name and value.
+fn parse_field_assignment(input: &str) -> Result<(String, String), String> {
+    match input.split_once('=') {
+        Some((name, value)) if !name.trim().is_empty() => {
+            Ok((name.trim().to_string(), value.to_string()))
+        }
+        _ => Err(format!(
+            "expected REFERENCE_NAME=VALUE, e.g. Microsoft.VSTS.Scheduling.Effort=5, got '{input}'"
+        )),
+    }
+}
+
+impl WorkItemContentArgs {
+    fn description(&self) -> Result<Option<String>> {
+        text_or_file(
+            self.description.as_deref(),
+            self.description_file.as_deref(),
+        )
+    }
+
+    fn acceptance_criteria(&self) -> Result<Option<String>> {
+        text_or_file(
+            self.acceptance_criteria.as_deref(),
+            self.acceptance_criteria_file.as_deref(),
+        )
+    }
+}
+
+/// The text given inline, or else the contents of the file given.
+fn text_or_file(text: Option<&str>, file: Option<&Path>) -> Result<Option<String>> {
+    match (text, file) {
+        (Some(text), _) => Ok(Some(text.to_string())),
+        (None, Some(file)) => std::fs::read_to_string(file)
+            .map(Some)
+            .map_err(|e| anyhow!("Failed to read '{}': {e}", file.display())),
+        (None, None) => Ok(None),
+    }
 }
 
 async fn list_work_item_types(project: &str) -> Result<Vec<models::WorkItemType>> {
@@ -351,123 +437,144 @@ async fn get_work_item(project: &str, id: &str) -> Result<models::WorkItem> {
     }
 }
 
+/// The fields a create or update sets. Unset fields are left alone.
+#[derive(Default, Debug)]
+struct WorkItemFields {
+    title: Option<String>,
+    description: Option<String>,
+    acceptance_criteria: Option<String>,
+    state: Option<String>,
+    priority: Option<i32>,
+    iteration_path: Option<String>,
+    area_path: Option<String>,
+    /// `System.Tags`, already joined with "; ".
+    tags: Option<String>,
+    /// Further fields as (reference name, value), set after the named ones.
+    extra: Vec<(String, String)>,
+}
+
+/// Joins `existing` tags (as Azure DevOps stores them, "a; b") with `added`,
+/// dropping blanks and case-insensitive duplicates. `None` when there are no
+/// tags to add.
+fn merge_tags(existing: Option<&str>, added: &[String]) -> Option<String> {
+    if added.iter().all(|tag| tag.trim().is_empty()) {
+        return None;
+    }
+    let mut tags: Vec<&str> = Vec::new();
+    for tag in existing
+        .unwrap_or("")
+        .split(';')
+        .chain(added.iter().map(String::as_str))
+        .map(str::trim)
+        .filter(|tag| !tag.is_empty())
+    {
+        if !tags.iter().any(|kept| kept.eq_ignore_ascii_case(tag)) {
+            tags.push(tag);
+        }
+    }
+    Some(tags.join("; "))
+}
+
+impl WorkItemFields {
+    /// The patch operations that set each field given.
+    fn patch(&self) -> Vec<JsonPatchOperation> {
+        let text = |value: &Option<String>| value.as_deref().map(|value| json!(value));
+        [
+            ("System.Title", text(&self.title)),
+            ("System.Description", text(&self.description)),
+            (
+                "Microsoft.VSTS.Common.AcceptanceCriteria",
+                text(&self.acceptance_criteria),
+            ),
+            ("System.State", text(&self.state)),
+            (
+                "Microsoft.VSTS.Common.Priority",
+                self.priority.map(|priority| json!(priority)),
+            ),
+            ("System.IterationPath", text(&self.iteration_path)),
+            ("System.AreaPath", text(&self.area_path)),
+            ("System.Tags", text(&self.tags)),
+        ]
+        .into_iter()
+        .filter_map(|(field, value)| value.map(|value| set_field_op(field, value)))
+        .chain(
+            self.extra
+                .iter()
+                .map(|(field, value)| set_field_op(field, json!(value))),
+        )
+        .collect()
+    }
+}
+
+/// Fails the patch unless the work item is still at revision `rev`.
+fn revision_test_op(rev: i32) -> JsonPatchOperation {
+    JsonPatchOperation {
+        from: None,
+        op: Some(Op::Test),
+        path: Some("/rev".to_owned()),
+        value: Some(json!(rev)),
+    }
+}
+
+fn set_field_op(field: &str, value: serde_json::Value) -> JsonPatchOperation {
+    JsonPatchOperation {
+        from: None,
+        op: Some(Op::Add),
+        path: Some(format!("/fields/{field}")),
+        value: Some(value),
+    }
+}
+
+/// Adds a relation of type `rel` to `url`, with optional link attributes.
+fn add_relation_op(
+    rel: &str,
+    url: &str,
+    attributes: Option<serde_json::Value>,
+) -> JsonPatchOperation {
+    let mut relation = json!({ "rel": rel, "url": url });
+    if let Some(attributes) = attributes {
+        relation["attributes"] = attributes;
+    }
+    JsonPatchOperation {
+        from: None,
+        op: Some(Op::Add),
+        path: Some("/relations/-".to_owned()),
+        value: Some(relation),
+    }
+}
+
 /// Builds the patch that creates a work item, optionally as a child of the
 /// work item at `parent_url`.
 fn create_work_item_patch(
-    title: &str,
+    fields: &WorkItemFields,
     parent_url: Option<&str>,
-    iteration_path: Option<&str>,
-    area_path: Option<&str>,
 ) -> Vec<JsonPatchOperation> {
-    let mut patch = vec![JsonPatchOperation {
-        from: None,
-        op: Some(Op::Add),
-        path: Some("/fields/System.Title".to_owned()),
-        value: Some(json!(title)),
-    }];
-
-    for (field, value) in [
-        ("System.IterationPath", iteration_path),
-        ("System.AreaPath", area_path),
-    ] {
-        if let Some(value) = value {
-            patch.push(JsonPatchOperation {
-                from: None,
-                op: Some(Op::Add),
-                path: Some(format!("/fields/{field}")),
-                value: Some(json!(value)),
-            });
-        }
-    }
-
+    let mut patch = fields.patch();
     if let Some(parent_url) = parent_url {
-        patch.push(JsonPatchOperation {
-            from: None,
-            op: Some(Op::Add),
-            path: Some("/relations/-".to_owned()),
-            value: Some(json!({
-                "rel": "System.LinkTypes.Hierarchy-Reverse",
-                "url": parent_url,
-            })),
-        });
+        patch.push(add_relation_op(
+            "System.LinkTypes.Hierarchy-Reverse",
+            parent_url,
+            None,
+        ));
     }
-
     patch
 }
 
 async fn create_work_item(
     project: &str,
-    work_item_type: &WorkItemType,
-    title: &str,
-    parent: Option<i32>,
-    iteration_path: Option<&str>,
-    area_path: Option<&str>,
+    work_item_type: &str,
+    patch: Vec<JsonPatchOperation>,
 ) -> Result<models::WorkItem> {
-    match get_credentials() {
-        Ok(creds) => {
-            let client = create_wit_client()?;
-            let parent_url =
-                parent.map(|id| api_work_item_url(&creds.base_url, &creds.organization, id));
-            let work_item = client
-                .work_items_client()
-                .create(
-                    creds.organization.clone(),
-                    create_work_item_patch(title, parent_url.as_deref(), iteration_path, area_path),
-                    project.to_string(),
-                    match work_item_type {
-                        WorkItemType::Bug => "Bug",
-                        WorkItemType::Task => "Task",
-                        WorkItemType::UserStory => "User Story",
-                        WorkItemType::Feature => "Feature",
-                        WorkItemType::Epic => "Epic",
-                    },
-                )
-                .await?;
-
-            Ok(work_item)
-        }
-        Err(e) => {
-            eprintln!("Unable to create work item");
-            Err(e)
-        }
-    }
-}
-
-fn update_work_item_patch(
-    title: Option<&str>,
-    description: Option<&str>,
-    state: Option<&str>,
-    priority: Option<i32>,
-    iteration_path: Option<&str>,
-    area_path: Option<&str>,
-) -> Vec<JsonPatchOperation> {
-    let mut patch_operations = Vec::new();
-
-    for (field, value) in [
-        ("System.Title", title.map(|value| json!(value))),
-        ("System.Description", description.map(|value| json!(value))),
-        ("System.State", state.map(|value| json!(value))),
-        (
-            "Microsoft.VSTS.Common.Priority",
-            priority.map(|priority| json!(priority)),
-        ),
-        (
-            "System.IterationPath",
-            iteration_path.map(|value| json!(value)),
-        ),
-        ("System.AreaPath", area_path.map(|value| json!(value))),
-    ] {
-        if let Some(value) = value {
-            patch_operations.push(JsonPatchOperation {
-                from: None,
-                op: Some(Op::Add),
-                path: Some(format!("/fields/{field}")),
-                value: Some(value),
-            });
-        }
-    }
-
-    patch_operations
+    let creds = get_credentials()?;
+    Ok(create_wit_client()?
+        .work_items_client()
+        .create(
+            creds.organization,
+            patch,
+            project.to_string(),
+            work_item_type,
+        )
+        .await?)
 }
 
 async fn update_work_item(
@@ -510,7 +617,15 @@ async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<
                     .and_then(|v| v.as_str());
                 let state = work_item_type
                     .map(|wt| {
-                        if wt == "Task" || wt == "User Story" || wt == "Feature" || wt == "Epic" {
+                        if [
+                            "Task",
+                            "User Story",
+                            "Product Backlog Item",
+                            "Feature",
+                            "Epic",
+                        ]
+                        .contains(&wt)
+                        {
                             "Removed"
                         } else {
                             "Closed"
@@ -520,7 +635,11 @@ async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<
                 update_work_item(
                     project,
                     id,
-                    update_work_item_patch(None, None, Some(state), None, None, None),
+                    WorkItemFields {
+                        state: Some(state.to_string()),
+                        ..Default::default()
+                    }
+                    .patch(),
                 )
                 .await?;
             } else {
@@ -827,20 +946,37 @@ async fn handle_work_item_command(
             parent,
             iteration_path,
             area_path,
+            content,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
-            println!("Creating a {work_item_type:?} work item in project: {project_name}");
+            let work_item_type = resolve_work_item_type(work_item_type);
+            if format == OutputFormat::Text {
+                println!("Creating a {work_item_type} work item in project: {project_name}");
+            }
 
-            match create_work_item(
-                &project_name,
-                work_item_type,
-                title,
-                *parent,
-                iteration_path.as_deref(),
-                area_path.as_deref(),
-            )
-            .await
-            {
+            let creds = get_credentials()?;
+            let parent_url =
+                parent.map(|id| api_work_item_url(&creds.base_url, &creds.organization, id));
+            let fields = WorkItemFields {
+                title: Some(title.clone()),
+                description: content.description()?,
+                acceptance_criteria: content.acceptance_criteria()?,
+                tags: merge_tags(None, &content.tags),
+                priority: content.priority,
+                extra: content.fields.clone(),
+                iteration_path: iteration_path.clone(),
+                area_path: area_path.clone(),
+                ..Default::default()
+            };
+
+            let mut patch = create_work_item_patch(&fields, parent_url.as_deref());
+            patch
+                .extend(attachment::upload_all(&project_name, &content.attachments, format).await?);
+
+            match create_work_item(&project_name, &work_item_type, patch).await {
+                Ok(work_item) if format != OutputFormat::Text => {
+                    output::emit(&WorkItemDetails(&work_item), format)?;
+                }
                 Ok(work_item) => {
                     println!("{}", "✅ Work item created successfully!".green());
                     println!("Created work item with ID: {}", work_item.id);
@@ -976,33 +1112,59 @@ async fn handle_work_item_command(
         WorkItemSubCommands::Comment { subcommand } => {
             return handle_work_item_comment_command(subcommand).await;
         }
+        WorkItemSubCommands::Attachment { subcommand } => {
+            return attachment::handle_command(subcommand, format).await;
+        }
         WorkItemSubCommands::Update {
             id,
             project,
             title,
-            description,
             state,
-            priority,
             iteration_path,
             area_path,
+            content,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
-            println!("Updating work item with id: {id} in project: {project_name}");
+            if format == OutputFormat::Text {
+                println!("Updating work item with id: {id} in project: {project_name}");
+            }
 
-            match update_work_item(
-                &project_name,
-                id,
-                update_work_item_patch(
-                    title.as_deref(),
-                    description.as_deref(),
-                    state.as_deref(),
-                    *priority,
-                    iteration_path.as_deref(),
-                    area_path.as_deref(),
-                ),
-            )
-            .await
-            {
+            // Setting System.Tags replaces them, so new tags join the existing
+            // ones. The revision they were read at guards the update, so tags
+            // another client adds in between fail the update instead of being lost.
+            let (tags, read_at) = if content.tags.is_empty() {
+                (None, None)
+            } else {
+                let current = get_work_item(&project_name, id).await?;
+                let tags = merge_tags(
+                    current.fields.get("System.Tags").and_then(|v| v.as_str()),
+                    &content.tags,
+                );
+                (tags, current.rev)
+            };
+
+            let mut patch: Vec<_> = read_at.map(revision_test_op).into_iter().collect();
+            patch.extend(
+                WorkItemFields {
+                    title: title.clone(),
+                    description: content.description()?,
+                    acceptance_criteria: content.acceptance_criteria()?,
+                    tags,
+                    state: state.clone(),
+                    priority: content.priority,
+                    extra: content.fields.clone(),
+                    iteration_path: iteration_path.clone(),
+                    area_path: area_path.clone(),
+                }
+                .patch(),
+            );
+            patch
+                .extend(attachment::upload_all(&project_name, &content.attachments, format).await?);
+
+            match update_work_item(&project_name, id, patch).await {
+                Ok(work_item) if format != OutputFormat::Text => {
+                    output::emit(&WorkItemDetails(&work_item), format)?;
+                }
                 Ok(work_item) => {
                     println!("{}", "✅ Work item updated successfully!".green());
                     println!("Updated work item with ID: {}", work_item.id);
@@ -1045,6 +1207,259 @@ mod tests {
             .map(|cli| cli.command)
     }
 
+    fn titled(title: &str) -> WorkItemFields {
+        WorkItemFields {
+            title: Some(title.to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn create_accepts_a_description() {
+        let WorkItemSubCommands::Create { content, .. } = parse(&[
+            "create",
+            "bug",
+            "--title",
+            "Crash",
+            "--description",
+            "It breaks",
+        ])
+        .unwrap() else {
+            panic!("expected Create");
+        };
+        assert_eq!(content.description().unwrap().as_deref(), Some("It breaks"));
+    }
+
+    #[test]
+    fn description_file_is_read() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), "# Spec\nDetails").unwrap();
+        let path = file.path().to_str().unwrap();
+        let WorkItemSubCommands::Update { content, .. } =
+            parse(&["update", "--id", "1", "--description-file", path]).unwrap()
+        else {
+            panic!("expected Update");
+        };
+        assert_eq!(
+            content.description().unwrap().as_deref(),
+            Some("# Spec\nDetails")
+        );
+    }
+
+    #[test]
+    fn description_and_description_file_conflict() {
+        assert!(parse(&[
+            "update",
+            "--id",
+            "1",
+            "--description",
+            "x",
+            "--description-file",
+            "y.md"
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn acceptance_criteria_sets_its_field() {
+        let WorkItemSubCommands::Create { content, .. } = parse(&[
+            "create",
+            "pbi",
+            "--title",
+            "Sign up",
+            "--acceptance-criteria",
+            "Given a user",
+        ])
+        .unwrap() else {
+            panic!("expected Create");
+        };
+        let patch = WorkItemFields {
+            acceptance_criteria: content.acceptance_criteria().unwrap(),
+            ..Default::default()
+        }
+        .patch();
+        assert_eq!(
+            patch[0].path.as_deref(),
+            Some("/fields/Microsoft.VSTS.Common.AcceptanceCriteria")
+        );
+        assert_eq!(patch[0].value, Some(json!("Given a user")));
+    }
+
+    #[test]
+    fn acceptance_criteria_and_its_file_conflict() {
+        assert!(parse(&[
+            "update",
+            "--id",
+            "1",
+            "--acceptance-criteria",
+            "x",
+            "--acceptance-criteria-file",
+            "y.md"
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn tags_are_repeatable_and_comma_separated() {
+        let WorkItemSubCommands::Create { content, .. } = parse(&[
+            "create", "pbi", "--title", "Sign up", "--tag", "backend", "--tag", "api,auth",
+        ])
+        .unwrap() else {
+            panic!("expected Create");
+        };
+        assert_eq!(content.tags, ["backend", "api", "auth"]);
+    }
+
+    #[test]
+    fn merge_tags_without_existing_joins_the_new_ones() {
+        assert_eq!(
+            merge_tags(None, &["a".into(), "b".into()]).as_deref(),
+            Some("a; b")
+        );
+    }
+
+    #[test]
+    fn merge_tags_keeps_existing_and_drops_duplicates() {
+        assert_eq!(
+            merge_tags(Some("api; Backend"), &["backend".into(), "auth".into()]).as_deref(),
+            Some("api; Backend; auth")
+        );
+    }
+
+    #[test]
+    fn merge_tags_with_nothing_to_add_is_none() {
+        assert_eq!(merge_tags(Some("api"), &[]), None);
+        assert_eq!(merge_tags(None, &[" ".into()]), None);
+    }
+
+    #[test]
+    fn revision_test_op_checks_the_revision() {
+        let op = revision_test_op(7);
+        assert_eq!(op.op, Some(Op::Test));
+        assert_eq!(op.path.as_deref(), Some("/rev"));
+        assert_eq!(op.value, Some(json!(7)));
+    }
+
+    #[test]
+    fn tags_set_the_tags_field() {
+        let patch = WorkItemFields {
+            tags: Some("a; b".into()),
+            ..Default::default()
+        }
+        .patch();
+        assert_eq!(patch[0].path.as_deref(), Some("/fields/System.Tags"));
+        assert_eq!(patch[0].value, Some(json!("a; b")));
+    }
+
+    #[test]
+    fn create_accepts_a_priority() {
+        let WorkItemSubCommands::Create { content, .. } =
+            parse(&["create", "bug", "--title", "Crash", "--priority", "1"]).unwrap()
+        else {
+            panic!("expected Create");
+        };
+        assert_eq!(content.priority, Some(1));
+    }
+
+    #[test]
+    fn fields_are_parsed_at_the_first_equals_sign() {
+        let WorkItemSubCommands::Update { content, .. } = parse(&[
+            "update",
+            "--id",
+            "1",
+            "--field",
+            "Microsoft.VSTS.Scheduling.Effort=5",
+            "--field",
+            "Custom.Formula=a=b",
+        ])
+        .unwrap() else {
+            panic!("expected Update");
+        };
+        assert_eq!(
+            content.fields,
+            [
+                ("Microsoft.VSTS.Scheduling.Effort".into(), "5".into()),
+                ("Custom.Formula".into(), "a=b".into())
+            ]
+        );
+    }
+
+    #[test]
+    fn fields_without_a_name_are_rejected() {
+        assert!(parse_field_assignment("NoEquals").is_err());
+        assert!(parse_field_assignment("=5").is_err());
+    }
+
+    #[test]
+    fn fields_follow_the_named_fields_in_the_patch() {
+        let patch = WorkItemFields {
+            title: Some("T".into()),
+            extra: vec![("Custom.Thing".into(), "x".into())],
+            ..Default::default()
+        }
+        .patch();
+        assert_eq!(patch[1].path.as_deref(), Some("/fields/Custom.Thing"));
+        assert_eq!(patch[1].value, Some(json!("x")));
+    }
+
+    #[test]
+    fn attachments_are_repeatable() {
+        let WorkItemSubCommands::Create { content, .. } = parse(&[
+            "create",
+            "pbi",
+            "--title",
+            "Sign up",
+            "--attachment",
+            "spec.md",
+            "--attachment",
+            "diagram.png",
+        ])
+        .unwrap() else {
+            panic!("expected Create");
+        };
+        assert_eq!(
+            content.attachments,
+            [PathBuf::from("spec.md"), PathBuf::from("diagram.png")]
+        );
+    }
+
+    #[test]
+    fn missing_description_file_is_an_error() {
+        assert!(text_or_file(None, Some(Path::new("does-not-exist.md"))).is_err());
+    }
+
+    #[test]
+    fn work_item_type_aliases_resolve_to_azure_devops_names() {
+        assert_eq!(resolve_work_item_type("bug"), "Bug");
+        assert_eq!(resolve_work_item_type("user-story"), "User Story");
+        assert_eq!(resolve_work_item_type("pbi"), "Product Backlog Item");
+        assert_eq!(
+            resolve_work_item_type("product-backlog-item"),
+            "Product Backlog Item"
+        );
+        assert_eq!(resolve_work_item_type("Impediment"), "Impediment");
+        assert_eq!(resolve_work_item_type("test-case"), "Test Case");
+    }
+
+    #[test]
+    fn unknown_work_item_types_pass_through_verbatim() {
+        assert_eq!(
+            resolve_work_item_type("Product Backlog Item"),
+            "Product Backlog Item"
+        );
+        assert_eq!(resolve_work_item_type("Custom Thing"), "Custom Thing");
+    }
+
+    #[test]
+    fn create_accepts_any_work_item_type_name() {
+        let WorkItemSubCommands::Create { work_item_type, .. } =
+            parse(&["create", "Product Backlog Item", "--title", "Sign up"]).unwrap()
+        else {
+            panic!("expected Create");
+        };
+        assert_eq!(work_item_type, "Product Backlog Item");
+    }
+
     #[test]
     fn create_accepts_iteration_and_area_paths() {
         let command = parse(&[
@@ -1073,10 +1488,13 @@ mod tests {
     #[test]
     fn create_patch_sets_iteration_and_area_paths() {
         let patch = create_work_item_patch(
-            "Write tests",
+            &WorkItemFields {
+                title: Some("Write tests".into()),
+                iteration_path: Some("Project\\Sprint 1".into()),
+                area_path: Some("Project\\Team A".into()),
+                ..Default::default()
+            },
             None,
-            Some("Project\\Sprint 1"),
-            Some("Project\\Team A"),
         );
 
         assert_eq!(
@@ -1114,14 +1532,12 @@ mod tests {
 
     #[test]
     fn update_patch_sets_iteration_and_area_paths() {
-        let patch = update_work_item_patch(
-            None,
-            None,
-            None,
-            None,
-            Some("Project\\Sprint 1"),
-            Some("Project\\Team A"),
-        );
+        let patch = WorkItemFields {
+            iteration_path: Some("Project\\Sprint 1".into()),
+            area_path: Some("Project\\Team A".into()),
+            ..Default::default()
+        }
+        .patch();
 
         assert_eq!(patch.len(), 2);
         assert_eq!(
@@ -1146,7 +1562,7 @@ mod tests {
         else {
             panic!("expected Create");
         };
-        assert!(matches!(work_item_type, WorkItemType::Task));
+        assert_eq!(work_item_type, "task");
         assert_eq!(parent, Some(42));
     }
 
@@ -1171,7 +1587,7 @@ mod tests {
         else {
             panic!("expected Create");
         };
-        assert!(matches!(work_item_type, WorkItemType::UserStory));
+        assert_eq!(work_item_type, "user-story");
         assert_eq!(title, "Sign up");
         assert_eq!(parent, Some(42));
     }
@@ -1201,7 +1617,7 @@ mod tests {
 
     #[test]
     fn create_patch_sets_the_title() {
-        let patch = create_work_item_patch("Write tests", None, None, None);
+        let patch = create_work_item_patch(&titled("Write tests"), None);
 
         assert_eq!(patch.len(), 1);
         assert_eq!(patch[0].op, Some(Op::Add));
@@ -1212,10 +1628,8 @@ mod tests {
     #[test]
     fn create_patch_links_the_new_work_item_to_its_parent() {
         let patch = create_work_item_patch(
-            "Write tests",
+            &titled("Write tests"),
             Some("https://dev.azure.com/mycompany/_apis/wit/workItems/42"),
-            None,
-            None,
         );
 
         assert_eq!(patch.len(), 2);

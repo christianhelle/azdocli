@@ -243,7 +243,8 @@ piped. Errors still go to stderr.
 
 These commands support every format so far: `repos list`, `repos show`, `repos pr list`,
 `repos pr show`, `pipelines list`, `pipelines show`, `pipelines runs list`, `boards work-item list`,
-`boards work-item show` and `boards query`. The other commands accept only `text` and fail with a
+`boards work-item show`, `boards work-item create`, `boards work-item update`,
+`boards work-item attachment list` and `boards query`. The other commands accept only `text` and fail with a
 clear error for any other format.
 
 ## Features
@@ -904,8 +905,24 @@ azdocli boards work-item show --id 123 --web
 azdocli boards work-item show --id 123 --project MyProject
 
 # Create a new work item (using default project)
-# Supported types: bug, task, user-story, feature, epic
+# Short type names: bug, task, user-story, feature, epic, pbi, issue, impediment, requirement, test-case
 azdocli boards work-item create bug --title "Fix login issue" --description "Users cannot login after password change"
+
+# Any type from 'boards work-item types' works too, e.g. in a Scrum project
+azdocli boards work-item create "Product Backlog Item" --title "Sign up with email"
+
+# Scrum product backlog item with acceptance criteria, tags, priority and an attached spec
+azdocli boards work-item create pbi --title "Sign up with email" \
+  --description "Short summary for humans" \
+  --acceptance-criteria-file criteria.md \
+  --tag backend --tag auth --priority 2 \
+  --attachment spec.md
+
+# Set any field by reference name
+azdocli boards work-item create pbi --title "Sign up" --field Microsoft.VSTS.Scheduling.Effort=5
+
+# Capture the new work item's ID in a script
+azdocli boards work-item create task --title "Write tests" -o json | jq .id
 
 # Create a task under an existing work item, such as a product backlog item
 azdocli boards work-item create task --title "Write integration tests" --parent 1234
@@ -916,6 +933,9 @@ azdocli boards work-item update --id 123 --iteration "MyProject\Sprint 1" --area
 
 # Update a work item (using default project)
 azdocli boards work-item update --id 123 --title "New title" --state "Active" --priority 2
+
+# Add tags (existing tags are kept), acceptance criteria and attachments
+azdocli boards work-item update --id 123 --tag needs-review --acceptance-criteria "Given ..." --attachment design.png
 
 # Delete a work item permanently (using default project)
 azdocli boards work-item delete --id 123
@@ -928,15 +948,33 @@ azdocli boards work-item delete --id 123 --soft-delete
 
 - **Full CRUD operations**: Create, read, update, and delete work items
 - **List work items**: View work items assigned to you (default), to someone else with `--assigned-to <name or email>`, or to anyone with `--all`
-- **Multiple work item types**: Support for bug, task, user story, feature, and epic
+- **Any work item type**: Short names for the built-in Agile, Scrum, Basic and CMMI types (e.g. `pbi` for Product Backlog Item), or any type name from `boards work-item types`
+- **Rich content**: Description and acceptance criteria inline or from a file (`--description-file`, `--acceptance-criteria-file`), tags with `--tag`, priority, and any field with `--field <ReferenceName>=<value>`
+- **Attachments**: Attach files with `--attachment <path>` on create or update
+- **Script friendly**: `create` and `update` support `-o json|yaml|markdown`
 - **Parent links**: Create a work item as a child of another with `--parent <ID>`, e.g. tasks under a product backlog item
 - **Filtering**: Filter by state, work item type, and limit number of results
 - **Web integration**: Open work items directly in browser with `--web` option
 - **Soft delete**: Option to change state to "Removed" instead of permanent deletion
 - **Iteration and area paths**: Set `System.IterationPath` and `System.AreaPath` on create or update with `--iteration` and `--area`
-- **Field updates**: Update title, description, state, and priority
+- **Field updates**: Update title, description, acceptance criteria, state, priority, tags and any other field
 - **Default project support**: Use with default project or specify --project explicitly
 - **Error handling**: Clear feedback when work item not found or access denied
+
+#### Work Item Attachments
+
+The `boards work-item attachment` commands list and download the files attached to a work item:
+
+```sh
+# List the attachments of a work item
+azdocli boards work-item attachment list --id 123
+
+# Download all attachments to the current directory
+azdocli boards work-item attachment download --id 123
+
+# Download one attachment into a directory
+azdocli boards work-item attachment download --id 123 --name spec.md --dir ./specs
+```
 
 #### Work Item Comments
 
