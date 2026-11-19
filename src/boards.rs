@@ -201,9 +201,6 @@ pub enum WorkItemSubCommands {
         /// New state for the work item (e.g., 'New', 'Active', 'Resolved', 'Closed')
         #[clap(long)]
         state: Option<String>,
-        /// New priority for the work item (e.g., 1, 2, 3, 4)
-        #[clap(long)]
-        priority: Option<i32>,
         /// New iteration path for the work item
         #[clap(long = "iteration")]
         iteration_path: Option<String>,
@@ -218,6 +215,9 @@ pub enum WorkItemSubCommands {
 /// Content options shared by `work-item create` and `work-item update`.
 #[derive(Args, Clone, Debug, Default)]
 pub struct WorkItemContentArgs {
+    /// Priority (e.g., 1, 2, 3, 4)
+    #[clap(long)]
+    priority: Option<i32>,
     /// Description (HTML or plain text)
     #[clap(long, conflicts_with = "description_file")]
     description: Option<String>,
@@ -919,6 +919,7 @@ async fn handle_work_item_command(
                 description: content.description()?,
                 acceptance_criteria: content.acceptance_criteria()?,
                 tags: merge_tags(None, &content.tags),
+                priority: content.priority,
                 iteration_path: iteration_path.clone(),
                 area_path: area_path.clone(),
                 ..Default::default()
@@ -1071,7 +1072,6 @@ async fn handle_work_item_command(
             project,
             title,
             state,
-            priority,
             iteration_path,
             area_path,
             content,
@@ -1099,7 +1099,7 @@ async fn handle_work_item_command(
                     acceptance_criteria: content.acceptance_criteria()?,
                     tags,
                     state: state.clone(),
-                    priority: *priority,
+                    priority: content.priority,
                     iteration_path: iteration_path.clone(),
                     area_path: area_path.clone(),
                 }
@@ -1283,6 +1283,16 @@ mod tests {
         .patch();
         assert_eq!(patch[0].path.as_deref(), Some("/fields/System.Tags"));
         assert_eq!(patch[0].value, Some(json!("a; b")));
+    }
+
+    #[test]
+    fn create_accepts_a_priority() {
+        let WorkItemSubCommands::Create { content, .. } =
+            parse(&["create", "bug", "--title", "Crash", "--priority", "1"]).unwrap()
+        else {
+            panic!("expected Create");
+        };
+        assert_eq!(content.priority, Some(1));
     }
 
     #[test]
