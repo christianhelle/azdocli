@@ -224,6 +224,12 @@ pub struct WorkItemContentArgs {
     /// Read the description from a file
     #[clap(long, value_name = "PATH")]
     description_file: Option<PathBuf>,
+    /// Acceptance criteria (HTML or plain text)
+    #[clap(long, conflicts_with = "acceptance_criteria_file")]
+    acceptance_criteria: Option<String>,
+    /// Read the acceptance criteria from a file
+    #[clap(long, value_name = "PATH")]
+    acceptance_criteria_file: Option<PathBuf>,
 }
 
 impl WorkItemContentArgs {
@@ -231,6 +237,13 @@ impl WorkItemContentArgs {
         text_or_file(
             self.description.as_deref(),
             self.description_file.as_deref(),
+        )
+    }
+
+    fn acceptance_criteria(&self) -> Result<Option<String>> {
+        text_or_file(
+            self.acceptance_criteria.as_deref(),
+            self.acceptance_criteria_file.as_deref(),
         )
     }
 }
@@ -402,6 +415,7 @@ async fn get_work_item(project: &str, id: &str) -> Result<models::WorkItem> {
 struct WorkItemFields {
     title: Option<String>,
     description: Option<String>,
+    acceptance_criteria: Option<String>,
     state: Option<String>,
     priority: Option<i32>,
     iteration_path: Option<String>,
@@ -415,6 +429,10 @@ impl WorkItemFields {
         [
             ("System.Title", text(&self.title)),
             ("System.Description", text(&self.description)),
+            (
+                "Microsoft.VSTS.Common.AcceptanceCriteria",
+                text(&self.acceptance_criteria),
+            ),
             ("System.State", text(&self.state)),
             (
                 "Microsoft.VSTS.Common.Priority",
@@ -871,6 +889,7 @@ async fn handle_work_item_command(
             let fields = WorkItemFields {
                 title: Some(title.clone()),
                 description: content.description()?,
+                acceptance_criteria: content.acceptance_criteria()?,
                 iteration_path: iteration_path.clone(),
                 area_path: area_path.clone(),
                 ..Default::default()
@@ -1037,6 +1056,7 @@ async fn handle_work_item_command(
                 WorkItemFields {
                     title: title.clone(),
                     description: content.description()?,
+                    acceptance_criteria: content.acceptance_criteria()?,
                     state: state.clone(),
                     priority: *priority,
                     iteration_path: iteration_path.clone(),
@@ -1136,6 +1156,45 @@ mod tests {
             "--description",
             "x",
             "--description-file",
+            "y.md"
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn acceptance_criteria_sets_its_field() {
+        let WorkItemSubCommands::Create { content, .. } = parse(&[
+            "create",
+            "pbi",
+            "--title",
+            "Sign up",
+            "--acceptance-criteria",
+            "Given a user",
+        ])
+        .unwrap() else {
+            panic!("expected Create");
+        };
+        let patch = WorkItemFields {
+            acceptance_criteria: content.acceptance_criteria().unwrap(),
+            ..Default::default()
+        }
+        .patch();
+        assert_eq!(
+            patch[0].path.as_deref(),
+            Some("/fields/Microsoft.VSTS.Common.AcceptanceCriteria")
+        );
+        assert_eq!(patch[0].value, Some(json!("Given a user")));
+    }
+
+    #[test]
+    fn acceptance_criteria_and_its_file_conflict() {
+        assert!(parse(&[
+            "update",
+            "--id",
+            "1",
+            "--acceptance-criteria",
+            "x",
+            "--acceptance-criteria-file",
             "y.md"
         ])
         .is_err());
