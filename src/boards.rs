@@ -505,42 +505,64 @@ impl WorkItemFields {
     /// The patch operations that set each field given.
     fn patch(&self) -> Vec<JsonPatchOperation> {
         let text = |value: &Option<String>| value.as_deref().map(|value| json!(value));
-        [
-            ("System.Title", text(&self.title)),
-            ("System.Description", text(&self.description)),
-            (
-                "Microsoft.VSTS.Common.AcceptanceCriteria",
-                text(&self.acceptance_criteria),
-            ),
-            ("System.State", text(&self.state)),
-            ("System.AssignedTo", text(&self.assigned_to)),
-            (
-                "Microsoft.VSTS.Common.Priority",
-                self.priority.map(|priority| json!(priority)),
-            ),
-            (
-                "Microsoft.VSTS.Scheduling.RemainingWork",
-                self.remaining_work.map(|hours| json!(hours)),
-            ),
-        ]
-        .into_iter()
-        .chain(
-            self.effort
-                .map(|(field, points)| (field, Some(json!(points)))),
-        )
-        .chain([
-            ("System.IterationPath", text(&self.iteration_path)),
-            ("System.AreaPath", text(&self.area_path)),
-            ("System.Tags", text(&self.tags)),
-        ])
-        .filter_map(|(field, value)| value.map(|value| set_field_op(field, value)))
-        .chain(
-            self.extra
-                .iter()
-                .map(|(field, value)| set_field_op(field, json!(value))),
-        )
-        .collect()
+        // A type change goes first, so the fields after it are set on the new type.
+        let (type_change, extra): (Vec<_>, Vec<_>) = self
+            .extra
+            .iter()
+            .partition(|(field, _)| is_work_item_type_field(field));
+        let extra_op = |(field, value): &(String, String)| set_field_op(field, json!(value));
+        type_change
+            .into_iter()
+            .map(extra_op)
+            .chain(
+                [
+                    ("System.Title", text(&self.title)),
+                    ("System.Description", text(&self.description)),
+                    (
+                        "Microsoft.VSTS.Common.AcceptanceCriteria",
+                        text(&self.acceptance_criteria),
+                    ),
+                    ("System.State", text(&self.state)),
+                    ("System.AssignedTo", text(&self.assigned_to)),
+                    (
+                        "Microsoft.VSTS.Common.Priority",
+                        self.priority.map(|priority| json!(priority)),
+                    ),
+                    (
+                        "Microsoft.VSTS.Scheduling.RemainingWork",
+                        self.remaining_work.map(|hours| json!(hours)),
+                    ),
+                ]
+                .into_iter()
+                .chain(
+                    self.effort
+                        .map(|(field, points)| (field, Some(json!(points)))),
+                )
+                .chain([
+                    ("System.IterationPath", text(&self.iteration_path)),
+                    ("System.AreaPath", text(&self.area_path)),
+                    ("System.Tags", text(&self.tags)),
+                ])
+                .filter_map(|(field, value)| value.map(|value| set_field_op(field, value))),
+            )
+            .chain(extra.into_iter().map(extra_op))
+            .collect()
     }
+}
+
+fn is_work_item_type_field(field: &str) -> bool {
+    field.eq_ignore_ascii_case("System.WorkItemType")
+}
+
+/// The type a work item will have after an update: one set with `--field`,
+/// or else its `current` type.
+fn requested_type<'a>(fields: &'a [(String, String)], current: Option<&'a str>) -> Option<&'a str> {
+    fields
+        .iter()
+        .rev()
+        .find(|(field, _)| is_work_item_type_field(field))
+        .map(|(_, value)| value.as_str())
+        .or(current)
 }
 
 /// The fields that size a backlog item, one per process: Scrum, Agile, CMMI.
@@ -1246,7 +1268,7 @@ async fn handle_work_item_command(
             } else {
                 merge_tags(field("System.Tags"), &content.tags)
             };
-            let effort = match field("System.WorkItemType") {
+            let effort = match requested_type(&content.fields, field("System.WorkItemType")) {
                 Some(work_item_type) => {
                     effort_assignment(&project_name, work_item_type, content.effort).await?
                 }
@@ -1449,6 +1471,36 @@ mod tests {
         );
         assert_eq!(effort_field(&cmmi), Some("Microsoft.VSTS.Scheduling.Size"));
         assert_eq!(effort_field(&["System.Title"]), None);
+    }
+
+    #[test]
+    fn a_type_change_is_patched_first() {
+        let patch = WorkItemFields {
+            effort: Some(("Microsoft.VSTS.Scheduling.Effort", 5.0)),
+            extra: vec![
+                ("Custom.Team".into(), "Web".into()),
+                ("System.WorkItemType".into(), "Bug".into()),
+            ],
+            ..Default::default()
+        }
+        .patch();
+        let paths: Vec<_> = patch.iter().filter_map(|op| op.path.as_deref()).collect();
+        assert_eq!(
+            paths,
+            [
+                "/fields/System.WorkItemType",
+                "/fields/Microsoft.VSTS.Scheduling.Effort",
+                "/fields/Custom.Team"
+            ]
+        );
+    }
+
+    #[test]
+    fn requested_type_overrides_the_current_one() {
+        let fields = [("system.workitemtype".to_string(), "Bug".to_string())];
+        assert_eq!(requested_type(&fields, Some("Task")), Some("Bug"));
+        assert_eq!(requested_type(&[], Some("Task")), Some("Task"));
+        assert_eq!(requested_type(&[], None), None);
     }
 
     #[test]
