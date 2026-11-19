@@ -271,6 +271,9 @@ azdocli boards work-item show --id 42 -o yaml</code></pre>
               <code>boards work-item create</code>,
               <code>boards work-item update</code>,
               <code>boards work-item attachment list</code>,
+              <code>boards work-item link list</code>,
+              <code>boards work-item link add</code>,
+              <code>boards work-item link remove</code>,
               <code>boards query</code> and
               <code>boards sprint show</code>.
               The other commands accept only <code>text</code> and fail with a
@@ -1116,7 +1119,10 @@ azdocli boards work-item update --id 123 --tag ready --remove-tag needs-review
 azdocli boards work-item update --id 124 --completed-work 3 --remaining-work 5
 
 # Move to another team's current sprint and reassign
-azdocli boards work-item update --id 123 --iteration "@current" --team "Web Team" --assigned-to ada@example.com</code></pre>
+azdocli boards work-item update --id 123 --iteration "@current" --team "Web Team" --assigned-to ada@example.com
+
+# Move a backlog item to another feature (replaces its parent)
+azdocli boards work-item update --id 123 --parent 456</code></pre>
           </div>
 
           <div class="command-example">
@@ -1127,6 +1133,23 @@ azdocli boards work-item attachment list --id 123
 # Download all, or one by name into a directory
 azdocli boards work-item attachment download --id 123
 azdocli boards work-item attachment download --id 123 --name spec.md --dir ./specs</code></pre>
+          </div>
+
+          <div class="command-example">
+            <h4>Work Item Links</h4>
+            <pre><code># List linked work items with their type, state and title
+azdocli boards work-item link list --id 123
+
+# Add dependencies: 124 and 125 must be done first
+azdocli boards work-item link add --id 123 --type predecessor --target 124,125
+
+# Remove one dependency, or every link to an item
+azdocli boards work-item link remove --id 123 --target 125 --type predecessor
+azdocli boards work-item link remove --id 123 --target 200</code></pre>
+            <p>
+              Link types: parent, child, related, predecessor, successor,
+              duplicate, duplicate-of.
+            </p>
           </div>
 
           <div class="command-example">
