@@ -806,17 +806,25 @@ fn add_relation_op(
     }
 }
 
-/// The patch that creates a task called `title` under the work item at
-/// `parent_url`, in the parent's iteration and area.
+/// The patch that creates a task called `title` under the created `parent`
+/// at `parent_url`, in the iteration and area the parent ended up in, even
+/// when those came from `--field` or the project's defaults.
 fn child_task_patch(
     title: &str,
-    parent: &WorkItemFields,
+    parent: &models::WorkItem,
     parent_url: &str,
 ) -> Vec<JsonPatchOperation> {
+    let path = |field: &str| {
+        parent
+            .fields
+            .get(field)
+            .and_then(|value| value.as_str())
+            .map(str::to_string)
+    };
     let fields = WorkItemFields {
         title: Some(title.to_string()),
-        iteration_path: parent.iteration_path.clone(),
-        area_path: parent.area_path.clone(),
+        iteration_path: path("System.IterationPath"),
+        area_path: path("System.AreaPath"),
         ..Default::default()
     };
     create_work_item_patch(&fields, Some(parent_url))
@@ -1291,7 +1299,7 @@ async fn handle_work_item_command(
                 let created = create_work_item(
                     &project_name,
                     "Task",
-                    child_task_patch(task, &fields, &new_url),
+                    child_task_patch(task, &work_item, &new_url),
                 )
                 .await
                 .map_err(|e| {
@@ -1861,14 +1869,18 @@ mod tests {
 
     #[test]
     fn child_task_shares_the_parents_sprint_and_area() {
-        let parent = WorkItemFields {
-            title: Some("Sign up".into()),
-            iteration_path: Some("Proj\\Sprint 3".into()),
-            area_path: Some("Proj\\Web".into()),
-            assigned_to: Some("ada@example.com".into()),
-            tags: Some("auth".into()),
-            ..Default::default()
-        };
+        // The created parent's paths, which may come from --field or defaults.
+        let parent: models::WorkItem = serde_json::from_value(json!({
+            "id": 9,
+            "url": "https://parent",
+            "fields": {
+                "System.Title": "Sign up",
+                "System.IterationPath": "Proj\\Sprint 3",
+                "System.AreaPath": "Proj\\Web",
+                "System.Tags": "auth"
+            }
+        }))
+        .unwrap();
         let patch = child_task_patch("Write tests", &parent, "https://parent");
         let ops: Vec<_> = patch
             .iter()
