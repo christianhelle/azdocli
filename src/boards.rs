@@ -230,6 +230,10 @@ pub struct WorkItemContentArgs {
     /// Team whose current sprint `--iteration @current` means (default: the project's default team)
     #[clap(long)]
     team: Option<String>,
+    /// Size of the item: sets Effort (Scrum), Story Points (Agile) or Size (CMMI),
+    /// whichever the work item type has
+    #[clap(long, value_name = "POINTS")]
+    effort: Option<f64>,
     /// Hours of work left on a task
     #[clap(long, value_name = "HOURS")]
     remaining_work: Option<f64>,
@@ -456,6 +460,8 @@ struct WorkItemFields {
     assigned_to: Option<String>,
     priority: Option<i32>,
     remaining_work: Option<f64>,
+    /// The work item type's effort field and the value for it.
+    effort: Option<(&'static str, f64)>,
     iteration_path: Option<String>,
     area_path: Option<String>,
     /// `System.Tags`, already joined with "; ".
@@ -507,11 +513,17 @@ impl WorkItemFields {
                 "Microsoft.VSTS.Scheduling.RemainingWork",
                 self.remaining_work.map(|hours| json!(hours)),
             ),
+        ]
+        .into_iter()
+        .chain(
+            self.effort
+                .map(|(field, points)| (field, Some(json!(points)))),
+        )
+        .chain([
             ("System.IterationPath", text(&self.iteration_path)),
             ("System.AreaPath", text(&self.area_path)),
             ("System.Tags", text(&self.tags)),
-        ]
-        .into_iter()
+        ])
         .filter_map(|(field, value)| value.map(|value| set_field_op(field, value)))
         .chain(
             self.extra
@@ -520,6 +532,55 @@ impl WorkItemFields {
         )
         .collect()
     }
+}
+
+/// The fields that size a backlog item, one per process: Scrum, Agile, CMMI.
+const EFFORT_FIELDS: [&str; 3] = [
+    "Microsoft.VSTS.Scheduling.Effort",
+    "Microsoft.VSTS.Scheduling.StoryPoints",
+    "Microsoft.VSTS.Scheduling.Size",
+];
+
+/// The effort field among a work item type's `fields`, if it has one.
+fn effort_field(fields: &[&str]) -> Option<&'static str> {
+    EFFORT_FIELDS
+        .into_iter()
+        .find(|effort| fields.contains(effort))
+}
+
+/// Pairs `effort` with the field that holds it for `work_item_type`.
+async fn effort_assignment(
+    project: &str,
+    work_item_type: &str,
+    effort: Option<f64>,
+) -> Result<Option<(&'static str, f64)>> {
+    let Some(effort) = effort else {
+        return Ok(None);
+    };
+    let creds = get_credentials()?;
+    let fields = create_wit_client()?
+        .work_item_types_field_client()
+        .list(creds.organization, project, work_item_type)
+        .await?
+        .value;
+    let names: Vec<&str> = fields
+        .iter()
+        .filter_map(|field| {
+            field
+                .work_item_type_field_instance_base
+                .work_item_field_reference
+                .reference_name
+                .as_deref()
+        })
+        .collect();
+    effort_field(&names)
+        .map(|field| Some((field, effort)))
+        .ok_or_else(|| {
+            anyhow!(
+                "Work item type '{work_item_type}' has no Effort, Story Points or Size field; \
+                 set one with --field"
+            )
+        })
 }
 
 /// Fails the patch unless the work item is still at revision `rev`.
@@ -979,8 +1040,10 @@ async fn handle_work_item_command(
                 iteration_path.as_deref(),
             )
             .await?;
+            let effort = effort_assignment(&project_name, &work_item_type, content.effort).await?;
             let fields = WorkItemFields {
                 title: Some(title.clone()),
+                effort,
                 description: content.description()?,
                 acceptance_criteria: content.acceptance_criteria()?,
                 tags: merge_tags(None, &content.tags),
@@ -1156,15 +1219,29 @@ async fn handle_work_item_command(
             // Setting System.Tags replaces them, so new tags join the existing
             // ones. The revision they were read at guards the update, so tags
             // another client adds in between fail the update instead of being lost.
+            // --effort needs the item's type to pick its effort field.
+            let current = if content.tags.is_empty() && content.effort.is_none() {
+                None
+            } else {
+                Some(get_work_item(&project_name, id).await?)
+            };
+            let field = |name| {
+                current
+                    .as_ref()
+                    .and_then(|item| item.fields.get(name))
+                    .and_then(|v| v.as_str())
+            };
             let (tags, read_at) = if content.tags.is_empty() {
                 (None, None)
             } else {
-                let current = get_work_item(&project_name, id).await?;
-                let tags = merge_tags(
-                    current.fields.get("System.Tags").and_then(|v| v.as_str()),
-                    &content.tags,
-                );
-                (tags, current.rev)
+                let tags = merge_tags(field("System.Tags"), &content.tags);
+                (tags, current.as_ref().and_then(|item| item.rev))
+            };
+            let effort = match field("System.WorkItemType") {
+                Some(work_item_type) => {
+                    effort_assignment(&project_name, work_item_type, content.effort).await?
+                }
+                None => None,
             };
 
             let iteration_path = iteration::resolve_iteration_path(
@@ -1181,6 +1258,7 @@ async fn handle_work_item_command(
                     acceptance_criteria: content.acceptance_criteria()?,
                     tags,
                     state: state.clone(),
+                    effort,
                     assigned_to: content.assigned_to.clone(),
                     priority: content.priority,
                     remaining_work: content.remaining_work,
@@ -1345,6 +1423,34 @@ mod tests {
         .patch();
         assert_eq!(patch[0].path.as_deref(), Some("/fields/System.AssignedTo"));
         assert_eq!(patch[0].value, Some(json!("ada@example.com")));
+    }
+
+    #[test]
+    fn effort_field_follows_the_process() {
+        let scrum = ["System.Title", "Microsoft.VSTS.Scheduling.Effort"];
+        let agile = ["System.Title", "Microsoft.VSTS.Scheduling.StoryPoints"];
+        let cmmi = ["Microsoft.VSTS.Scheduling.Size"];
+        assert_eq!(
+            effort_field(&scrum),
+            Some("Microsoft.VSTS.Scheduling.Effort")
+        );
+        assert_eq!(
+            effort_field(&agile),
+            Some("Microsoft.VSTS.Scheduling.StoryPoints")
+        );
+        assert_eq!(effort_field(&cmmi), Some("Microsoft.VSTS.Scheduling.Size"));
+        assert_eq!(effort_field(&["System.Title"]), None);
+    }
+
+    #[test]
+    fn effort_parses_as_a_number() {
+        let WorkItemSubCommands::Create { content, .. } =
+            parse(&["create", "pbi", "--title", "Sign up", "--effort", "5"]).unwrap()
+        else {
+            panic!("expected Create");
+        };
+        assert_eq!(content.effort, Some(5.0));
+        assert!(parse(&["create", "pbi", "--title", "x", "--effort", "big"]).is_err());
     }
 
     #[test]
