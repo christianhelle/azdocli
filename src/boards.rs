@@ -233,6 +233,21 @@ pub struct WorkItemContentArgs {
     /// Tag to add; repeat the flag or separate tags with commas. Update keeps existing tags
     #[clap(long = "tag", value_name = "TAG", value_delimiter = ',')]
     tags: Vec<String>,
+    /// Any field by reference name, e.g. Microsoft.VSTS.Scheduling.Effort=5; repeatable
+    #[clap(long = "field", value_name = "REFERENCE_NAME=VALUE", value_parser = parse_field_assignment)]
+    fields: Vec<(String, String)>,
+}
+
+/// Splits `--field` input at its first `=` into reference name and value.
+fn parse_field_assignment(input: &str) -> Result<(String, String), String> {
+    match input.split_once('=') {
+        Some((name, value)) if !name.trim().is_empty() => {
+            Ok((name.trim().to_string(), value.to_string()))
+        }
+        _ => Err(format!(
+            "expected REFERENCE_NAME=VALUE, e.g. Microsoft.VSTS.Scheduling.Effort=5, got '{input}'"
+        )),
+    }
 }
 
 impl WorkItemContentArgs {
@@ -425,6 +440,8 @@ struct WorkItemFields {
     area_path: Option<String>,
     /// `System.Tags`, already joined with "; ".
     tags: Option<String>,
+    /// Further fields as (reference name, value), set after the named ones.
+    extra: Vec<(String, String)>,
 }
 
 /// Joins `existing` tags (as Azure DevOps stores them, "a; b") with `added`,
@@ -471,6 +488,11 @@ impl WorkItemFields {
         ]
         .into_iter()
         .filter_map(|(field, value)| value.map(|value| set_field_op(field, value)))
+        .chain(
+            self.extra
+                .iter()
+                .map(|(field, value)| set_field_op(field, json!(value))),
+        )
         .collect()
     }
 }
@@ -920,6 +942,7 @@ async fn handle_work_item_command(
                 acceptance_criteria: content.acceptance_criteria()?,
                 tags: merge_tags(None, &content.tags),
                 priority: content.priority,
+                extra: content.fields.clone(),
                 iteration_path: iteration_path.clone(),
                 area_path: area_path.clone(),
                 ..Default::default()
@@ -1100,6 +1123,7 @@ async fn handle_work_item_command(
                     tags,
                     state: state.clone(),
                     priority: content.priority,
+                    extra: content.fields.clone(),
                     iteration_path: iteration_path.clone(),
                     area_path: area_path.clone(),
                 }
@@ -1293,6 +1317,47 @@ mod tests {
             panic!("expected Create");
         };
         assert_eq!(content.priority, Some(1));
+    }
+
+    #[test]
+    fn fields_are_parsed_at_the_first_equals_sign() {
+        let WorkItemSubCommands::Update { content, .. } = parse(&[
+            "update",
+            "--id",
+            "1",
+            "--field",
+            "Microsoft.VSTS.Scheduling.Effort=5",
+            "--field",
+            "Custom.Formula=a=b",
+        ])
+        .unwrap() else {
+            panic!("expected Update");
+        };
+        assert_eq!(
+            content.fields,
+            [
+                ("Microsoft.VSTS.Scheduling.Effort".into(), "5".into()),
+                ("Custom.Formula".into(), "a=b".into())
+            ]
+        );
+    }
+
+    #[test]
+    fn fields_without_a_name_are_rejected() {
+        assert!(parse_field_assignment("NoEquals").is_err());
+        assert!(parse_field_assignment("=5").is_err());
+    }
+
+    #[test]
+    fn fields_follow_the_named_fields_in_the_patch() {
+        let patch = WorkItemFields {
+            title: Some("T".into()),
+            extra: vec![("Custom.Thing".into(), "x".into())],
+            ..Default::default()
+        }
+        .patch();
+        assert_eq!(patch[1].path.as_deref(), Some("/fields/Custom.Thing"));
+        assert_eq!(patch[1].value, Some(json!("x")));
     }
 
     #[test]
