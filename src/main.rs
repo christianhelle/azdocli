@@ -51,6 +51,8 @@ const STRUCTURED_OUTPUT_COMMANDS: &[&str] = &[
     "repos pr show",
     "boards work-item list",
     "boards work-item show",
+    "boards work-item create",
+    "boards work-item update",
     "boards query",
 ];
 
@@ -357,6 +359,8 @@ mod tests {
             "repos pr show",
             "boards work-item list",
             "boards work-item show",
+            "boards work-item create",
+            "boards work-item update",
             "boards query",
         ] {
             assert!(check_output_support(OutputFormat::Yaml, command).is_ok());

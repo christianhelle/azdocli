@@ -931,7 +931,9 @@ async fn handle_work_item_command(
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
             let work_item_type = resolve_work_item_type(work_item_type);
-            println!("Creating a {work_item_type} work item in project: {project_name}");
+            if format == OutputFormat::Text {
+                println!("Creating a {work_item_type} work item in project: {project_name}");
+            }
 
             let creds = get_credentials()?;
             let parent_url =
@@ -955,6 +957,9 @@ async fn handle_work_item_command(
             )
             .await
             {
+                Ok(work_item) if format != OutputFormat::Text => {
+                    output::emit(&WorkItemDetails(&work_item), format)?;
+                }
                 Ok(work_item) => {
                     println!("{}", "✅ Work item created successfully!".green());
                     println!("Created work item with ID: {}", work_item.id);
@@ -1100,7 +1105,9 @@ async fn handle_work_item_command(
             content,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
-            println!("Updating work item with id: {id} in project: {project_name}");
+            if format == OutputFormat::Text {
+                println!("Updating work item with id: {id} in project: {project_name}");
+            }
 
             // Setting System.Tags replaces them, so new tags join the existing ones.
             let tags = if content.tags.is_empty() {
@@ -1131,6 +1138,9 @@ async fn handle_work_item_command(
             )
             .await
             {
+                Ok(work_item) if format != OutputFormat::Text => {
+                    output::emit(&WorkItemDetails(&work_item), format)?;
+                }
                 Ok(work_item) => {
                     println!("{}", "✅ Work item updated successfully!".green());
                     println!("Updated work item with ID: {}", work_item.id);
