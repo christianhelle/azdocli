@@ -270,8 +270,9 @@ azdocli boards work-item show --id 42 -o yaml</code></pre>
               <code>boards work-item show</code>,
               <code>boards work-item create</code>,
               <code>boards work-item update</code>,
-              <code>boards work-item attachment list</code> and
-              <code>boards query</code>.
+              <code>boards work-item attachment list</code>,
+              <code>boards query</code> and
+              <code>boards sprint show</code>.
               The other commands accept only <code>text</code> and fail with a
               clear error for any other format.
             </p>
@@ -1085,6 +1086,9 @@ azdocli boards work-item create pbi --title "Sign up with email" --description "
 # Plan into the current sprint: assign, size (Effort, Story Points or Size) and estimate
 azdocli boards work-item create pbi --title "Sign up" --iteration "@current" --assigned-to ada@example.com --effort 5
 azdocli boards work-item create task --title "Write tests" --parent 1234 --iteration "@current" --remaining-work 4
+
+# Create a backlog item and its tasks in one go; the tasks share its sprint and area
+azdocli boards work-item create pbi --title "Sign up" --iteration "@current" --task "Write tests" --task "Implement"
 azdocli boards work-item create task --title "Review" --assigned-to "@me" --original-estimate 2
 
 # Any type name from 'boards work-item types', and any field by reference name
@@ -1224,6 +1228,24 @@ azdocli boards work-item types --project MyProject</code></pre>
             <h4>List Work Item States</h4>
             <pre><code># New, Approved, Committed, Done and Removed in a Scrum project
 azdocli boards work-item states pbi</code></pre>
+          </div>
+        </div>
+
+        <div class="command-section">
+          <h3>Sprint Overview</h3>
+          <p>
+            The boards sprint show command shows how a team's current sprint
+            is going: its work items grouped by state, with effort (Effort,
+            Story Points or Size) and remaining work totals per state.
+          </p>
+
+          <div class="command-example">
+            <h4>Show the Current Sprint</h4>
+            <pre><code># The current sprint of the project's default team
+azdocli boards sprint show
+
+# Another team's sprint, as JSON for scripts
+azdocli boards sprint show --team "Web Team" -o json</code></pre>
           </div>
         </div>
 
