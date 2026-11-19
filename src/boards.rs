@@ -565,6 +565,9 @@ struct WorkItemFields {
     area_path: Option<String>,
     /// `System.Tags`, already joined with "; ".
     tags: Option<String>,
+    /// Whether `tags` replaces the item's tags. Azure DevOps merges tags set
+    /// with `add`, so dropping one takes `replace`, or `remove` to clear them.
+    replace_tags: bool,
     /// Further fields as (reference name, value), set after the named ones.
     extra: Vec<(String, String)>,
 }
@@ -654,12 +657,27 @@ impl WorkItemFields {
                 .chain([
                     ("System.IterationPath", text(&self.iteration_path)),
                     ("System.AreaPath", text(&self.area_path)),
-                    ("System.Tags", text(&self.tags)),
                 ])
                 .filter_map(|(field, value)| value.map(|value| set_field_op(field, value))),
             )
+            .chain(self.tags.as_deref().map(|tags| self.tags_op(tags)))
             .chain(extra.into_iter().map(extra_op))
             .collect()
+    }
+}
+
+impl WorkItemFields {
+    fn tags_op(&self, tags: &str) -> JsonPatchOperation {
+        let mut op = set_field_op("System.Tags", json!(tags));
+        if self.replace_tags {
+            if tags.is_empty() {
+                op.op = Some(Op::Remove);
+                op.value = None;
+            } else {
+                op.op = Some(Op::Replace);
+            }
+        }
+        op
     }
 }
 
@@ -1417,6 +1435,7 @@ async fn handle_work_item_command(
                     acceptance_criteria: content.acceptance_criteria()?,
                     tags,
                     state: state.clone(),
+                    replace_tags: !remove_tags.is_empty(),
                     effort,
                     assigned_to: resolve_assignee(content.assigned_to.as_deref()).await?,
                     priority: content.priority,
@@ -1818,6 +1837,32 @@ mod tests {
         assert!(table.contains(&format!("{:<20} {}\n", "New", "Proposed")));
         assert!(table.contains(&format!("{:<20} {}\n", "Committed", "InProgress")));
         assert!(table.ends_with("\n2 state(s)\n"));
+    }
+
+    #[test]
+    fn replacing_tags_uses_replace_or_remove() {
+        let tags_op = |tags: &str, replace_tags| {
+            WorkItemFields {
+                tags: Some(tags.into()),
+                replace_tags,
+                ..Default::default()
+            }
+            .patch()
+            .remove(0)
+        };
+        let added = tags_op("a; b", false);
+        assert_eq!(
+            (added.op, added.value),
+            (Some(Op::Add), Some(json!("a; b")))
+        );
+        let replaced = tags_op("a", true);
+        assert_eq!(
+            (replaced.op, replaced.value),
+            (Some(Op::Replace), Some(json!("a")))
+        );
+        let cleared = tags_op("", true);
+        assert_eq!((cleared.op, cleared.value), (Some(Op::Remove), None));
+        assert_eq!(cleared.path.as_deref(), Some("/fields/System.Tags"));
     }
 
     #[test]
