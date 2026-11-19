@@ -90,14 +90,17 @@ pub(crate) struct WorkItemDetails<'a>(pub &'a WorkItem);
 
 /// The string fields the details show, in order, as (field, console label,
 /// Markdown label).
-const DETAIL_FIELDS: [(&str, &str, &str); 6] = [
+const DETAIL_FIELDS: [(&str, &str, &str); 7] = [
     ("System.State", "🔄 State", "State"),
     ("System.WorkItemType", "📌 Type", "Type"),
+    ("System.Tags", "🏷️ Tags", "Tags"),
     ("System.CreatedBy", "👤 Created By", "Created by"),
     ("System.CreatedDate", "📅 Created Date", "Created"),
     ("System.ChangedBy", "🔄 Changed By", "Changed by"),
     ("System.ChangedDate", "📅 Changed Date", "Changed"),
 ];
+
+const ACCEPTANCE_CRITERIA: &str = "Microsoft.VSTS.Common.AcceptanceCriteria";
 
 impl WorkItemDetails<'_> {
     fn priority(&self) -> Option<i64> {
@@ -132,6 +135,10 @@ impl Render for WorkItemDetails<'_> {
             writeln!(w, "\n📄 Description:")?;
             writeln!(w, "{description}")?;
         }
+        if let Some(criteria) = field_str(work_item, ACCEPTANCE_CRITERIA) {
+            writeln!(w, "\n✅ Acceptance Criteria:")?;
+            writeln!(w, "{criteria}")?;
+        }
         Ok(())
     }
 
@@ -156,6 +163,9 @@ impl Render for WorkItemDetails<'_> {
         }
         if let Some(description) = field_str(work_item, "System.Description") {
             writeln!(w, "\n### Description\n\n{description}")?;
+        }
+        if let Some(criteria) = field_str(work_item, ACCEPTANCE_CRITERIA) {
+            writeln!(w, "\n### Acceptance Criteria\n\n{criteria}")?;
         }
         Ok(())
     }
@@ -312,6 +322,21 @@ mod tests {
              \n### Description\n\n\
              It breaks\n"
         );
+    }
+
+    #[test]
+    fn work_item_details_show_tags_and_acceptance_criteria() {
+        let mut item = work_item(5, "Sign up");
+        item.fields["System.Tags"] = json!("api; auth");
+        item.fields["Microsoft.VSTS.Common.AcceptanceCriteria"] = json!("Given a user");
+
+        let text = text(&WorkItemDetails(&item));
+        assert!(text.contains("🏷️ Tags: api; auth\n"));
+        assert!(text.ends_with("\n✅ Acceptance Criteria:\nGiven a user\n"));
+
+        let markdown = markdown(&WorkItemDetails(&item));
+        assert!(markdown.contains("- **Tags:** api; auth\n"));
+        assert!(markdown.ends_with("\n### Acceptance Criteria\n\nGiven a user\n"));
     }
 
     #[test]
