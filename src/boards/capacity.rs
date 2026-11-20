@@ -380,10 +380,13 @@ pub(super) fn plan(members: &[Member], period: &Period, items: &[WorkItem]) -> C
                 .copied()
                 .collect();
             let days = working_days(period.from, period.to, period.weekdays, &days_off);
-            let capacity = member.capacity_per_day * f64::from(days);
+            // The API holds capacity per day as f32; rounding drops what
+            // widening it adds, such as 7.6 becoming 7.5999999.
+            let capacity_per_day = hours(member.capacity_per_day);
+            let capacity = capacity_per_day * f64::from(days);
             let row = MemberCapacity {
                 name: member.name.clone(),
-                capacity_per_day: member.capacity_per_day,
+                capacity_per_day,
                 days,
                 capacity,
                 assigned: 0.0,
@@ -677,6 +680,25 @@ mod tests {
         let text = rendered(|w| overview.text(w));
         assert!(text.contains("Eve <eve@one.com> (no capacity)"), "{text}");
         assert!(text.contains("Eve <eve@two.com> (no capacity)"), "{text}");
+    }
+
+    #[test]
+    fn capacity_read_as_f32_does_not_warn_when_work_fills_it() {
+        let period = Period {
+            // Monday to Friday
+            from: date("2026-11-09"),
+            to: date("2026-11-13"),
+            weekdays: &WEEKDAYS,
+            team_days_off: &[],
+        };
+        // The API holds capacity per day as f32, so 7.6 arrives as 7.5999999…
+        let members = [member("Ann", f64::from(7.6_f32), vec![])];
+        let plan_with = |work| plan(&members, &period, &[item(1, Some("Ann"), work)]);
+        let full = plan_with(38.0);
+        assert_eq!(full.members[0].capacity_per_day, 7.6);
+        assert_eq!(full.members[0].capacity, 38.0);
+        assert_eq!(full.members[0].left, 0.0);
+        assert_eq!(plan_with(39.0).members[0].left, -1.0);
     }
 
     #[test]
