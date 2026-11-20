@@ -448,6 +448,33 @@ impl DaysOff {
     fn contains(&self, day: NaiveDate) -> bool {
         self.start <= day && day <= self.end
     }
+
+    /// Reads one day, `2026-11-24`, or a run of days, `2026-11-24..2026-11-26`.
+    pub fn parse(value: &str) -> Result<Self, String> {
+        let date = |text: &str| {
+            text.trim()
+                .parse::<NaiveDate>()
+                .map_err(|_| format!("'{text}' is not a date like 2026-11-24"))
+        };
+        let (start, end) = match value.split_once("..") {
+            Some((start, end)) => (date(start)?, date(end)?),
+            None => (date(value)?, date(value)?),
+        };
+        if end < start {
+            return Err(format!("'{value}' ends before it starts"));
+        }
+        Ok(Self { start, end })
+    }
+
+    /// The range as the API takes it.
+    pub fn to_date_range(self) -> DateRange {
+        let midnight = |day: NaiveDate| format!("{day}T00:00:00Z");
+        serde_json::from_value(serde_json::json!({
+            "start": midnight(self.start),
+            "end": midnight(self.end),
+        }))
+        .expect("a date range of two RFC 3339 dates")
+    }
 }
 
 /// The days from `from` to `to`, both included, that fall on one of the
@@ -479,6 +506,46 @@ mod tests {
 
     fn date(day: &str) -> NaiveDate {
         day.parse().unwrap()
+    }
+
+    #[test]
+    fn days_off_parse_from_one_day_or_a_run() {
+        assert_eq!(
+            DaysOff::parse("2026-11-24"),
+            Ok(DaysOff {
+                start: date("2026-11-24"),
+                end: date("2026-11-24"),
+            })
+        );
+        assert_eq!(
+            DaysOff::parse("2026-11-24..2026-11-26"),
+            Ok(DaysOff {
+                start: date("2026-11-24"),
+                end: date("2026-11-26"),
+            })
+        );
+    }
+
+    #[test]
+    fn days_off_refuse_bad_dates_and_backward_runs() {
+        assert_eq!(
+            DaysOff::parse("tomorrow"),
+            Err("'tomorrow' is not a date like 2026-11-24".into())
+        );
+        assert_eq!(
+            DaysOff::parse("2026-11-26..2026-11-24"),
+            Err("'2026-11-26..2026-11-24' ends before it starts".into())
+        );
+    }
+
+    #[test]
+    fn days_off_round_trip_through_the_api_range() {
+        let off = DaysOff::parse("2026-11-24..2026-11-26").unwrap();
+        let range = off.to_date_range();
+        assert_eq!(days_off(&[range]), [off]);
+        let json = serde_json::to_value(off.to_date_range()).unwrap();
+        assert_eq!(json["start"], "2026-11-24T00:00:00Z");
+        assert_eq!(json["end"], "2026-11-26T00:00:00Z");
     }
 
     #[test]
