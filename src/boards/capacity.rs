@@ -3,11 +3,12 @@
 
 use super::create_work_client;
 use super::sprint::{amount, SprintInfo};
+use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::output::{md_table, Render};
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::wit::models::WorkItem;
-use azure_devops_rust_api::work::models::DateRange;
+use azure_devops_rust_api::work::models::{Activity, CapacityPatch, DateRange};
 use chrono::{Datelike, NaiveDate, Weekday};
 use serde::Serialize;
 use std::io::{self, Write};
@@ -110,6 +111,113 @@ pub(super) async fn team_capacity(
         weekdays: parse_weekdays(&settings.working_days),
         team_days_off: days_off(&team_days_off),
     })
+}
+
+/// A member of a team, as capacity is set for them.
+#[derive(Debug, PartialEq)]
+pub(super) struct TeamMember {
+    pub id: String,
+    pub unique_name: String,
+    pub name: String,
+}
+
+pub(super) async fn team_members(project: &str, team: &str) -> Result<Vec<TeamMember>> {
+    let creds = get_credentials()?;
+    let members = CredentialClientFactory::new(&creds)?
+        .build_core()
+        .teams_client()
+        .get_team_members_with_extended_properties(creds.organization.clone(), project, team)
+        .await
+        .map_err(|e| anyhow!("Failed to list the members of team '{team}': {e}"))?
+        .value;
+    Ok(members
+        .into_iter()
+        .filter_map(|member| {
+            let identity = member.identity?;
+            let unique_name = identity.unique_name?;
+            Some(TeamMember {
+                id: identity.id?,
+                name: identity
+                    .graph_subject_base
+                    .display_name
+                    .unwrap_or_else(|| unique_name.clone()),
+                unique_name,
+            })
+        })
+        .collect())
+}
+
+/// The member `wanted` names, by unique name (such as an email address) or
+/// else by display name, ignoring case.
+pub(super) fn find_member<'a>(
+    members: &'a [TeamMember],
+    wanted: &str,
+    team: &str,
+) -> Result<&'a TeamMember> {
+    if let Some(member) = members
+        .iter()
+        .find(|m| m.unique_name.eq_ignore_ascii_case(wanted))
+    {
+        return Ok(member);
+    }
+    let named: Vec<_> = members
+        .iter()
+        .filter(|m| m.name.eq_ignore_ascii_case(wanted))
+        .collect();
+    match named.as_slice() {
+        [member] => Ok(member),
+        [] => Err(anyhow!("Team '{team}' has no member '{wanted}'")),
+        several => Err(anyhow!(
+            "Several members of team '{team}' are called '{wanted}'; use one of {}",
+            several
+                .iter()
+                .map(|m| m.unique_name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+    }
+}
+
+/// The change to a member's capacity: hours a day for one activity, days
+/// off, or both. What is not given is left as it is.
+pub(super) fn capacity_patch(
+    per_day: Option<f64>,
+    activity: Option<&str>,
+    days_off: &[DaysOff],
+) -> CapacityPatch {
+    let mut patch = CapacityPatch::new();
+    if let Some(per_day) = per_day {
+        let mut work = Activity::new();
+        // The API holds capacity per day as f32.
+        work.capacity_per_day = Some(per_day as f32);
+        work.name = Some(activity.unwrap_or_default().to_string());
+        patch.activities = vec![work];
+    }
+    patch.days_off = days_off.iter().map(|off| off.to_date_range()).collect();
+    patch
+}
+
+pub(super) async fn set_member_capacity(
+    project: &str,
+    team: &str,
+    iteration_id: &str,
+    member_id: &str,
+    patch: CapacityPatch,
+) -> Result<()> {
+    let creds = get_credentials()?;
+    create_work_client()?
+        .capacities_client()
+        .update(
+            creds.organization.clone(),
+            patch,
+            project,
+            iteration_id,
+            member_id,
+            team,
+        )
+        .await
+        .map_err(|e| anyhow!("Failed to set the capacity: {e}"))?;
+    Ok(())
 }
 
 /// A team's capacity for what is left of its sprint.
@@ -439,7 +547,7 @@ pub(super) fn plan(members: &[Member], period: &Period, items: &[WorkItem]) -> C
 
 /// A run of days off, both ends included.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) struct DaysOff {
+pub(crate) struct DaysOff {
     pub start: NaiveDate,
     pub end: NaiveDate,
 }
@@ -506,6 +614,62 @@ mod tests {
 
     fn date(day: &str) -> NaiveDate {
         day.parse().unwrap()
+    }
+
+    fn team() -> Vec<TeamMember> {
+        [
+            ("1", "ann@one.com", "Ann"),
+            ("2", "alex@one.com", "Alex"),
+            ("3", "alex@two.com", "Alex"),
+        ]
+        .into_iter()
+        .map(|(id, unique_name, name)| TeamMember {
+            id: id.into(),
+            unique_name: unique_name.into(),
+            name: name.into(),
+        })
+        .collect()
+    }
+
+    #[test]
+    fn members_are_found_by_unique_or_display_name() {
+        let team = team();
+        assert_eq!(find_member(&team, "ANN@one.com", "T").unwrap().id, "1");
+        assert_eq!(find_member(&team, "ann", "T").unwrap().id, "1");
+        assert_eq!(find_member(&team, "alex@two.com", "T").unwrap().id, "3");
+    }
+
+    #[test]
+    fn unknown_or_shared_names_are_refused() {
+        let team = team();
+        assert_eq!(
+            find_member(&team, "Bob", "Web").unwrap_err().to_string(),
+            "Team 'Web' has no member 'Bob'"
+        );
+        assert_eq!(
+            find_member(&team, "alex", "Web").unwrap_err().to_string(),
+            "Several members of team 'Web' are called 'alex'; use one of alex@one.com, alex@two.com"
+        );
+    }
+
+    #[test]
+    fn capacity_patch_sets_what_is_given() {
+        let off = DaysOff::parse("2026-11-24").unwrap();
+        assert_eq!(
+            serde_json::to_value(capacity_patch(Some(6.5), Some("Development"), &[off])).unwrap(),
+            serde_json::json!({
+                "activities": [{"capacityPerDay": 6.5, "name": "Development"}],
+                "daysOff": [{"start": "2026-11-24T00:00:00Z", "end": "2026-11-24T00:00:00Z"}],
+            })
+        );
+        assert_eq!(
+            serde_json::to_value(capacity_patch(Some(4.0), None, &[])).unwrap(),
+            serde_json::json!({"activities": [{"capacityPerDay": 4.0, "name": ""}]})
+        );
+        assert_eq!(
+            serde_json::to_value(capacity_patch(None, None, &[off])).unwrap()["activities"],
+            serde_json::Value::Null
+        );
     }
 
     #[test]

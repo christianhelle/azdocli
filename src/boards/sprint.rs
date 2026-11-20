@@ -35,6 +35,35 @@ pub enum SprintSubCommands {
         #[clap(long)]
         team: Option<String>,
     },
+    /// Set a member's capacity, days off, or both, in a team's current
+    /// sprint, then show the team's capacity
+    #[clap(group(
+        clap::ArgGroup::new("change")
+            .required(true)
+            .multiple(true)
+            .args(["per_day", "days_off"])
+    ))]
+    SetCapacity {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Team whose sprint to change (default: the project's default team)
+        #[clap(long)]
+        team: Option<String>,
+        /// The member: their email or unique name, display name, or @me
+        #[clap(long)]
+        member: String,
+        /// Hours a day the member can work; replaces their activities
+        #[clap(long)]
+        per_day: Option<f64>,
+        /// The activity the hours are for, such as Development
+        #[clap(long, requires = "per_day")]
+        activity: Option<String>,
+        /// A day off, 2026-11-24, or a run of days off, 2026-11-24..2026-11-26;
+        /// repeat for more. Replaces the member's days off
+        #[clap(long = "day-off", value_parser = capacity::DaysOff::parse)]
+        days_off: Vec<capacity::DaysOff>,
+    },
 }
 
 pub(super) async fn handle_command(
@@ -54,35 +83,70 @@ pub(super) async fn handle_command(
         SprintSubCommands::Capacity { project, team } => {
             let project = get_project_or_default(project.as_deref())?;
             let (team, current) = iteration::current_iteration(&project, team.as_deref()).await?;
-            let info = SprintInfo::from(&current);
-            let date = |date: &Option<String>| {
-                date.as_deref()
-                    .and_then(|d| d.parse::<chrono::NaiveDate>().ok())
-            };
-            let (Some(start), Some(finish)) = (date(&info.start_date), date(&info.finish_date))
-            else {
-                return Err(anyhow!(
-                    "Sprint '{}' has no start and finish dates, so its capacity cannot be counted",
-                    info.name
-                ));
-            };
+            show_capacity(&project, &team, &current, format).await
+        }
+        SprintSubCommands::SetCapacity {
+            project,
+            team,
+            member,
+            per_day,
+            activity,
+            days_off,
+        } => {
+            let project = get_project_or_default(project.as_deref())?;
+            let (team, current) = iteration::current_iteration(&project, team.as_deref()).await?;
+            let member = super::resolve_assignee(Some(member))
+                .await?
+                .unwrap_or_default();
+            let members = capacity::team_members(&project, &team).await?;
+            let member = capacity::find_member(&members, &member, &team)?;
             let id = current.id.clone().unwrap_or_default();
-            let settings = capacity::team_capacity(&project, &team, &id).await?;
-            let items = iteration::iteration_work_items(&project, &team, &id).await?;
-            // Only the days still ahead count, today included, by the local
-            // calendar so a working day is not dropped early.
-            let today = chrono::Local::now().date_naive();
-            let period = capacity::Period {
-                from: start.max(today),
-                to: finish,
-                weekdays: &settings.weekdays,
-                team_days_off: &settings.team_days_off,
-            };
-            let overview =
-                capacity::CapacityOverview::new(&team, info, &period, &settings.members, &items);
-            output::emit(&overview, format)
+            let patch = capacity::capacity_patch(*per_day, activity.as_deref(), days_off);
+            capacity::set_member_capacity(&project, &team, &id, &member.id, patch).await?;
+            if format == OutputFormat::Text {
+                println!(
+                    "✅ Set the capacity of {} in {}\n",
+                    member.name,
+                    current.name.as_deref().unwrap_or_default()
+                );
+            }
+            show_capacity(&project, &team, &current, format).await
         }
     }
+}
+
+/// Each member's capacity for the rest of the sprint `current`.
+async fn show_capacity(
+    project: &str,
+    team: &str,
+    current: &azure_devops_rust_api::work::models::TeamSettingsIteration,
+    format: OutputFormat,
+) -> Result<()> {
+    let info = SprintInfo::from(current);
+    let date = |date: &Option<String>| {
+        date.as_deref()
+            .and_then(|d| d.parse::<chrono::NaiveDate>().ok())
+    };
+    let (Some(start), Some(finish)) = (date(&info.start_date), date(&info.finish_date)) else {
+        return Err(anyhow!(
+            "Sprint '{}' has no start and finish dates, so its capacity cannot be counted",
+            info.name
+        ));
+    };
+    let id = current.id.clone().unwrap_or_default();
+    let settings = capacity::team_capacity(project, team, &id).await?;
+    let items = iteration::iteration_work_items(project, team, &id).await?;
+    // Only the days still ahead count, today included, by the local
+    // calendar so a working day is not dropped early.
+    let today = chrono::Local::now().date_naive();
+    let period = capacity::Period {
+        from: start.max(today),
+        to: finish,
+        weekdays: &settings.weekdays,
+        team_days_off: &settings.team_days_off,
+    };
+    let overview = capacity::CapacityOverview::new(team, info, &period, &settings.members, &items);
+    output::emit(&overview, format)
 }
 
 /// The sprint an overview is about.
