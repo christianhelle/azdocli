@@ -233,7 +233,7 @@ impl Render for BacklogList<'_> {
         let row = |w: &mut dyn Write, cells: &[String]| {
             writeln!(
                 w,
-                "{:>4} {:<8} {:<20} {:<12} {:>6} {:<20} {}",
+                "{:>4} {:<8} {:<21} {:<12} {:>6} {:<20} {}",
                 cells[0],
                 cells[1],
                 escape_control_characters(&cells[2]),
