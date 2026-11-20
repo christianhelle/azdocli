@@ -176,6 +176,9 @@ fn entry(update: &WorkItemUpdate, filter: &[String]) -> Option<HistoryEntry> {
             old_value: change.get("oldValue").filter(|v| !v.is_null()).cloned(),
             new_value: change.get("newValue").filter(|v| !v.is_null()).cloned(),
         })
+        .filter(|change| {
+            value_text(change.old_value.as_ref()) != value_text(change.new_value.as_ref())
+        })
         .collect();
 
     // Link changes belong to no field, so a field filter leaves them out.
@@ -470,6 +473,19 @@ mod tests {
         assert_eq!(entries[2].date.as_deref(), Some("2026-11-01 09:00:00"));
         assert_eq!(entries[1].date.as_deref(), Some("2026-11-02 10:30:15"));
         assert_eq!(entries[1].changed_by.as_deref(), Some("Jane Doe"));
+    }
+
+    #[test]
+    fn changes_from_nothing_to_nothing_are_skipped() {
+        let updates = updates(json!([{
+            "id": 1, "workItemId": 7, "url": "https://x/u/1", "rev": 1,
+            "fields": {
+                "System.Tags": {"newValue": ""},
+                "System.State": {"newValue": "New"}
+            }
+        }]));
+        let entries = build_entries(&updates, &[], None);
+        assert_eq!(entries[0].changes.len(), 1);
     }
 
     #[test]
