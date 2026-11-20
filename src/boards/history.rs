@@ -97,6 +97,30 @@ fn field_matches(query: &str, reference: &str) -> bool {
     query.eq_ignore_ascii_case(reference)
         || query.eq_ignore_ascii_case(last)
         || query.eq_ignore_ascii_case(&display_name(reference))
+        // A label such as `API Key` for the reference `Custom.APIKey`.
+        || query.replace(' ', "").eq_ignore_ascii_case(last)
+}
+
+/// Fields whose values are HTML.
+const HTML_FIELDS: &[&str] = &[
+    "System.Description",
+    "System.History",
+    "Microsoft.VSTS.TCM.ReproSteps",
+    "Microsoft.VSTS.TCM.SystemInfo",
+    "Microsoft.VSTS.Common.AcceptanceCriteria",
+];
+
+fn is_html_field(reference: &str) -> bool {
+    HTML_FIELDS
+        .iter()
+        .any(|field| field.eq_ignore_ascii_case(reference))
+}
+
+/// A value with absent, null and empty text all treated as nothing.
+fn meaningful(value: &Option<Value>) -> Option<&Value> {
+    value
+        .as_ref()
+        .filter(|v| !v.is_null() && v.as_str() != Some(""))
 }
 
 fn identity_name(value: &Value) -> Option<String> {
@@ -121,8 +145,11 @@ fn link_name(relation: &WorkItemRelation) -> String {
         .unwrap_or_else(|| link.rel.clone())
 }
 
-fn link_target(url: &str) -> String {
-    let marker = "/workItems/";
+fn link_target(rel: &str, url: &str) -> String {
+    if rel == "Hyperlink" {
+        return url.to_string();
+    }
+    let marker = "/_apis/wit/workItems/";
     match url.rfind(marker) {
         Some(at) if url[at + marker.len()..].chars().all(|c| c.is_ascii_digit()) => {
             format!("#{}", &url[at + marker.len()..])
@@ -137,7 +164,7 @@ fn link_changes(relations: &[WorkItemRelation]) -> Vec<LinkChange> {
         .map(|relation| LinkChange {
             rel: relation.link.rel.clone(),
             name: link_name(relation),
-            target: link_target(&relation.link.url),
+            target: link_target(&relation.link.rel, &relation.link.url),
         })
         .collect()
 }
@@ -176,9 +203,7 @@ fn entry(update: &WorkItemUpdate, filter: &[String]) -> Option<HistoryEntry> {
             old_value: change.get("oldValue").filter(|v| !v.is_null()).cloned(),
             new_value: change.get("newValue").filter(|v| !v.is_null()).cloned(),
         })
-        .filter(|change| {
-            value_text(change.old_value.as_ref()) != value_text(change.new_value.as_ref())
-        })
+        .filter(|change| meaningful(&change.old_value) != meaningful(&change.new_value))
         .collect();
 
     // Link changes belong to no field, so a field filter leaves them out.
@@ -196,11 +221,13 @@ fn entry(update: &WorkItemUpdate, filter: &[String]) -> Option<HistoryEntry> {
     let changed = |field: &str| raw.and_then(|f| f.get(field)?.get("newValue"));
     let date = changed("System.ChangedDate")
         .and_then(Value::as_str)
-        .map(format_date)
+        .map(str::to_string)
         .or_else(|| {
-            update.revised_date.map(|d| {
+            // The API marks a work item's latest revision as revised in 9999.
+            let d = update.revised_date?;
+            (d.year() < 9000 && d.offset().whole_seconds() == 0).then(|| {
                 format!(
-                    "{} {:02}:{:02}:{:02}",
+                    "{}T{:02}:{:02}:{:02}Z",
                     d.date(),
                     d.time().hour(),
                     d.time().minute(),
@@ -224,8 +251,7 @@ fn entry(update: &WorkItemUpdate, filter: &[String]) -> Option<HistoryEntry> {
     })
 }
 
-/// Removes HTML tags and entities, collapses whitespace and shortens.
-fn plain_text(value: &str) -> String {
+fn strip_html(value: &str) -> String {
     let mut text = String::new();
     let mut in_tag = false;
     for c in value.chars() {
@@ -239,12 +265,20 @@ fn plain_text(value: &str) -> String {
             _ => {}
         }
     }
-    let text = text
-        .replace("&nbsp;", " ")
+    text.replace("&nbsp;", " ")
         .replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
-        .replace("&amp;", "&");
+        .replace("&amp;", "&")
+}
+
+/// Strips HTML from HTML fields, collapses whitespace and shortens.
+fn plain_text(value: &str, html: bool) -> String {
+    let text = if html {
+        strip_html(value)
+    } else {
+        value.to_string()
+    };
     let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
     if text.chars().count() > MAX_TEXT_VALUE {
         let cut: String = text.chars().take(MAX_TEXT_VALUE).collect();
@@ -255,10 +289,10 @@ fn plain_text(value: &str) -> String {
 }
 
 /// A field value as text output shows it.
-fn value_text(value: Option<&Value>) -> String {
+fn value_text(value: Option<&Value>, html: bool) -> String {
     let text = match value {
         None | Some(Value::Null) => return "(none)".to_string(),
-        Some(Value::String(s)) => plain_text(s),
+        Some(Value::String(s)) => plain_text(s, html),
         Some(Value::Number(n)) => match n.as_f64() {
             Some(f) if n.is_f64() && f.fract() == 0.0 && f.abs() < 1e15 => format!("{}", f as i64),
             _ => n.to_string(),
@@ -273,11 +307,12 @@ fn value_text(value: Option<&Value>) -> String {
 }
 
 fn change_line(change: &FieldChange) -> String {
+    let html = is_html_field(&change.field);
     format!(
         "{}: {} → {}",
         change.name,
-        value_text(change.old_value.as_ref()),
-        value_text(change.new_value.as_ref())
+        value_text(change.old_value.as_ref(), html),
+        value_text(change.new_value.as_ref(), html)
     )
 }
 
@@ -306,7 +341,7 @@ impl Render for History {
                 w,
                 "Rev {}  {}  {}",
                 entry.rev,
-                entry.date.as_deref().unwrap_or("-"),
+                entry.date.as_deref().map_or("-".into(), format_date),
                 escape_control_characters(entry.changed_by.as_deref().unwrap_or("-"))
             )?;
             for line in lines(entry) {
@@ -324,9 +359,9 @@ impl Render for History {
                 lines(entry).into_iter().map(move |line| {
                     vec![
                         entry.rev.to_string(),
-                        entry.date.clone().unwrap_or_else(|| "-".into()),
-                        entry.changed_by.clone().unwrap_or_else(|| "-".into()),
-                        line,
+                        entry.date.as_deref().map_or("-".into(), format_date),
+                        escape_control_characters(entry.changed_by.as_deref().unwrap_or("-")),
+                        escape_control_characters(&line),
                     ]
                 })
             })
@@ -470,8 +505,8 @@ mod tests {
     #[test]
     fn entry_uses_change_date_and_revised_by() {
         let entries = build_entries(&sample(), &[], None);
-        assert_eq!(entries[2].date.as_deref(), Some("2026-11-01 09:00:00"));
-        assert_eq!(entries[1].date.as_deref(), Some("2026-11-02 10:30:15"));
+        assert_eq!(entries[2].date.as_deref(), Some("2026-11-01T09:00:00.5Z"));
+        assert_eq!(entries[1].date.as_deref(), Some("2026-11-02T10:30:15Z"));
         assert_eq!(entries[1].changed_by.as_deref(), Some("Jane Doe"));
     }
 
@@ -486,6 +521,74 @@ mod tests {
         }]));
         let entries = build_entries(&updates, &[], None);
         assert_eq!(entries[0].changes.len(), 1);
+    }
+
+    #[test]
+    fn plain_text_fields_keep_angle_brackets() {
+        assert_eq!(plain_text("Latency < 5 ms", false), "Latency < 5 ms");
+    }
+
+    #[test]
+    fn changes_past_the_shortened_text_are_kept() {
+        let a = format!("{}a", "x".repeat(100));
+        let b = format!("{}b", "x".repeat(100));
+        let updates = updates(json!([{
+            "id": 1, "workItemId": 7, "url": "https://x/u/1", "rev": 2,
+            "fields": {"System.Description": {"oldValue": a, "newValue": b}}
+        }]));
+        assert_eq!(build_entries(&updates, &[], None)[0].changes.len(), 1);
+    }
+
+    #[test]
+    fn identities_with_the_same_name_are_still_a_change() {
+        let updates = updates(json!([{
+            "id": 1, "workItemId": 7, "url": "https://x/u/1", "rev": 2,
+            "fields": {"System.AssignedTo": {
+                "oldValue": {"displayName": "Jo", "id": "1"},
+                "newValue": {"displayName": "Jo", "id": "2"}
+            }}
+        }]));
+        assert_eq!(build_entries(&updates, &[], None)[0].changes.len(), 1);
+    }
+
+    #[test]
+    fn field_matches_a_label_with_spaces() {
+        assert!(field_matches("API Key", "Custom.APIKey"));
+    }
+
+    #[test]
+    fn hyperlinks_keep_their_url() {
+        let url = "https://tracker.example.com/workItems/42";
+        assert_eq!(link_target("Hyperlink", url), url);
+        assert_eq!(
+            link_target(
+                "ArtifactLink",
+                "https://dev.azure.com/o/_apis/wit/workItems/42"
+            ),
+            "#42"
+        );
+    }
+
+    #[test]
+    fn markdown_escapes_control_characters() {
+        let history = History {
+            work_item_id: 7,
+            updates: vec![HistoryEntry {
+                rev: 1,
+                date: None,
+                changed_by: Some("\u{1b}[31mEvil".into()),
+                changes: vec![],
+                links_added: vec![LinkChange {
+                    rel: "r".into(),
+                    name: "n".into(),
+                    target: "\u{1b}[0m".into(),
+                }],
+                links_removed: vec![],
+            }],
+        };
+        let mut out = Vec::new();
+        history.markdown(&mut out).unwrap();
+        assert!(!String::from_utf8(out).unwrap().contains('\u{1b}'));
     }
 
     #[test]
@@ -526,22 +629,22 @@ mod tests {
 
     #[test]
     fn value_text_formats_each_kind_of_value() {
-        assert_eq!(value_text(None), "(none)");
-        assert_eq!(value_text(Some(&json!(null))), "(none)");
-        assert_eq!(value_text(Some(&json!(8.0))), "8");
-        assert_eq!(value_text(Some(&json!(2.5))), "2.5");
-        assert_eq!(value_text(Some(&json!("Active"))), "Active");
+        assert_eq!(value_text(None, false), "(none)");
+        assert_eq!(value_text(Some(&json!(null)), false), "(none)");
+        assert_eq!(value_text(Some(&json!(8.0)), false), "8");
+        assert_eq!(value_text(Some(&json!(2.5)), false), "2.5");
+        assert_eq!(value_text(Some(&json!("Active")), false), "Active");
         assert_eq!(
-            value_text(Some(&json!({"displayName": "Jane Doe"}))),
+            value_text(Some(&json!({"displayName": "Jane Doe"})), false),
             "Jane Doe"
         );
     }
 
     #[test]
     fn plain_text_strips_html_and_shortens() {
-        assert_eq!(plain_text("<div>a &amp; b</div><p>c</p>"), "a & b c");
+        assert_eq!(plain_text("<div>a &amp; b</div><p>c</p>", true), "a & b c");
         let long = "x".repeat(200);
-        assert_eq!(plain_text(&long).chars().count(), MAX_TEXT_VALUE + 1);
+        assert_eq!(plain_text(&long, true).chars().count(), MAX_TEXT_VALUE + 1);
     }
 
     fn render_to_string(format: OutputFormat) -> String {
