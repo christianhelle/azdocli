@@ -3,11 +3,15 @@
 
 use super::create_work_client;
 use super::sprint::{amount, SprintInfo};
+use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::output::{md_table, Render};
+use crate::text::escape_control_characters;
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::wit::models::WorkItem;
-use azure_devops_rust_api::work::models::DateRange;
+use azure_devops_rust_api::work::models::{
+    Activity, CapacityPatch, DateRange, TeamSettingsDaysOffPatch,
+};
 use chrono::{Datelike, NaiveDate, Weekday};
 use serde::Serialize;
 use std::io::{self, Write};
@@ -112,6 +116,155 @@ pub(super) async fn team_capacity(
     })
 }
 
+/// A member of a team, as capacity is set for them.
+#[derive(Debug, PartialEq)]
+pub(super) struct TeamMember {
+    pub id: String,
+    pub unique_name: String,
+    pub name: String,
+}
+
+pub(super) async fn team_members(project: &str, team: &str) -> Result<Vec<TeamMember>> {
+    let creds = get_credentials()?;
+    let members = CredentialClientFactory::new(&creds)?
+        .build_core()
+        .teams_client()
+        .get_team_members_with_extended_properties(creds.organization.clone(), project, team)
+        .await
+        .map_err(|e| anyhow!("Failed to list the members of team '{team}': {e}"))?
+        .value;
+    Ok(members
+        .into_iter()
+        .filter_map(|member| {
+            let identity = member.identity?;
+            let unique_name = identity.unique_name?;
+            Some(TeamMember {
+                id: identity.id?,
+                name: identity
+                    .graph_subject_base
+                    .display_name
+                    .unwrap_or_else(|| unique_name.clone()),
+                unique_name,
+            })
+        })
+        .collect())
+}
+
+/// The member `wanted` names, by unique name (such as an email address) or
+/// else by display name, ignoring case.
+pub(super) fn find_member<'a>(
+    members: &'a [TeamMember],
+    wanted: &str,
+    team: &str,
+) -> Result<&'a TeamMember> {
+    // Names compare by their lowercase form, which folds beyond ASCII.
+    let key = wanted.to_lowercase();
+    if let Some(member) = members.iter().find(|m| m.unique_name.to_lowercase() == key) {
+        return Ok(member);
+    }
+    let named: Vec<_> = members
+        .iter()
+        .filter(|m| m.name.to_lowercase() == key)
+        .collect();
+    match named.as_slice() {
+        [member] => Ok(member),
+        [] => Err(anyhow!(
+            "Team '{team}' has no member '{wanted}'; its members are {}",
+            members
+                .iter()
+                .map(|m| format!("{} ({})", m.name, m.unique_name))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+        several => Err(anyhow!(
+            "Several members of team '{team}' are called '{wanted}'; use one of {}",
+            several
+                .iter()
+                .map(|m| m.unique_name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+    }
+}
+
+/// Reads hours a day, from 0 to 24, so the value survives the API's f32.
+pub(crate) fn parse_hours_a_day(value: &str) -> Result<f64, String> {
+    match value.trim().parse::<f64>() {
+        Ok(hours) if (0.0..=24.0).contains(&hours) => Ok(hours),
+        _ => Err(format!("'{value}' is not a number of hours from 0 to 24")),
+    }
+}
+
+/// The change to a member's capacity: hours a day for one activity, days
+/// off, or both. What is not given is left as it is.
+pub(super) fn capacity_patch(
+    per_day: Option<f64>,
+    activity: Option<&str>,
+    days_off: &[DaysOff],
+) -> CapacityPatch {
+    let mut patch = CapacityPatch::new();
+    if let Some(per_day) = per_day {
+        let mut work = Activity::new();
+        // The API holds capacity per day as f32.
+        work.capacity_per_day = Some(per_day as f32);
+        work.name = Some(activity.unwrap_or_default().to_string());
+        patch.activities = vec![work];
+    }
+    patch.days_off = days_off.iter().map(|off| off.to_date_range()).collect();
+    patch
+}
+
+/// The team's days off, replacing the ones set before.
+pub(super) fn team_days_off_patch(days_off: &[DaysOff]) -> TeamSettingsDaysOffPatch {
+    let mut patch = TeamSettingsDaysOffPatch::new();
+    patch.days_off = days_off.iter().map(|off| off.to_date_range()).collect();
+    patch
+}
+
+pub(super) async fn set_team_days_off(
+    project: &str,
+    team: &str,
+    iteration_id: &str,
+    days_off: &[DaysOff],
+) -> Result<()> {
+    let creds = get_credentials()?;
+    create_work_client()?
+        .teamdaysoff_client()
+        .update(
+            creds.organization.clone(),
+            team_days_off_patch(days_off),
+            project,
+            iteration_id,
+            team,
+        )
+        .await
+        .map_err(|e| anyhow!("Failed to set the days off of team '{team}': {e}"))?;
+    Ok(())
+}
+
+pub(super) async fn set_member_capacity(
+    project: &str,
+    team: &str,
+    iteration_id: &str,
+    member_id: &str,
+    patch: CapacityPatch,
+) -> Result<()> {
+    let creds = get_credentials()?;
+    create_work_client()?
+        .capacities_client()
+        .update(
+            creds.organization.clone(),
+            patch,
+            project,
+            iteration_id,
+            member_id,
+            team,
+        )
+        .await
+        .map_err(|e| anyhow!("Failed to set the capacity: {e}"))?;
+    Ok(())
+}
+
 /// A team's capacity for what is left of its sprint.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -121,7 +274,8 @@ pub(super) struct CapacityOverview<'a> {
     /// The first and last day counted.
     pub from: NaiveDate,
     pub to: NaiveDate,
-    /// The team's working days left, before anyone's days off.
+    /// The team's working days left, less the team's days off but before
+    /// anyone's own.
     pub working_days: u32,
     #[serde(flatten)]
     pub plan: CapacityPlan,
@@ -162,7 +316,12 @@ impl<'a> CapacityOverview<'a> {
             iteration,
             from: period.from,
             to: period.to,
-            working_days: working_days(period.from, period.to, period.weekdays, &[]),
+            working_days: working_days(
+                period.from,
+                period.to,
+                period.weekdays,
+                period.team_days_off,
+            ),
             plan,
             total,
         }
@@ -240,13 +399,21 @@ const HEADERS: [&str; 6] = ["Member", "Per day", "Days", "Capacity", "Assigned",
 
 impl Render for CapacityOverview<'_> {
     fn text(&self, w: &mut dyn Write) -> io::Result<()> {
-        writeln!(w, "🏃 {}", self.heading())?;
-        writeln!(w, "📅 {} · 👥 {}", self.period(), self.team)?;
+        writeln!(w, "🏃 {}", escape_control_characters(&self.heading()))?;
+        writeln!(
+            w,
+            "📅 {} · 👥 {}",
+            self.period(),
+            escape_control_characters(self.team)
+        )?;
         writeln!(w)?;
         if self.plan.members.is_empty() {
             writeln!(w, "No capacity is set for this sprint.\n")?;
         }
-        let rows = self.rows();
+        let mut rows = self.rows();
+        for row in &mut rows {
+            row[0] = escape_control_characters(&row[0]);
+        }
         // The name column fits the longest name.
         let width = rows
             .iter()
@@ -439,7 +606,7 @@ pub(super) fn plan(members: &[Member], period: &Period, items: &[WorkItem]) -> C
 
 /// A run of days off, both ends included.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) struct DaysOff {
+pub(crate) struct DaysOff {
     pub start: NaiveDate,
     pub end: NaiveDate,
 }
@@ -447,6 +614,33 @@ pub(super) struct DaysOff {
 impl DaysOff {
     fn contains(&self, day: NaiveDate) -> bool {
         self.start <= day && day <= self.end
+    }
+
+    /// Reads one day, `2026-11-24`, or a run of days, `2026-11-24..2026-11-26`.
+    pub fn parse(value: &str) -> Result<Self, String> {
+        let date = |text: &str| {
+            text.trim()
+                .parse::<NaiveDate>()
+                .map_err(|_| format!("'{text}' is not a date like 2026-11-24"))
+        };
+        let (start, end) = match value.split_once("..") {
+            Some((start, end)) => (date(start)?, date(end)?),
+            None => (date(value)?, date(value)?),
+        };
+        if end < start {
+            return Err(format!("'{value}' ends before it starts"));
+        }
+        Ok(Self { start, end })
+    }
+
+    /// The range as the API takes it.
+    pub fn to_date_range(self) -> DateRange {
+        let midnight = |day: NaiveDate| format!("{day}T00:00:00Z");
+        serde_json::from_value(serde_json::json!({
+            "start": midnight(self.start),
+            "end": midnight(self.end),
+        }))
+        .expect("a date range of two RFC 3339 dates")
     }
 }
 
@@ -479,6 +673,169 @@ mod tests {
 
     fn date(day: &str) -> NaiveDate {
         day.parse().unwrap()
+    }
+
+    fn team() -> Vec<TeamMember> {
+        [
+            ("1", "ann@one.com", "Ann"),
+            ("2", "alex@one.com", "Alex"),
+            ("3", "alex@two.com", "Alex"),
+        ]
+        .into_iter()
+        .map(|(id, unique_name, name)| TeamMember {
+            id: id.into(),
+            unique_name: unique_name.into(),
+            name: name.into(),
+        })
+        .collect()
+    }
+
+    #[test]
+    fn members_are_found_by_unique_or_display_name() {
+        let team = team();
+        assert_eq!(find_member(&team, "ANN@one.com", "T").unwrap().id, "1");
+        assert_eq!(find_member(&team, "ann", "T").unwrap().id, "1");
+        assert_eq!(find_member(&team, "alex@two.com", "T").unwrap().id, "3");
+    }
+
+    #[test]
+    fn display_names_match_ignoring_case_beyond_ascii() {
+        let mut team = team();
+        team.push(TeamMember {
+            id: "4".into(),
+            unique_name: "jorg@one.com".into(),
+            name: "Jörg".into(),
+        });
+        assert_eq!(find_member(&team, "JÖRG", "T").unwrap().id, "4");
+        team.push(TeamMember {
+            id: "5".into(),
+            unique_name: "jorg@two.com".into(),
+            name: "JÖRG".into(),
+        });
+        assert!(find_member(&team, "jörg", "T")
+            .unwrap_err()
+            .to_string()
+            .starts_with("Several members of team 'T' are called 'jörg'"));
+    }
+
+    #[test]
+    fn unknown_or_shared_names_are_refused() {
+        let team = team();
+        assert_eq!(
+            find_member(&team, "Bob", "Web").unwrap_err().to_string(),
+            "Team 'Web' has no member 'Bob'; its members are Ann (ann@one.com), Alex (alex@one.com), Alex (alex@two.com)"
+        );
+        assert_eq!(
+            find_member(&team, "alex", "Web").unwrap_err().to_string(),
+            "Several members of team 'Web' are called 'alex'; use one of alex@one.com, alex@two.com"
+        );
+    }
+
+    #[test]
+    fn hours_a_day_must_be_a_number_from_0_to_24() {
+        assert_eq!(parse_hours_a_day("6.5"), Ok(6.5));
+        assert_eq!(parse_hours_a_day("0"), Ok(0.0));
+        assert_eq!(parse_hours_a_day("24"), Ok(24.0));
+        for bad in ["NaN", "inf", "1e39", "-1", "24.5", "six"] {
+            assert_eq!(
+                parse_hours_a_day(bad),
+                Err(format!("'{bad}' is not a number of hours from 0 to 24")),
+            );
+        }
+    }
+
+    #[test]
+    fn capacity_patch_sets_what_is_given() {
+        let off = DaysOff::parse("2026-11-24").unwrap();
+        assert_eq!(
+            serde_json::to_value(capacity_patch(Some(6.5), Some("Development"), &[off])).unwrap(),
+            serde_json::json!({
+                "activities": [{"capacityPerDay": 6.5, "name": "Development"}],
+                "daysOff": [{"start": "2026-11-24T00:00:00Z", "end": "2026-11-24T00:00:00Z"}],
+            })
+        );
+        assert_eq!(
+            serde_json::to_value(capacity_patch(Some(4.0), None, &[])).unwrap(),
+            serde_json::json!({"activities": [{"capacityPerDay": 4.0, "name": ""}]})
+        );
+        assert_eq!(
+            serde_json::to_value(capacity_patch(None, None, &[off])).unwrap()["activities"],
+            serde_json::Value::Null
+        );
+    }
+
+    #[test]
+    fn working_days_left_leave_out_team_days_off() {
+        let team_off = [DaysOff::parse("2026-11-12..2026-11-13").unwrap()];
+        let period = Period {
+            from: date("2026-11-09"),
+            to: date("2026-11-13"),
+            weekdays: &WEEKDAYS,
+            team_days_off: &team_off,
+        };
+        let info = SprintInfo {
+            name: "Sprint 3".into(),
+            path: "Proj\\Sprint 3".into(),
+            start_date: None,
+            finish_date: None,
+        };
+        let overview = CapacityOverview::new("Web Team", info, &period, &[], &[]);
+        assert_eq!(overview.working_days, 3);
+    }
+
+    #[test]
+    fn team_days_off_patch_lists_each_run() {
+        let off = [
+            DaysOff::parse("2026-11-24").unwrap(),
+            DaysOff::parse("2026-12-24..2026-12-26").unwrap(),
+        ];
+        assert_eq!(
+            serde_json::to_value(team_days_off_patch(&off)).unwrap(),
+            serde_json::json!({"daysOff": [
+                {"start": "2026-11-24T00:00:00Z", "end": "2026-11-24T00:00:00Z"},
+                {"start": "2026-12-24T00:00:00Z", "end": "2026-12-26T00:00:00Z"},
+            ]})
+        );
+    }
+
+    #[test]
+    fn days_off_parse_from_one_day_or_a_run() {
+        assert_eq!(
+            DaysOff::parse("2026-11-24"),
+            Ok(DaysOff {
+                start: date("2026-11-24"),
+                end: date("2026-11-24"),
+            })
+        );
+        assert_eq!(
+            DaysOff::parse("2026-11-24..2026-11-26"),
+            Ok(DaysOff {
+                start: date("2026-11-24"),
+                end: date("2026-11-26"),
+            })
+        );
+    }
+
+    #[test]
+    fn days_off_refuse_bad_dates_and_backward_runs() {
+        assert_eq!(
+            DaysOff::parse("tomorrow"),
+            Err("'tomorrow' is not a date like 2026-11-24".into())
+        );
+        assert_eq!(
+            DaysOff::parse("2026-11-26..2026-11-24"),
+            Err("'2026-11-26..2026-11-24' ends before it starts".into())
+        );
+    }
+
+    #[test]
+    fn days_off_round_trip_through_the_api_range() {
+        let off = DaysOff::parse("2026-11-24..2026-11-26").unwrap();
+        let range = off.to_date_range();
+        assert_eq!(days_off(&[range]), [off]);
+        let json = serde_json::to_value(off.to_date_range()).unwrap();
+        assert_eq!(json["start"], "2026-11-24T00:00:00Z");
+        assert_eq!(json["end"], "2026-11-26T00:00:00Z");
     }
 
     #[test]
@@ -789,6 +1146,17 @@ mod tests {
             assert!(text.contains(&expected), "missing {expected:?} in\n{text}");
         }
         assert!(!text.contains("No capacity is set"));
+    }
+
+    #[test]
+    fn overview_text_escapes_control_characters_in_names() {
+        let overview = overview(
+            &[member("Ann\x1b[2J", 1.0, vec![])],
+            &[item(1, Some("Eve\x1b[1A"), 1.0)],
+        );
+        let text = rendered(|w| overview.text(w));
+        assert!(!text.contains('\x1b'), "control character in\n{text}");
+        assert!(text.contains("Ann\\u{001b}[2J"), "{text}");
     }
 
     #[test]
