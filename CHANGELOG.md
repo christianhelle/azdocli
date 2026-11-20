@@ -3,6 +3,9 @@
 ## [Unreleased Changes]
 
 ### Features
+- Add saved work item queries ([#165](https://github.com/christianhelle/azdocli/pull/165)) ([@christianhelle](https://github.com/christianhelle/))
+- Add work item history command ([#164](https://github.com/christianhelle/azdocli/pull/164)) ([@christianhelle](https://github.com/christianhelle/))
+- Keep default project when logging in again ([#150](https://github.com/christianhelle/azdocli/pull/150)) ([@christianhelle](https://github.com/christianhelle/))
 - Add backlog ordering ([#163](https://github.com/christianhelle/azdocli/pull/163)) ([@christianhelle](https://github.com/christianhelle/))
 - Set sprint capacity and days off ([#162](https://github.com/christianhelle/azdocli/pull/162)) ([@christianhelle](https://github.com/christianhelle/))
 - Show sprint capacity per team member ([#161](https://github.com/christianhelle/azdocli/pull/161)) ([@christianhelle](https://github.com/christianhelle/))
