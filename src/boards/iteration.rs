@@ -553,7 +553,7 @@ pub(super) async fn resolve_iteration_path(
     Ok(iteration.path)
 }
 
-async fn default_team(project: &str) -> Result<String> {
+pub(super) async fn default_team(project: &str) -> Result<String> {
     let creds = get_credentials()?;
     let client = CredentialClientFactory::new(&creds)?.build_core();
     client

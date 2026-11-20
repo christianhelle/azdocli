@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 
 mod area;
 mod attachment;
+mod backlog;
 mod capacity;
 mod classification;
 mod iteration;
@@ -45,6 +46,11 @@ pub enum BoardsSubCommands {
     Sprint {
         #[clap(subcommand)]
         subcommand: sprint::SprintSubCommands,
+    },
+    /// List a team's product backlog in backlog order
+    Backlog {
+        #[clap(subcommand)]
+        subcommand: backlog::BacklogSubCommands,
     },
     /// Run a WIQL query and list the work items it returns
     Query {
@@ -1333,6 +1339,9 @@ pub async fn handle_command(subcommand: &BoardsSubCommands, format: OutputFormat
         BoardsSubCommands::Iteration { subcommand } => iteration::handle_command(subcommand).await,
         BoardsSubCommands::Sprint { subcommand } => {
             sprint::handle_command(subcommand, format).await
+        }
+        BoardsSubCommands::Backlog { subcommand } => {
+            backlog::handle_command(subcommand, format).await
         }
         BoardsSubCommands::Query {
             wiql,
