@@ -5,8 +5,9 @@ use super::{create_wit_client, create_work_client, EFFORT_FIELDS};
 use crate::auth::get_credentials;
 use crate::output::{md_table, Render};
 use crate::text::escape_control_characters;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use azure_devops_rust_api::wit::models::WorkItem;
+use azure_devops_rust_api::work::models::ReorderOperation;
 use clap::Subcommand;
 use serde::Serialize;
 use std::io::{self, Write};
@@ -220,6 +221,118 @@ impl Render for BacklogList<'_> {
     }
 }
 
+/// Where `work-item move` puts an item.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) enum Placement {
+    Top,
+    Before(i32),
+    After(i32),
+}
+
+/// The `(previous_id, next_id)` neighbours the reorder API wants to put `id`
+/// at `placement` in the backlog `order`; 0 means the start or end.
+pub(super) fn neighbours(order: &[i32], id: i32, placement: Placement) -> Result<(i32, i32)> {
+    if let Placement::Before(target) | Placement::After(target) = placement {
+        if target == id {
+            bail!("Cannot move work item {id} relative to itself");
+        }
+        if !order.contains(&target) {
+            bail!("Work item {target} is not on the backlog");
+        }
+    }
+    if !order.contains(&id) {
+        bail!("Work item {id} is not on the backlog");
+    }
+    let others: Vec<i32> = order.iter().copied().filter(|other| *other != id).collect();
+    let at = |index: usize| others.get(index).copied().unwrap_or(0);
+    let position = |target: i32| others.iter().position(|other| *other == target);
+    Ok(match placement {
+        Placement::Top => (0, at(0)),
+        Placement::Before(target) => {
+            let index = position(target).unwrap_or(0);
+            (index.checked_sub(1).map_or(0, at), target)
+        }
+        Placement::After(target) => (target, at(position(target).unwrap_or(0) + 1)),
+    })
+}
+
+/// The result of a move.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct MoveResult<'a> {
+    team: &'a str,
+    position: usize,
+    total: usize,
+    work_item: &'a WorkItem,
+}
+
+impl Render for MoveResult<'_> {
+    fn text(&self, w: &mut dyn Write) -> io::Result<()> {
+        writeln!(
+            w,
+            "✅ Moved work item {} '{}' to position {} of {} in the backlog of {}",
+            self.work_item.id,
+            escape_control_characters(field_str(self.work_item, "System.Title").unwrap_or("")),
+            self.position,
+            self.total,
+            escape_control_characters(self.team)
+        )
+    }
+
+    fn markdown(&self, w: &mut dyn Write) -> io::Result<()> {
+        writeln!(
+            w,
+            "Moved work item **{}** to position {} of {} in the backlog of {}",
+            self.work_item.id,
+            self.position,
+            self.total,
+            escape_control_characters(self.team)
+        )
+    }
+}
+
+/// Moves work item `id` within the team's backlog, then reports its position.
+pub(super) async fn move_item(
+    project: &str,
+    team: Option<&str>,
+    id: i32,
+    placement: Placement,
+    format: crate::output::OutputFormat,
+) -> Result<()> {
+    let team = team_or_default(project, team).await?;
+    let order: Vec<i32> = backlog_items(project, &team)
+        .await?
+        .iter()
+        .map(|item| item.id)
+        .collect();
+    let (previous, next) = neighbours(&order, id, placement)?;
+    let creds = get_credentials()?;
+    let mut body = ReorderOperation::new();
+    body.ids = vec![id];
+    body.previous_id = Some(previous);
+    body.next_id = Some(next);
+    body.parent_id = Some(0);
+    create_work_client()?
+        .workitemsorder_client()
+        .reorder_backlog_work_items(creds.organization, body, project, &team)
+        .await
+        .map_err(|e| anyhow!("Failed to move work item {id}: {e}"))?;
+    let items = backlog_items(project, &team).await?;
+    let index = items
+        .iter()
+        .position(|item| item.id == id)
+        .ok_or_else(|| anyhow!("Work item {id} is no longer on the backlog"))?;
+    crate::output::emit(
+        &MoveResult {
+            team: &team,
+            position: index + 1,
+            total: items.len(),
+            work_item: &items[index],
+        },
+        format,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -303,5 +416,73 @@ mod tests {
         let value = serde_json::to_value(BacklogList::new("Web Team", &items)).unwrap();
         assert_eq!(value["team"], "Web Team");
         assert_eq!(value["workItems"][0]["id"], 7);
+    }
+
+    #[test]
+    fn top_goes_before_the_first_item() {
+        assert_eq!(neighbours(&[1, 2, 3], 3, Placement::Top).unwrap(), (0, 1));
+    }
+
+    #[test]
+    fn before_uses_the_item_above_the_target() {
+        assert_eq!(
+            neighbours(&[1, 2, 3], 3, Placement::Before(2)).unwrap(),
+            (1, 2)
+        );
+        assert_eq!(
+            neighbours(&[1, 2, 3], 3, Placement::Before(1)).unwrap(),
+            (0, 1)
+        );
+    }
+
+    #[test]
+    fn before_skips_the_moved_item_when_it_is_above_the_target() {
+        assert_eq!(
+            neighbours(&[1, 2, 3], 1, Placement::Before(3)).unwrap(),
+            (2, 3)
+        );
+    }
+
+    #[test]
+    fn after_uses_the_item_below_the_target() {
+        assert_eq!(
+            neighbours(&[1, 2, 3], 1, Placement::After(2)).unwrap(),
+            (2, 3)
+        );
+        assert_eq!(
+            neighbours(&[1, 2, 3], 1, Placement::After(3)).unwrap(),
+            (3, 0)
+        );
+    }
+
+    #[test]
+    fn after_skips_the_moved_item_when_it_is_below_the_target() {
+        assert_eq!(
+            neighbours(&[1, 2, 3], 3, Placement::After(1)).unwrap(),
+            (1, 2)
+        );
+    }
+
+    #[test]
+    fn moving_relative_to_itself_or_unknown_items_is_refused() {
+        assert!(neighbours(&[1, 2], 1, Placement::Before(1)).is_err());
+        assert!(neighbours(&[1, 2], 1, Placement::After(9)).is_err());
+        assert!(neighbours(&[1, 2], 9, Placement::Top).is_err());
+    }
+
+    #[test]
+    fn move_result_serializes_position_and_item() {
+        let items = [item(7, "New", json!({}))];
+        let result = MoveResult {
+            team: "T",
+            position: 2,
+            total: 5,
+            work_item: &items[0],
+        };
+        let value = serde_json::to_value(&result).unwrap();
+        assert_eq!(value["position"], 2);
+        assert_eq!(value["workItem"]["id"], 7);
+        let text = rendered(|w| result.text(w));
+        assert!(text.contains("to position 2 of 5"), "{text}");
     }
 }
