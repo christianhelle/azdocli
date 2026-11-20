@@ -244,7 +244,8 @@ piped. Errors still go to stderr.
 These commands support every format so far: `repos list`, `repos show`, `repos pr list`,
 `repos pr show`, `pipelines list`, `pipelines show`, `pipelines runs list`, `boards work-item list`,
 `boards work-item show`, `boards work-item create`, `boards work-item update`,
-`boards work-item attachment list`, `boards query` and `boards sprint show`. The other commands accept only `text` and fail with a
+`boards work-item attachment list`, `boards work-item link list`, `boards work-item link add`,
+`boards work-item link remove`, `boards query` and `boards sprint show`. The other commands accept only `text` and fail with a
 clear error for any other format.
 
 ## Features
@@ -951,6 +952,9 @@ azdocli boards work-item update --id 123 --tag needs-review --acceptance-criteri
 # Swap one tag for another
 azdocli boards work-item update --id 123 --tag ready --remove-tag needs-review
 
+# Move a backlog item to another feature (replaces its current parent)
+azdocli boards work-item update --id 123 --parent 456
+
 # Delete a work item permanently (using default project)
 azdocli boards work-item delete --id 123
 
@@ -969,7 +973,7 @@ azdocli boards work-item delete --id 123 --soft-delete
 - **Details**: `show` includes the assignee, iteration, area, effort and hours
 - **Attachments**: Attach files with `--attachment <path>` on create or update
 - **Script friendly**: `create` and `update` support `-o json|yaml|markdown`
-- **Parent links**: Create a work item as a child of another with `--parent <ID>`, e.g. tasks under a product backlog item
+- **Parent links**: Create a work item as a child of another with `--parent <ID>`, e.g. tasks under a product backlog item, and move it to a new parent with `update --parent <ID>`
 - **Filtering**: Filter by state, work item type, and limit number of results
 - **Web integration**: Open work items directly in browser with `--web` option
 - **Soft delete**: Option to change state to "Removed" instead of permanent deletion
@@ -991,6 +995,26 @@ azdocli boards work-item attachment download --id 123
 
 # Download one attachment into a directory
 azdocli boards work-item attachment download --id 123 --name spec.md --dir ./specs
+```
+
+#### Work Item Links
+
+The `boards work-item link` commands list, add and remove the links between work items: `parent`,
+`child`, `related`, `predecessor`, `successor`, `duplicate` and `duplicate-of`:
+
+```sh
+# List the linked work items with their type, state and title
+azdocli boards work-item link list --id 123
+
+# This backlog item can only start once 124 and 125 are done
+azdocli boards work-item link add --id 123 --type predecessor --target 124,125 --comment "API first"
+
+# Relate two items
+azdocli boards work-item link add --id 123 --type related --target 200
+
+# Remove the dependency on 125, or every link to 200 whatever its type
+azdocli boards work-item link remove --id 123 --target 125 --type predecessor
+azdocli boards work-item link remove --id 123 --target 200
 ```
 
 #### Work Item Comments

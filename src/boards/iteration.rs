@@ -15,7 +15,7 @@ use colored::Colorize;
 const GROUP: StructureGroup = StructureGroup::Iterations;
 
 /// The work items API takes at most this many ids per request.
-const WORK_ITEMS_PER_REQUEST: usize = 200;
+pub(super) const WORK_ITEMS_PER_REQUEST: usize = 200;
 
 #[derive(Subcommand, Clone)]
 pub enum IterationSubCommands {

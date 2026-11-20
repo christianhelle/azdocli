@@ -17,6 +17,7 @@ mod area;
 mod attachment;
 mod classification;
 mod iteration;
+mod link;
 mod sprint;
 mod views;
 
@@ -212,6 +213,12 @@ pub enum WorkItemSubCommands {
         #[clap(subcommand)]
         subcommand: attachment::AttachmentSubCommands,
     },
+    /// List, add and remove links to other work items, such as a parent,
+    /// children, related items and dependencies
+    Link {
+        #[clap(subcommand)]
+        subcommand: link::LinkSubCommands,
+    },
     /// Update a work item
     Update {
         /// ID of the work item to update
@@ -235,6 +242,10 @@ pub enum WorkItemSubCommands {
         /// Tag to remove; repeat the flag or separate tags with commas
         #[clap(long = "remove-tag", value_name = "TAG", value_delimiter = ',')]
         remove_tags: Vec<String>,
+        /// ID of the new parent work item; replaces the current parent, e.g.
+        /// to move a backlog item to another feature
+        #[clap(long)]
+        parent: Option<i32>,
         #[clap(flatten)]
         content: WorkItemContentArgs,
     },
@@ -1488,6 +1499,9 @@ async fn handle_work_item_command(
         WorkItemSubCommands::Attachment { subcommand } => {
             return attachment::handle_command(subcommand, format).await;
         }
+        WorkItemSubCommands::Link { subcommand } => {
+            return link::handle_command(subcommand, format).await;
+        }
         WorkItemSubCommands::Update {
             id,
             project,
@@ -1496,6 +1510,7 @@ async fn handle_work_item_command(
             iteration_path,
             area_path,
             remove_tags,
+            parent,
             content,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
@@ -1507,12 +1522,15 @@ async fn handle_work_item_command(
             // ones, and --effort needs the item's type to pick its effort field.
             // The revision these were read at guards the update, so a change by
             // another client in between fails it instead of being lost or misread.
-            let current =
-                if content.tags.is_empty() && remove_tags.is_empty() && content.effort.is_none() {
-                    None
-                } else {
-                    Some(get_work_item(&project_name, id).await?)
-                };
+            // A new parent replaces the old one, which is found among the relations.
+            let current = if parent.is_some() {
+                Some(get_work_item_with_relations(&project_name, parse_work_item_id(id)?).await?)
+            } else if content.tags.is_empty() && remove_tags.is_empty() && content.effort.is_none()
+            {
+                None
+            } else {
+                Some(get_work_item(&project_name, id).await?)
+            };
             let field = |name| {
                 current
                     .as_ref()
@@ -1555,6 +1573,11 @@ async fn handle_work_item_command(
                 }
                 .patch(),
             );
+            if let (Some(parent), Some(current)) = (parent, &current) {
+                let creds = get_credentials()?;
+                let parent_url = api_work_item_url(&creds.base_url, &creds.organization, *parent);
+                patch.extend(link::set_parent_ops(current, *parent, &parent_url)?);
+            }
             patch
                 .extend(attachment::upload_all(&project_name, &content.attachments, format).await?);
 
@@ -2087,6 +2110,16 @@ mod tests {
     #[test]
     fn edit_tags_with_nothing_to_change_is_none() {
         assert_eq!(edit_tags(Some("api"), &[], &[" ".into()]), None);
+    }
+
+    #[test]
+    fn update_accepts_a_new_parent() {
+        let WorkItemSubCommands::Update { parent, .. } =
+            parse(&["update", "--id", "1", "--parent", "42"]).unwrap()
+        else {
+            panic!("expected Update");
+        };
+        assert_eq!(parent, Some(42));
     }
 
     #[test]

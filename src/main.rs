@@ -54,6 +54,9 @@ const STRUCTURED_OUTPUT_COMMANDS: &[&str] = &[
     "boards work-item create",
     "boards work-item update",
     "boards work-item attachment list",
+    "boards work-item link list",
+    "boards work-item link add",
+    "boards work-item link remove",
     "boards query",
     "boards sprint show",
 ];
@@ -364,6 +367,9 @@ mod tests {
             "boards work-item create",
             "boards work-item update",
             "boards work-item attachment list",
+            "boards work-item link list",
+            "boards work-item link add",
+            "boards work-item link remove",
             "boards query",
             "boards sprint show",
         ] {
