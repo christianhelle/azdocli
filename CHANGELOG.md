@@ -3,6 +3,7 @@
 ## [Unreleased Changes]
 
 ### Features
+- Add backlog ordering ([#163](https://github.com/christianhelle/azdocli/pull/163)) ([@christianhelle](https://github.com/christianhelle/))
 - Set sprint capacity and days off ([#162](https://github.com/christianhelle/azdocli/pull/162)) ([@christianhelle](https://github.com/christianhelle/))
 - Show sprint capacity per team member ([#161](https://github.com/christianhelle/azdocli/pull/161)) ([@christianhelle](https://github.com/christianhelle/))
 - Update several work items at once ([#160](https://github.com/christianhelle/azdocli/pull/160)) ([@christianhelle](https://github.com/christianhelle/))
