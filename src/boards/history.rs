@@ -586,6 +586,25 @@ mod tests {
     }
 
     #[test]
+    fn markdown_shows_a_tag_like_title_literally() {
+        let updates = updates(json!([{
+            "id": 1, "workItemId": 7, "url": "https://x/u/1", "rev": 2,
+            "fields": {"System.Title": {
+                "oldValue": "Old", "newValue": "Check <b>this</b>"
+            }}
+        }]));
+        let history = History {
+            work_item_id: 7,
+            updates: build_entries(&updates, &[], None),
+        };
+        let mut out = Vec::new();
+        history.markdown(&mut out).unwrap();
+        let md = String::from_utf8(out).unwrap();
+        assert!(md.contains("Title: Old → Check &lt;b&gt;this&lt;/b&gt;"));
+        assert!(!md.contains("<b>"));
+    }
+
+    #[test]
     fn markdown_escapes_control_characters() {
         let history = History {
             work_item_id: 7,
