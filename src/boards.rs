@@ -929,6 +929,40 @@ fn print_updated(work_item: &models::WorkItem) {
     }
 }
 
+/// Runs `update` on each of `ids` in turn, telling `report` how each went.
+/// One failure does not stop the others. Returns the updated work items, and
+/// an error naming the failed IDs if there were any.
+async fn update_each<F, Fut>(
+    ids: &[i32],
+    update: F,
+    mut report: impl FnMut(Result<&models::WorkItem, (i32, &anyhow::Error)>),
+) -> (Vec<models::WorkItem>, Result<()>)
+where
+    F: Fn(i32) -> Fut,
+    Fut: std::future::Future<Output = Result<models::WorkItem>>,
+{
+    let mut updated = Vec::new();
+    let mut failed = Vec::new();
+    for id in ids {
+        match update(*id).await {
+            Ok(work_item) => {
+                report(Ok(&work_item));
+                updated.push(work_item);
+            }
+            Err(e) => {
+                report(Err((*id, &e)));
+                failed.push(*id);
+            }
+        }
+    }
+    let result = if failed.is_empty() {
+        Ok(())
+    } else {
+        Err(anyhow!(bulk_failure(&failed, ids.len())))
+    };
+    (updated, result)
+}
+
 /// The error for an update of several work items that some failed.
 fn bulk_failure(failed: &[i32], total: usize) -> String {
     let ids = failed
@@ -1680,31 +1714,28 @@ async fn handle_work_item_command(
                 };
             }
 
-            // Several work items: one failure does not stop the others.
-            let mut updated = Vec::new();
-            let mut failed = Vec::new();
-            for id in ids {
-                match update_one(&plan, *id).await {
-                    Ok(work_item) => {
-                        if format == OutputFormat::Text {
-                            println!("✅ Updated #{id}: {}", work_item_title(&work_item));
-                        }
-                        updated.push(work_item);
+            let (updated, result) = update_each(
+                ids,
+                |id| update_one(&plan, id),
+                |outcome| match outcome {
+                    Ok(work_item) if format == OutputFormat::Text => {
+                        println!(
+                            "✅ Updated #{}: {}",
+                            work_item.id,
+                            work_item_title(work_item)
+                        )
                     }
-                    Err(e) => {
-                        eprintln!("❌ Failed to update work item {id}: {e}");
-                        failed.push(*id);
-                    }
-                }
-            }
+                    Ok(_) => {}
+                    Err((id, e)) => eprintln!("❌ Failed to update work item {id}: {e}"),
+                },
+            )
+            .await;
             if format == OutputFormat::Text {
                 println!("Updated {} of {} work items", updated.len(), ids.len());
             } else {
                 print_work_items("Updated Work Items", &updated, format)?;
             }
-            if !failed.is_empty() {
-                return Err(anyhow!(bulk_failure(&failed, ids.len())));
-            }
+            return result;
         }
     }
     Ok(())
@@ -2221,6 +2252,53 @@ mod tests {
         assert_eq!(ids, [1, 2, 3]);
         assert!(parse(&["update", "--id", "x"]).is_err());
         assert!(parse(&["update", "--title", "t"]).is_err());
+    }
+
+    #[tokio::test]
+    async fn update_each_keeps_going_after_a_failure() {
+        let attempted = std::cell::RefCell::new(Vec::new());
+        let mut reported = Vec::new();
+
+        let (updated, result) = update_each(
+            &[1, 2, 3],
+            |id| {
+                attempted.borrow_mut().push(id);
+                async move {
+                    if id == 2 {
+                        Err(anyhow!("TF401232"))
+                    } else {
+                        Ok(
+                            serde_json::from_value(json!({ "id": id, "url": "u", "fields": {} }))
+                                .unwrap(),
+                        )
+                    }
+                }
+            },
+            |outcome| reported.push(outcome.map(|w| w.id).map_err(|(id, _)| id)),
+        )
+        .await;
+
+        assert_eq!(*attempted.borrow(), [1, 2, 3]);
+        assert_eq!(updated.iter().map(|w| w.id).collect::<Vec<_>>(), [1, 3]);
+        assert_eq!(reported, [Ok(1), Err(2), Ok(3)]);
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "1 of 3 work items failed to update: #2"
+        );
+    }
+
+    #[tokio::test]
+    async fn update_each_succeeds_when_every_item_updates() {
+        let (updated, result) = update_each(
+            &[4],
+            |id| async move {
+                Ok(serde_json::from_value(json!({ "id": id, "url": "u", "fields": {} })).unwrap())
+            },
+            |_| {},
+        )
+        .await;
+        assert_eq!(updated.len(), 1);
+        assert!(result.is_ok());
     }
 
     #[test]
