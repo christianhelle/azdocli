@@ -259,7 +259,8 @@ pub(super) struct CapacityOverview<'a> {
     /// The first and last day counted.
     pub from: NaiveDate,
     pub to: NaiveDate,
-    /// The team's working days left, before anyone's days off.
+    /// The team's working days left, less the team's days off but before
+    /// anyone's own.
     pub working_days: u32,
     #[serde(flatten)]
     pub plan: CapacityPlan,
@@ -300,7 +301,12 @@ impl<'a> CapacityOverview<'a> {
             iteration,
             from: period.from,
             to: period.to,
-            working_days: working_days(period.from, period.to, period.weekdays, &[]),
+            working_days: working_days(
+                period.from,
+                period.to,
+                period.weekdays,
+                period.team_days_off,
+            ),
             plan,
             total,
         }
@@ -700,6 +706,25 @@ mod tests {
             serde_json::to_value(capacity_patch(None, None, &[off])).unwrap()["activities"],
             serde_json::Value::Null
         );
+    }
+
+    #[test]
+    fn working_days_left_leave_out_team_days_off() {
+        let team_off = [DaysOff::parse("2026-11-12..2026-11-13").unwrap()];
+        let period = Period {
+            from: date("2026-11-09"),
+            to: date("2026-11-13"),
+            weekdays: &WEEKDAYS,
+            team_days_off: &team_off,
+        };
+        let info = SprintInfo {
+            name: "Sprint 3".into(),
+            path: "Proj\\Sprint 3".into(),
+            start_date: None,
+            finish_date: None,
+        };
+        let overview = CapacityOverview::new("Web Team", info, &period, &[], &[]);
+        assert_eq!(overview.working_days, 3);
     }
 
     #[test]
