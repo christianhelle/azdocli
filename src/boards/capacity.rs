@@ -137,7 +137,7 @@ impl<'a> CapacityOverview<'a> {
         items: &[WorkItem],
     ) -> Self {
         let plan = plan(members, period, items);
-        let total = plan.members.iter().fold(
+        let mut total = plan.members.iter().fold(
             MemberCapacity {
                 name: "Total".into(),
                 capacity_per_day: 0.0,
@@ -150,10 +150,13 @@ impl<'a> CapacityOverview<'a> {
                 total.capacity_per_day += row.capacity_per_day;
                 total.capacity += row.capacity;
                 total.assigned += row.assigned;
-                total.left += row.left;
                 total
             },
         );
+        total.capacity_per_day = hours(total.capacity_per_day);
+        total.capacity = hours(total.capacity);
+        total.assigned = hours(total.assigned);
+        total.left = hours(total.capacity - total.assigned);
         Self {
             team,
             iteration,
@@ -341,6 +344,14 @@ fn remaining_work(item: &WorkItem) -> f64 {
         .unwrap_or(0.0)
 }
 
+/// Hours to the nearest millionth, so sums of fractional estimates do not
+/// show rounding errors, such as a tiny overload when work fills capacity.
+fn hours(value: f64) -> f64 {
+    let rounded = (value * 1e6).round() / 1e6;
+    // Avoid -0, which serializes as "-0.0".
+    rounded + 0.0
+}
+
 /// Each member's capacity over `period` against the remaining work of the
 /// sprint's `items` assigned to them.
 pub(super) fn plan(members: &[Member], period: &Period, items: &[WorkItem]) -> CapacityPlan {
@@ -377,7 +388,6 @@ pub(super) fn plan(members: &[Member], period: &Period, items: &[WorkItem]) -> C
         });
         if let Some((_, row)) = member {
             row.assigned += work;
-            row.left -= work;
             continue;
         }
         let assigned_to = assignee.map(|(_, name)| name.to_string());
@@ -388,6 +398,14 @@ pub(super) fn plan(members: &[Member], period: &Period, items: &[WorkItem]) -> C
                 remaining_work: work,
             }),
         }
+    }
+    for (_, row) in &mut members {
+        row.capacity = hours(row.capacity);
+        row.assigned = hours(row.assigned);
+        row.left = hours(row.capacity - row.assigned);
+    }
+    for other in &mut other_work {
+        other.remaining_work = hours(other.remaining_work);
     }
     CapacityPlan {
         members: members.into_iter().map(|(_, row)| row).collect(),
@@ -574,6 +592,25 @@ mod tests {
                 ],
             }
         );
+    }
+
+    #[test]
+    fn work_that_fills_the_capacity_leaves_nothing_rather_than_a_rounding_error() {
+        let period = Period {
+            // One Monday
+            from: date("2026-11-09"),
+            to: date("2026-11-09"),
+            weekdays: &WEEKDAYS,
+            team_days_off: &[],
+        };
+        let items = [0.1, 0.2, 0.3, 0.4, 0.1, 0.2]
+            .iter()
+            .enumerate()
+            .map(|(id, work)| item(id as i32, Some("Ann"), *work))
+            .collect::<Vec<_>>();
+        let plan = plan(&[member("Ann", 1.3, vec![])], &period, &items);
+        assert_eq!(plan.members[0].assigned, 1.3);
+        assert_eq!(plan.members[0].left, 0.0);
     }
 
     #[test]
