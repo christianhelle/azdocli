@@ -18,6 +18,7 @@ mod attachment;
 mod backlog;
 mod capacity;
 mod classification;
+mod history;
 mod iteration;
 mod link;
 mod sprint;
@@ -225,6 +226,21 @@ pub enum WorkItemSubCommands {
     Link {
         #[clap(subcommand)]
         subcommand: link::LinkSubCommands,
+    },
+    /// Show who changed a work item's fields, and when
+    History {
+        /// ID of the work item
+        #[clap(short, long)]
+        id: String,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Only show changes to this field (reference or short name); repeatable
+        #[clap(long = "field")]
+        fields: Vec<String>,
+        /// Show only the newest N updates
+        #[clap(long, value_parser = clap::value_parser!(usize))]
+        top: Option<usize>,
     },
     /// Move a work item up or down the team's product backlog
     #[clap(group(
@@ -1670,6 +1686,15 @@ async fn handle_work_item_command(
         }
         WorkItemSubCommands::Attachment { subcommand } => {
             return attachment::handle_command(subcommand, format).await;
+        }
+        WorkItemSubCommands::History {
+            id,
+            project,
+            fields,
+            top,
+        } => {
+            let project = get_project_or_default(project.as_deref())?;
+            return history::show(id, &project, fields, *top, format).await;
         }
         WorkItemSubCommands::Move {
             id,
