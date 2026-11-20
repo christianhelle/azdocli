@@ -245,7 +245,7 @@ These commands support every format so far: `repos list`, `repos show`, `repos p
 `repos pr show`, `pipelines list`, `pipelines show`, `pipelines runs list`, `boards work-item list`,
 `boards work-item show`, `boards work-item create`, `boards work-item update`,
 `boards work-item attachment list`, `boards work-item link list`, `boards work-item link add`,
-`boards work-item link remove`, `boards query` and `boards sprint show`. The other commands accept only `text` and fail with a
+`boards work-item link remove`, `boards query`, `boards sprint show` and `boards sprint capacity`. The other commands accept only `text` and fail with a
 clear error for any other format.
 
 ## Features
@@ -1071,6 +1071,16 @@ azdocli boards sprint show
 
 # Another team's sprint, as JSON for scripts
 azdocli boards sprint show --team "Web Team" -o json
+```
+
+The `boards sprint capacity` command shows each member's capacity for the rest of the sprint against the remaining work assigned to them. Capacity counts the team's working days from today to the sprint's finish date, less team and personal days off; a ⚠️ marks members with more work than capacity. Remaining work assigned to someone without capacity, or to no one, is listed below the total.
+
+```sh
+# Capacity left in the default team's current sprint
+azdocli boards sprint capacity
+
+# Another team's capacity, as JSON for scripts
+azdocli boards sprint capacity --team "Web Team" -o json
 ```
 
 #### WIQL Queries
