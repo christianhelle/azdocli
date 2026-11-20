@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 
 mod area;
 mod attachment;
+mod capacity;
 mod classification;
 mod iteration;
 mod link;
