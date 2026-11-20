@@ -3,6 +3,7 @@
 ## [Unreleased Changes]
 
 ### Features
+- Update several work items at once ([#160](https://github.com/christianhelle/azdocli/pull/160)) ([@christianhelle](https://github.com/christianhelle/))
 - Add work item links and update --parent ([#159](https://github.com/christianhelle/azdocli/pull/159)) ([@christianhelle](https://github.com/christianhelle/))
 - Sprint overview (boards sprint show) and child tasks on create (--task) ([#158](https://github.com/christianhelle/azdocli/pull/158)) ([@christianhelle](https://github.com/christianhelle/))
 - Work item show fields, --remove-tag, states, --assigned-to @me, task estimates ([#157](https://github.com/christianhelle/azdocli/pull/157)) ([@christianhelle](https://github.com/christianhelle/))
