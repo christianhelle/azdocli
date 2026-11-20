@@ -5,7 +5,7 @@ use crate::auth::get_credentials;
 use crate::auth::url::percent_encode_path_segment;
 use crate::output::{md_table, Render};
 use crate::text::escape_control_characters;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Context, Result};
 use azure_devops_rust_api::wit::models::query_hierarchy_item::QueryType;
 use azure_devops_rust_api::wit::models::QueryHierarchyItem;
 use serde::Serialize;
@@ -159,7 +159,7 @@ pub(super) async fn list_queries(project: &str, depth: i32) -> Result<QueryList>
         .list(creds.organization.clone(), project)
         .depth(depth)
         .await
-        .map_err(|e| anyhow!("Failed to list saved queries: {e}"))?
+        .context("Failed to list saved queries")?
         .value;
     Ok(QueryList {
         queries: flatten(&roots),
@@ -174,8 +174,8 @@ pub(super) async fn saved_query_wiql(project: &str, path_or_id: &str) -> Result<
         .get(creds.organization.clone(), project, route(path_or_id))
         .expand("wiql")
         .await
-        .map_err(|e| {
-            anyhow!("Saved query '{path_or_id}' was not found or could not be read: {e}")
+        .with_context(|| {
+            format!("Saved query '{path_or_id}' was not found or could not be read")
         })?;
     runnable_wiql(&item, path_or_id)
 }
