@@ -2,6 +2,7 @@
 
 use super::create_wit_client;
 use crate::auth::get_credentials;
+use crate::auth::url::percent_encode_path_segment;
 use crate::output::{md_table, Render};
 use crate::text::escape_control_characters;
 use anyhow::{anyhow, bail, Result};
@@ -56,6 +57,15 @@ fn query_type_name(query_type: &QueryType) -> String {
         QueryType::OneHop => "oneHop",
     }
     .to_string()
+}
+
+/// `path_or_id` as a URL path, each segment percent-encoded and `/` kept.
+fn route(path_or_id: &str) -> String {
+    path_or_id
+        .split('/')
+        .map(percent_encode_path_segment)
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 /// The WIQL of a saved query, or why it cannot be run as one.
@@ -161,7 +171,7 @@ pub(super) async fn saved_query_wiql(project: &str, path_or_id: &str) -> Result<
     let creds = get_credentials()?;
     let item = create_wit_client()?
         .queries_client()
-        .get(creds.organization.clone(), project, path_or_id)
+        .get(creds.organization.clone(), project, route(path_or_id))
         .expand("wiql")
         .await
         .map_err(|e| {
@@ -213,6 +223,15 @@ mod tests {
         assert_eq!(
             runnable_wiql(flat, "x").unwrap(),
             "SELECT [System.Id] FROM WorkItems"
+        );
+    }
+
+    #[test]
+    fn route_encodes_segments_but_keeps_separators() {
+        assert_eq!(route("Shared Queries/Bugs#1"), "Shared%20Queries/Bugs%231");
+        assert_eq!(
+            route("22222222-2222-2222-2222-222222222222"),
+            "22222222-2222-2222-2222-222222222222"
         );
     }
 
