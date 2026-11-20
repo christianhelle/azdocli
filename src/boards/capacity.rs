@@ -1,9 +1,268 @@
 //! A team's capacity for the rest of its current sprint, set against the
 //! remaining work assigned to each member.
 
+use super::create_work_client;
+use super::sprint::{amount, SprintInfo};
+use crate::auth::get_credentials;
+use crate::output::{md_table, Render};
+use anyhow::{anyhow, Result};
 use azure_devops_rust_api::wit::models::WorkItem;
+use azure_devops_rust_api::work::models::DateRange;
 use chrono::{Datelike, NaiveDate, Weekday};
 use serde::Serialize;
+use std::io::{self, Write};
+
+fn days_off(ranges: &[DateRange]) -> Vec<DaysOff> {
+    ranges
+        .iter()
+        .filter_map(|range| {
+            // The day each API date falls on.
+            let start = range.start?;
+            let end = range.end?;
+            Some(DaysOff {
+                start: NaiveDate::from_yo_opt(start.year(), u32::from(start.ordinal()))?,
+                end: NaiveDate::from_yo_opt(end.year(), u32::from(end.ordinal()))?,
+            })
+        })
+        .collect()
+}
+
+/// The team's working days, as the team settings name them; Monday to
+/// Friday when none are set.
+pub(super) fn parse_weekdays(names: &[serde_json::Value]) -> Vec<Weekday> {
+    let days: Vec<Weekday> = names
+        .iter()
+        .filter_map(|name| name.as_str()?.parse().ok())
+        .collect();
+    if days.is_empty() {
+        vec![
+            Weekday::Mon,
+            Weekday::Tue,
+            Weekday::Wed,
+            Weekday::Thu,
+            Weekday::Fri,
+        ]
+    } else {
+        days
+    }
+}
+
+/// What the team settings say about a sprint's capacity.
+pub(super) struct TeamCapacity {
+    pub members: Vec<Member>,
+    pub weekdays: Vec<Weekday>,
+    pub team_days_off: Vec<DaysOff>,
+}
+
+pub(super) async fn team_capacity(
+    project: &str,
+    team: &str,
+    iteration_id: &str,
+) -> Result<TeamCapacity> {
+    let creds = get_credentials()?;
+    let client = create_work_client()?;
+    let capacity = client
+        .capacities_client()
+        .get_capacities_with_identity_ref_and_totals(
+            creds.organization.clone(),
+            project,
+            iteration_id,
+            team,
+        )
+        .await
+        .map_err(|e| anyhow!("Failed to read the capacity of team '{team}': {e}"))?;
+    let team_days_off = client
+        .teamdaysoff_client()
+        .get(creds.organization.clone(), project, iteration_id, team)
+        .await?
+        .days_off;
+    let settings = client
+        .teamsettings_client()
+        .get(creds.organization.clone(), project, team)
+        .await?;
+    let members = capacity
+        .team_members
+        .iter()
+        .filter_map(|member| {
+            let identity = member.team_member.as_ref()?;
+            let unique_name = identity.unique_name.clone()?;
+            let name = identity
+                .graph_subject_base
+                .display_name
+                .clone()
+                .unwrap_or_else(|| unique_name.clone());
+            let base = &member.capacity_contract_base;
+            Some(Member {
+                name,
+                unique_name,
+                capacity_per_day: base
+                    .activities
+                    .iter()
+                    .filter_map(|activity| activity.capacity_per_day)
+                    .map(f64::from)
+                    .sum(),
+                days_off: days_off(&base.days_off),
+            })
+        })
+        .collect();
+    Ok(TeamCapacity {
+        members,
+        weekdays: parse_weekdays(&settings.working_days),
+        team_days_off: days_off(&team_days_off),
+    })
+}
+
+/// A team's capacity for what is left of its sprint.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct CapacityOverview<'a> {
+    pub team: &'a str,
+    pub iteration: SprintInfo,
+    /// The first and last day counted.
+    pub from: NaiveDate,
+    pub to: NaiveDate,
+    /// The team's working days left, before anyone's days off.
+    pub working_days: u32,
+    #[serde(flatten)]
+    pub plan: CapacityPlan,
+    pub total: MemberCapacity,
+}
+
+impl<'a> CapacityOverview<'a> {
+    pub fn new(
+        team: &'a str,
+        iteration: SprintInfo,
+        period: &Period,
+        members: &[Member],
+        items: &[WorkItem],
+    ) -> Self {
+        let plan = plan(members, period, items);
+        let total = plan.members.iter().fold(
+            MemberCapacity {
+                name: "Total".into(),
+                capacity_per_day: 0.0,
+                days: 0,
+                capacity: 0.0,
+                assigned: 0.0,
+                left: 0.0,
+            },
+            |mut total, row| {
+                total.capacity_per_day += row.capacity_per_day;
+                total.capacity += row.capacity;
+                total.assigned += row.assigned;
+                total.left += row.left;
+                total
+            },
+        );
+        Self {
+            team,
+            iteration,
+            from: period.from,
+            to: period.to,
+            working_days: working_days(period.from, period.to, period.weekdays, &[]),
+            plan,
+            total,
+        }
+    }
+
+    fn heading(&self) -> String {
+        format!("{} ({})", self.iteration.name, self.iteration.path)
+    }
+
+    fn period(&self) -> String {
+        format!(
+            "{} → {} · {} working day(s) left",
+            self.from, self.to, self.working_days
+        )
+    }
+
+    /// Each member, the total, then the work no member's capacity covers.
+    fn rows(&self) -> Vec<[String; 6]> {
+        let member = |row: &MemberCapacity| {
+            [
+                row.name.clone(),
+                amount(row.capacity_per_day),
+                row.days.to_string(),
+                amount(row.capacity),
+                amount(row.assigned),
+                left(row.left),
+            ]
+        };
+        let mut rows: Vec<_> = self.plan.members.iter().map(member).collect();
+        let mut total = member(&self.total);
+        // Days differ per member, so they do not add up.
+        total[2] = String::new();
+        rows.push(total);
+        rows.extend(self.plan.other_work.iter().map(|other| {
+            let name = match &other.assigned_to {
+                Some(name) => format!("{name} (no capacity)"),
+                None => "Unassigned".into(),
+            };
+            let blank = String::new;
+            [
+                name,
+                blank(),
+                blank(),
+                blank(),
+                amount(other.remaining_work),
+                blank(),
+            ]
+        }));
+        rows
+    }
+}
+
+/// Capacity left, flagged when the assigned work is more than the capacity.
+fn left(value: f64) -> String {
+    if value < 0.0 {
+        format!("⚠️ {}", amount(value))
+    } else {
+        amount(value)
+    }
+}
+
+const HEADERS: [&str; 6] = ["Member", "Per day", "Days", "Capacity", "Assigned", "Left"];
+
+impl Render for CapacityOverview<'_> {
+    fn text(&self, w: &mut dyn Write) -> io::Result<()> {
+        writeln!(w, "🏃 {}", self.heading())?;
+        writeln!(w, "📅 {} · 👥 {}", self.period(), self.team)?;
+        writeln!(w)?;
+        if self.plan.members.is_empty() {
+            writeln!(w, "No capacity is set for this sprint.")?;
+        }
+        let line = |w: &mut dyn Write, row: &[String]| {
+            writeln!(
+                w,
+                "{:<30} {:>8} {:>5} {:>9} {:>9} {:>9}",
+                row[0], row[1], row[2], row[3], row[4], row[5]
+            )
+        };
+        line(w, &HEADERS.map(String::from))?;
+        writeln!(w, "{}", "-".repeat(75))?;
+        let rows = self.rows();
+        let members = self.plan.members.len();
+        for (index, row) in rows.iter().enumerate() {
+            if index == members || index == members + 1 {
+                writeln!(w, "{}", "-".repeat(75))?;
+            }
+            line(w, row)?;
+        }
+        Ok(())
+    }
+
+    fn markdown(&self, w: &mut dyn Write) -> io::Result<()> {
+        writeln!(w, "## {}\n", self.heading())?;
+        writeln!(w, "{} · Team: {}\n", self.period(), self.team)?;
+        if self.plan.members.is_empty() {
+            writeln!(w, "No capacity is set for this sprint.\n")?;
+        }
+        let mut rows: Vec<Vec<String>> = self.rows().into_iter().map(Vec::from).collect();
+        let total = self.plan.members.len();
+        rows[total][0] = "**Total**".into();
+        writeln!(w, "{}", md_table(&HEADERS, &rows))
+    }
+}
 
 /// A team member's capacity settings for a sprint.
 #[derive(Debug)]
@@ -306,6 +565,103 @@ mod tests {
                 ],
             }
         );
+    }
+
+    #[test]
+    fn weekdays_come_from_the_team_settings_or_default_to_monday_to_friday() {
+        assert_eq!(
+            parse_weekdays(&[serde_json::json!("monday"), serde_json::json!("saturday")]),
+            [Weekday::Mon, Weekday::Sat]
+        );
+        assert_eq!(parse_weekdays(&[]), WEEKDAYS);
+    }
+
+    fn overview<'a>(members: &[Member], items: &[WorkItem]) -> CapacityOverview<'a> {
+        let period = Period {
+            from: date("2026-11-09"),
+            to: date("2026-11-13"),
+            weekdays: &WEEKDAYS,
+            team_days_off: &[],
+        };
+        CapacityOverview::new(
+            "Web Team",
+            SprintInfo {
+                name: "Sprint 3".into(),
+                path: "Proj\\Sprint 3".into(),
+                start_date: Some("2026-11-02".into()),
+                finish_date: Some("2026-11-13".into()),
+            },
+            &period,
+            members,
+            items,
+        )
+    }
+
+    fn rendered(render: impl Fn(&mut Vec<u8>) -> std::io::Result<()>) -> String {
+        let mut out = Vec::new();
+        render(&mut out).unwrap();
+        String::from_utf8(out).unwrap()
+    }
+
+    fn sample<'a>() -> CapacityOverview<'a> {
+        overview(
+            &[member("Ann", 6.0, vec![]), member("Bob", 1.5, vec![])],
+            &[
+                item(1, Some("Ann"), 31.0),
+                item(2, Some("Bob"), 2.0),
+                item(3, None, 4.0),
+                item(4, Some("Eve"), 1.0),
+            ],
+        )
+    }
+
+    #[test]
+    fn overview_text_shows_each_member_the_total_and_other_work() {
+        let text = rendered(|w| sample().text(w));
+        let row = |cells: [&str; 6]| {
+            format!(
+                "{:<30} {:>8} {:>5} {:>9} {:>9} {:>9}\n",
+                cells[0], cells[1], cells[2], cells[3], cells[4], cells[5]
+            )
+        };
+        for expected in [
+            "🏃 Sprint 3 (Proj\\Sprint 3)\n".to_string(),
+            "📅 2026-11-09 → 2026-11-13 · 5 working day(s) left · 👥 Web Team\n".into(),
+            row(["Ann", "6", "5", "30", "31", "⚠️ -1"]),
+            row(["Bob", "1.5", "5", "7.5", "2", "5.5"]),
+            row(["Total", "7.5", "", "37.5", "33", "4.5"]),
+            row(["Unassigned", "", "", "", "4", ""]),
+            row(["Eve (no capacity)", "", "", "", "1", ""]),
+        ] {
+            assert!(text.contains(&expected), "missing {expected:?} in\n{text}");
+        }
+        assert!(!text.contains("No capacity is set"));
+    }
+
+    #[test]
+    fn overview_says_when_no_capacity_is_set() {
+        let overview = overview(&[], &[item(1, None, 2.0)]);
+        assert!(rendered(|w| overview.text(w)).contains("No capacity is set for this sprint."));
+    }
+
+    #[test]
+    fn overview_markdown_has_a_capacity_table() {
+        let markdown = rendered(|w| sample().markdown(w));
+        assert!(markdown.starts_with("## Sprint 3 (Proj\\Sprint 3)\n"));
+        assert!(markdown.contains("| Member | Per day | Days | Capacity | Assigned | Left |\n"));
+        assert!(markdown.contains("| **Total** | 7.5 |  | 37.5 | 33 | 4.5 |\n"));
+    }
+
+    #[test]
+    fn overview_serializes_members_other_work_and_total() {
+        let value = serde_json::to_value(sample()).unwrap();
+        assert_eq!(value["team"], "Web Team");
+        assert_eq!(value["from"], "2026-11-09");
+        assert_eq!(value["workingDays"], 5);
+        assert_eq!(value["members"][0]["name"], "Ann");
+        assert_eq!(value["members"][0]["left"], -1.0);
+        assert_eq!(value["otherWork"][0]["assignedTo"], serde_json::Value::Null);
+        assert_eq!(value["total"]["capacity"], 37.5);
     }
 
     #[test]

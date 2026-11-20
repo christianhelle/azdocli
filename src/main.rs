@@ -59,6 +59,7 @@ const STRUCTURED_OUTPUT_COMMANDS: &[&str] = &[
     "boards work-item link remove",
     "boards query",
     "boards sprint show",
+    "boards sprint capacity",
 ];
 
 /// The subcommand names the user typed, e.g. `repos pr list`.
@@ -372,6 +373,7 @@ mod tests {
             "boards work-item link remove",
             "boards query",
             "boards sprint show",
+            "boards sprint capacity",
         ] {
             assert!(check_output_support(OutputFormat::Yaml, command).is_ok());
         }

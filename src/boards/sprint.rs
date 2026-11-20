@@ -1,12 +1,13 @@
 //! A team's current sprint at a glance: its work items by state, with effort
 //! and remaining work totals.
 
+use super::capacity;
 use super::iteration;
 use super::views::WorkItemList;
 use super::EFFORT_FIELDS;
 use crate::output::{self, md_table, OutputFormat, Render};
 use crate::project::get_project_or_default;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use azure_devops_rust_api::wit::models::WorkItem;
 use clap::Subcommand;
 use serde::Serialize;
@@ -17,6 +18,16 @@ pub enum SprintSubCommands {
     /// Show a team's current sprint: its work items by state, with effort and
     /// remaining work totals
     Show {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Team whose sprint to show (default: the project's default team)
+        #[clap(long)]
+        team: Option<String>,
+    },
+    /// Show each member's capacity for the rest of a team's current sprint
+    /// against the remaining work assigned to them
+    Capacity {
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
@@ -39,6 +50,36 @@ pub(super) async fn handle_command(
             sort_by_state(&mut items);
             let info = SprintInfo::from(&current);
             output::emit(&SprintOverview::new(&team, info, &items), format)
+        }
+        SprintSubCommands::Capacity { project, team } => {
+            let project = get_project_or_default(project.as_deref())?;
+            let (team, current) = iteration::current_iteration(&project, team.as_deref()).await?;
+            let info = SprintInfo::from(&current);
+            let date = |date: &Option<String>| {
+                date.as_deref()
+                    .and_then(|d| d.parse::<chrono::NaiveDate>().ok())
+            };
+            let (Some(start), Some(finish)) = (date(&info.start_date), date(&info.finish_date))
+            else {
+                return Err(anyhow!(
+                    "Sprint '{}' has no start and finish dates, so its capacity cannot be counted",
+                    info.name
+                ));
+            };
+            let id = current.id.clone().unwrap_or_default();
+            let settings = capacity::team_capacity(&project, &team, &id).await?;
+            let items = iteration::iteration_work_items(&project, &team, &id).await?;
+            // Only the days still ahead count, today included.
+            let today = chrono::Utc::now().date_naive();
+            let period = capacity::Period {
+                from: start.max(today),
+                to: finish,
+                weekdays: &settings.weekdays,
+                team_days_off: &settings.team_days_off,
+            };
+            let overview =
+                capacity::CapacityOverview::new(&team, info, &period, &settings.members, &items);
+            output::emit(&overview, format)
         }
     }
 }
@@ -116,7 +157,7 @@ impl<'a> SprintOverview<'a> {
 }
 
 /// Whole numbers without decimals, others as they are.
-fn amount(value: f64) -> String {
+pub(super) fn amount(value: f64) -> String {
     if value.fract() == 0.0 {
         format!("{value:.0}")
     } else {
