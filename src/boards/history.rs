@@ -316,6 +316,14 @@ fn change_line(change: &FieldChange) -> String {
     )
 }
 
+/// Escapes control characters and angle brackets, so remote text cannot drive
+/// the terminal or render as HTML in Markdown.
+fn md_text(text: &str) -> String {
+    escape_control_characters(text)
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
 fn link_line(sign: char, link: &LinkChange) -> String {
     format!("{sign} {}: {}", link.name, link.target)
 }
@@ -360,8 +368,8 @@ impl Render for History {
                     vec![
                         entry.rev.to_string(),
                         entry.date.as_deref().map_or("-".into(), format_date),
-                        escape_control_characters(entry.changed_by.as_deref().unwrap_or("-")),
-                        escape_control_characters(&line),
+                        md_text(entry.changed_by.as_deref().unwrap_or("-")),
+                        md_text(&line),
                     ]
                 })
             })
@@ -566,6 +574,14 @@ mod tests {
                 "https://dev.azure.com/o/_apis/wit/workItems/42"
             ),
             "#42"
+        );
+    }
+
+    #[test]
+    fn markdown_escapes_tag_like_text() {
+        assert_eq!(
+            md_text("Check <b>this</b>"),
+            "Check &lt;b&gt;this&lt;/b&gt;"
         );
     }
 
