@@ -69,8 +69,9 @@ pub(super) async fn handle_command(
             let id = current.id.clone().unwrap_or_default();
             let settings = capacity::team_capacity(&project, &team, &id).await?;
             let items = iteration::iteration_work_items(&project, &team, &id).await?;
-            // Only the days still ahead count, today included.
-            let today = chrono::Utc::now().date_naive();
+            // Only the days still ahead count, today included, by the local
+            // calendar so a working day is not dropped early.
+            let today = chrono::Local::now().date_naive();
             let period = capacity::Period {
                 from: start.max(today),
                 to: finish,
