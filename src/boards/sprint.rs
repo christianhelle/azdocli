@@ -7,6 +7,7 @@ use super::views::WorkItemList;
 use super::EFFORT_FIELDS;
 use crate::output::{self, md_table, OutputFormat, Render};
 use crate::project::get_project_or_default;
+use crate::text::escape_control_characters;
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::wit::models::WorkItem;
 use clap::Subcommand;
@@ -120,8 +121,8 @@ pub(super) async fn handle_command(
             if format == OutputFormat::Text {
                 println!(
                     "✅ Set the capacity of {} in {}\n",
-                    member.name,
-                    current.name.as_deref().unwrap_or_default()
+                    escape_control_characters(&member.name),
+                    escape_control_characters(current.name.as_deref().unwrap_or_default())
                 );
             }
             show_capacity(&project, &team, &current, format).await
@@ -137,8 +138,9 @@ pub(super) async fn handle_command(
             capacity::set_team_days_off(&project, &team, &id, days_off).await?;
             if format == OutputFormat::Text {
                 println!(
-                    "✅ Set the days off of team {team} in {}\n",
-                    current.name.as_deref().unwrap_or_default()
+                    "✅ Set the days off of team {} in {}\n",
+                    escape_control_characters(&team),
+                    escape_control_characters(current.name.as_deref().unwrap_or_default())
                 );
             }
             show_capacity(&project, &team, &current, format).await

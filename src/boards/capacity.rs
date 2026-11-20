@@ -6,6 +6,7 @@ use super::sprint::{amount, SprintInfo};
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::output::{md_table, Render};
+use crate::text::escape_control_characters;
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::wit::models::WorkItem;
 use azure_devops_rust_api::work::models::{
@@ -398,13 +399,21 @@ const HEADERS: [&str; 6] = ["Member", "Per day", "Days", "Capacity", "Assigned",
 
 impl Render for CapacityOverview<'_> {
     fn text(&self, w: &mut dyn Write) -> io::Result<()> {
-        writeln!(w, "🏃 {}", self.heading())?;
-        writeln!(w, "📅 {} · 👥 {}", self.period(), self.team)?;
+        writeln!(w, "🏃 {}", escape_control_characters(&self.heading()))?;
+        writeln!(
+            w,
+            "📅 {} · 👥 {}",
+            self.period(),
+            escape_control_characters(self.team)
+        )?;
         writeln!(w)?;
         if self.plan.members.is_empty() {
             writeln!(w, "No capacity is set for this sprint.\n")?;
         }
-        let rows = self.rows();
+        let mut rows = self.rows();
+        for row in &mut rows {
+            row[0] = escape_control_characters(&row[0]);
+        }
         // The name column fits the longest name.
         let width = rows
             .iter()
@@ -1137,6 +1146,17 @@ mod tests {
             assert!(text.contains(&expected), "missing {expected:?} in\n{text}");
         }
         assert!(!text.contains("No capacity is set"));
+    }
+
+    #[test]
+    fn overview_text_escapes_control_characters_in_names() {
+        let overview = overview(
+            &[member("Ann\x1b[2J", 1.0, vec![])],
+            &[item(1, Some("Eve\x1b[1A"), 1.0)],
+        );
+        let text = rendered(|w| overview.text(w));
+        assert!(!text.contains('\x1b'), "control character in\n{text}");
+        assert!(text.contains("Ann\\u{001b}[2J"), "{text}");
     }
 
     #[test]
