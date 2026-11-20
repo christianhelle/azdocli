@@ -219,11 +219,18 @@ pub enum WorkItemSubCommands {
         #[clap(subcommand)]
         subcommand: link::LinkSubCommands,
     },
-    /// Update a work item
+    /// Update one or more work items
     Update {
-        /// ID of the work item to update
-        #[clap(short, long)]
-        id: String,
+        /// ID of the work item to update; repeat the flag or separate IDs with
+        /// commas to make the same change to several work items
+        #[clap(
+            short = 'i',
+            long = "id",
+            value_name = "ID",
+            value_delimiter = ',',
+            required = true
+        )]
+        ids: Vec<i32>,
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
@@ -569,7 +576,7 @@ async fn get_work_item(project: &str, id: &str) -> Result<models::WorkItem> {
 }
 
 /// The fields a create or update sets. Unset fields are left alone.
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 struct WorkItemFields {
     title: Option<String>,
     description: Option<String>,
@@ -839,6 +846,134 @@ fn child_task_patch(
         ..Default::default()
     };
     create_work_item_patch(&fields, Some(parent_url))
+}
+
+/// What `work-item update` changes on each of the work items it is given.
+struct UpdatePlan<'a> {
+    project: &'a str,
+    /// The fields set the same way on each work item. Tags and effort depend
+    /// on the work item, so they are worked out per item.
+    fields: WorkItemFields,
+    added_tags: &'a [String],
+    removed_tags: &'a [String],
+    effort: Option<f64>,
+    /// The new parent's ID and URL.
+    parent: Option<(i32, String)>,
+    /// Operations that attach the files uploaded for this update.
+    attachments: Vec<JsonPatchOperation>,
+}
+
+async fn update_one(plan: &UpdatePlan<'_>, id: i32) -> Result<models::WorkItem> {
+    let project = plan.project;
+    // Setting System.Tags replaces them, so new tags join the existing
+    // ones, and --effort needs the item's type to pick its effort field.
+    // The revision these were read at guards the update, so a change by
+    // another client in between fails it instead of being lost or misread.
+    // A new parent replaces the old one, which is found among the relations.
+    let current = if plan.parent.is_some() {
+        Some(get_work_item_with_relations(project, id).await?)
+    } else if plan.added_tags.is_empty() && plan.removed_tags.is_empty() && plan.effort.is_none() {
+        None
+    } else {
+        Some(get_work_item(project, &id.to_string()).await?)
+    };
+    let field = |name| {
+        current
+            .as_ref()
+            .and_then(|item| item.fields.get(name))
+            .and_then(|v| v.as_str())
+    };
+    let effort = match requested_type(&plan.fields.extra, field("System.WorkItemType")) {
+        Some(work_item_type) => effort_assignment(project, work_item_type, plan.effort).await?,
+        None => None,
+    };
+    let fields = WorkItemFields {
+        tags: edit_tags(field("System.Tags"), plan.added_tags, plan.removed_tags),
+        replace_tags: !plan.removed_tags.is_empty(),
+        effort,
+        ..plan.fields.clone()
+    };
+
+    let mut patch: Vec<_> = current
+        .as_ref()
+        .and_then(|item| item.rev)
+        .map(revision_test_op)
+        .into_iter()
+        .collect();
+    patch.extend(fields.patch());
+    if let (Some((parent, parent_url)), Some(current)) = (&plan.parent, &current) {
+        patch.extend(link::set_parent_ops(current, *parent, parent_url)?);
+    }
+    patch.extend(plan.attachments.iter().cloned());
+    update_work_item(project, &id.to_string(), patch).await
+}
+
+fn work_item_title(work_item: &models::WorkItem) -> &str {
+    work_item
+        .fields
+        .get("System.Title")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+}
+
+fn print_updated(work_item: &models::WorkItem) {
+    println!("{}", "✅ Work item updated successfully!".green());
+    println!("Updated work item with ID: {}", work_item.id);
+    println!("Updated Title: {}", work_item_title(work_item));
+    if let Some(description) = work_item
+        .fields
+        .get("System.Description")
+        .and_then(|v| v.as_str())
+    {
+        println!("Updated Description: {description}");
+    }
+}
+
+/// Runs `update` on each of `ids` in turn, telling `report` how each went.
+/// One failure does not stop the others. Returns the updated work items, and
+/// an error naming the failed IDs if there were any.
+async fn update_each<F, Fut>(
+    ids: &[i32],
+    update: F,
+    mut report: impl FnMut(Result<&models::WorkItem, (i32, &anyhow::Error)>),
+) -> (Vec<models::WorkItem>, Result<()>)
+where
+    F: Fn(i32) -> Fut,
+    Fut: std::future::Future<Output = Result<models::WorkItem>>,
+{
+    let mut updated = Vec::new();
+    let mut failed = Vec::new();
+    for id in ids {
+        match update(*id).await {
+            Ok(work_item) => {
+                report(Ok(&work_item));
+                updated.push(work_item);
+            }
+            Err(e) => {
+                report(Err((*id, &e)));
+                failed.push(*id);
+            }
+        }
+    }
+    let result = if failed.is_empty() {
+        Ok(())
+    } else {
+        Err(anyhow!(bulk_failure(&failed, ids.len())))
+    };
+    (updated, result)
+}
+
+/// The error for an update of several work items that some failed.
+fn bulk_failure(failed: &[i32], total: usize) -> String {
+    let ids = failed
+        .iter()
+        .map(|id| format!("#{id}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "{} of {total} work items failed to update: {ids}",
+        failed.len()
+    )
 }
 
 /// Says what a create already made when reading the result back fails, so
@@ -1503,7 +1638,7 @@ async fn handle_work_item_command(
             return link::handle_command(subcommand, format).await;
         }
         WorkItemSubCommands::Update {
-            id,
+            ids,
             project,
             title,
             state,
@@ -1515,97 +1650,92 @@ async fn handle_work_item_command(
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
             if format == OutputFormat::Text {
-                println!("Updating work item with id: {id} in project: {project_name}");
+                match ids.as_slice() {
+                    [id] => println!("Updating work item with id: {id} in project: {project_name}"),
+                    _ => println!(
+                        "Updating {} work items in project: {project_name}",
+                        ids.len()
+                    ),
+                }
             }
 
-            // Setting System.Tags replaces them, so new tags join the existing
-            // ones, and --effort needs the item's type to pick its effort field.
-            // The revision these were read at guards the update, so a change by
-            // another client in between fails it instead of being lost or misread.
-            // A new parent replaces the old one, which is found among the relations.
-            let current = if parent.is_some() {
-                Some(get_work_item_with_relations(&project_name, parse_work_item_id(id)?).await?)
-            } else if content.tags.is_empty() && remove_tags.is_empty() && content.effort.is_none()
-            {
-                None
-            } else {
-                Some(get_work_item(&project_name, id).await?)
-            };
-            let field = |name| {
-                current
-                    .as_ref()
-                    .and_then(|item| item.fields.get(name))
-                    .and_then(|v| v.as_str())
-            };
-            let read_at = current.as_ref().and_then(|item| item.rev);
-            let tags = edit_tags(field("System.Tags"), &content.tags, remove_tags);
-            let effort = match requested_type(&content.fields, field("System.WorkItemType")) {
-                Some(work_item_type) => {
-                    effort_assignment(&project_name, work_item_type, content.effort).await?
+            // Everything that is the same for each work item is worked out once.
+            let parent = match parent {
+                Some(parent) => {
+                    let creds = get_credentials()?;
+                    let url = api_work_item_url(&creds.base_url, &creds.organization, *parent);
+                    Some((*parent, url))
                 }
                 None => None,
             };
-
-            let iteration_path = iteration::resolve_iteration_path(
-                &project_name,
-                content.team.as_deref(),
-                iteration_path.as_deref(),
-            )
-            .await?;
-            let mut patch: Vec<_> = read_at.map(revision_test_op).into_iter().collect();
-            patch.extend(
-                WorkItemFields {
+            let plan = UpdatePlan {
+                project: &project_name,
+                fields: WorkItemFields {
                     title: title.clone(),
                     description: content.description()?,
                     acceptance_criteria: content.acceptance_criteria()?,
-                    tags,
                     state: state.clone(),
-                    replace_tags: !remove_tags.is_empty(),
-                    effort,
                     assigned_to: resolve_assignee(content.assigned_to.as_deref()).await?,
                     priority: content.priority,
                     remaining_work: content.remaining_work,
                     original_estimate: content.original_estimate,
                     completed_work: content.completed_work,
                     extra: content.fields.clone(),
-                    iteration_path,
+                    iteration_path: iteration::resolve_iteration_path(
+                        &project_name,
+                        content.team.as_deref(),
+                        iteration_path.as_deref(),
+                    )
+                    .await?,
                     area_path: area_path.clone(),
-                }
-                .patch(),
-            );
-            if let (Some(parent), Some(current)) = (parent, &current) {
-                let creds = get_credentials()?;
-                let parent_url = api_work_item_url(&creds.base_url, &creds.organization, *parent);
-                patch.extend(link::set_parent_ops(current, *parent, &parent_url)?);
-            }
-            patch
-                .extend(attachment::upload_all(&project_name, &content.attachments, format).await?);
+                    ..Default::default()
+                },
+                added_tags: &content.tags,
+                removed_tags: remove_tags,
+                effort: content.effort,
+                parent,
+                attachments: attachment::upload_all(&project_name, &content.attachments, format)
+                    .await?,
+            };
 
-            match update_work_item(&project_name, id, patch).await {
-                Ok(work_item) if format != OutputFormat::Text => {
-                    output::emit(&WorkItemDetails(&work_item), format)?;
-                }
-                Ok(work_item) => {
-                    println!("{}", "✅ Work item updated successfully!".green());
-                    println!("Updated work item with ID: {}", work_item.id);
-                    if let Some(fields) = work_item.fields.as_object() {
-                        if let Some(updated_title) =
-                            fields.get("System.Title").and_then(|v| v.as_str())
-                        {
-                            println!("Updated Title: {updated_title}");
-                        }
-                        if let Some(updated_desc) =
-                            fields.get("System.Description").and_then(|v| v.as_str())
-                        {
-                            println!("Updated Description: {updated_desc}");
-                        }
+            if let [id] = ids.as_slice() {
+                return match update_one(&plan, *id).await {
+                    Ok(work_item) if format != OutputFormat::Text => {
+                        output::emit(&WorkItemDetails(&work_item), format)
                     }
-                }
-                Err(e) => {
-                    eprintln!("❌ Failed to update work item: {e}");
-                    return Err(e);
-                }
+                    Ok(work_item) => {
+                        print_updated(&work_item);
+                        Ok(())
+                    }
+                    Err(e) => {
+                        eprintln!("❌ Failed to update work item: {e}");
+                        Err(e)
+                    }
+                };
             }
+
+            let (updated, result) = update_each(
+                ids,
+                |id| update_one(&plan, id),
+                |outcome| match outcome {
+                    Ok(work_item) if format == OutputFormat::Text => {
+                        println!(
+                            "✅ Updated #{}: {}",
+                            work_item.id,
+                            work_item_title(work_item)
+                        )
+                    }
+                    Ok(_) => {}
+                    Err((id, e)) => eprintln!("❌ Failed to update work item {id}: {e}"),
+                },
+            )
+            .await;
+            if format == OutputFormat::Text {
+                println!("Updated {} of {} work items", updated.len(), ids.len());
+            } else {
+                print_work_items("Updated Work Items", &updated, format)?;
+            }
+            return result;
         }
     }
     Ok(())
@@ -2110,6 +2240,73 @@ mod tests {
     #[test]
     fn edit_tags_with_nothing_to_change_is_none() {
         assert_eq!(edit_tags(Some("api"), &[], &[" ".into()]), None);
+    }
+
+    #[test]
+    fn update_takes_several_ids() {
+        let WorkItemSubCommands::Update { ids, .. } =
+            parse(&["update", "--id", "1,2", "-i", "3"]).unwrap()
+        else {
+            panic!("expected Update");
+        };
+        assert_eq!(ids, [1, 2, 3]);
+        assert!(parse(&["update", "--id", "x"]).is_err());
+        assert!(parse(&["update", "--title", "t"]).is_err());
+    }
+
+    #[tokio::test]
+    async fn update_each_keeps_going_after_a_failure() {
+        let attempted = std::cell::RefCell::new(Vec::new());
+        let mut reported = Vec::new();
+
+        let (updated, result) = update_each(
+            &[1, 2, 3],
+            |id| {
+                attempted.borrow_mut().push(id);
+                async move {
+                    if id == 2 {
+                        Err(anyhow!("TF401232"))
+                    } else {
+                        Ok(
+                            serde_json::from_value(json!({ "id": id, "url": "u", "fields": {} }))
+                                .unwrap(),
+                        )
+                    }
+                }
+            },
+            |outcome| reported.push(outcome.map(|w| w.id).map_err(|(id, _)| id)),
+        )
+        .await;
+
+        assert_eq!(*attempted.borrow(), [1, 2, 3]);
+        assert_eq!(updated.iter().map(|w| w.id).collect::<Vec<_>>(), [1, 3]);
+        assert_eq!(reported, [Ok(1), Err(2), Ok(3)]);
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "1 of 3 work items failed to update: #2"
+        );
+    }
+
+    #[tokio::test]
+    async fn update_each_succeeds_when_every_item_updates() {
+        let (updated, result) = update_each(
+            &[4],
+            |id| async move {
+                Ok(serde_json::from_value(json!({ "id": id, "url": "u", "fields": {} })).unwrap())
+            },
+            |_| {},
+        )
+        .await;
+        assert_eq!(updated.len(), 1);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn bulk_failure_names_the_failed_items() {
+        assert_eq!(
+            bulk_failure(&[2, 5], 4),
+            "2 of 4 work items failed to update: #2, #5"
+        );
     }
 
     #[test]

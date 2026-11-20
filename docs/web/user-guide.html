@@ -1122,7 +1122,10 @@ azdocli boards work-item update --id 124 --completed-work 3 --remaining-work 5
 azdocli boards work-item update --id 123 --iteration "@current" --team "Web Team" --assigned-to ada@example.com
 
 # Move a backlog item to another feature (replaces its parent)
-azdocli boards work-item update --id 123 --parent 456</code></pre>
+azdocli boards work-item update --id 123 --parent 456
+
+# Same change to several work items: pull them into the current sprint
+azdocli boards work-item update --id 123,124,125 --iteration "@current"</code></pre>
           </div>
 
           <div class="command-example">

@@ -955,6 +955,9 @@ azdocli boards work-item update --id 123 --tag ready --remove-tag needs-review
 # Move a backlog item to another feature (replaces its current parent)
 azdocli boards work-item update --id 123 --parent 456
 
+# Make the same change to several work items, e.g. pull them into the current sprint
+azdocli boards work-item update --id 123,124,125 --iteration "@current" --tag sprint-12
+
 # Delete a work item permanently (using default project)
 azdocli boards work-item delete --id 123
 
@@ -979,6 +982,7 @@ azdocli boards work-item delete --id 123 --soft-delete
 - **Soft delete**: Option to change state to "Removed" instead of permanent deletion
 - **Iteration and area paths**: Set `System.IterationPath` and `System.AreaPath` on create or update with `--iteration` and `--area`
 - **Field updates**: Update title, description, acceptance criteria, state, priority, tags and any other field
+- **Bulk updates**: `update --id 1,2,3` makes the same change to each work item; one failure does not stop the others, and the command fails at the end naming the ones that did not update
 - **Default project support**: Use with default project or specify --project explicitly
 - **Error handling**: Clear feedback when work item not found or access denied
 
