@@ -64,6 +64,20 @@ pub enum SprintSubCommands {
         #[clap(long = "day-off", value_parser = capacity::DaysOff::parse)]
         days_off: Vec<capacity::DaysOff>,
     },
+    /// Set the days the whole team is off in its current sprint, such as
+    /// public holidays, then show the team's capacity
+    SetDaysOff {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Team whose sprint to change (default: the project's default team)
+        #[clap(long)]
+        team: Option<String>,
+        /// A day off, 2026-11-24, or a run of days off, 2026-11-24..2026-11-26;
+        /// repeat for more. Replaces the team's days off
+        #[clap(long = "day-off", value_parser = capacity::DaysOff::parse, required = true)]
+        days_off: Vec<capacity::DaysOff>,
+    },
 }
 
 pub(super) async fn handle_command(
@@ -107,6 +121,23 @@ pub(super) async fn handle_command(
                 println!(
                     "✅ Set the capacity of {} in {}\n",
                     member.name,
+                    current.name.as_deref().unwrap_or_default()
+                );
+            }
+            show_capacity(&project, &team, &current, format).await
+        }
+        SprintSubCommands::SetDaysOff {
+            project,
+            team,
+            days_off,
+        } => {
+            let project = get_project_or_default(project.as_deref())?;
+            let (team, current) = iteration::current_iteration(&project, team.as_deref()).await?;
+            let id = current.id.clone().unwrap_or_default();
+            capacity::set_team_days_off(&project, &team, &id, days_off).await?;
+            if format == OutputFormat::Text {
+                println!(
+                    "✅ Set the days off of team {team} in {}\n",
                     current.name.as_deref().unwrap_or_default()
                 );
             }

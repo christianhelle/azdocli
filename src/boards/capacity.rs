@@ -8,7 +8,9 @@ use crate::auth::get_credentials;
 use crate::output::{md_table, Render};
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::wit::models::WorkItem;
-use azure_devops_rust_api::work::models::{Activity, CapacityPatch, DateRange};
+use azure_devops_rust_api::work::models::{
+    Activity, CapacityPatch, DateRange, TeamSettingsDaysOffPatch,
+};
 use chrono::{Datelike, NaiveDate, Weekday};
 use serde::Serialize;
 use std::io::{self, Write};
@@ -195,6 +197,34 @@ pub(super) fn capacity_patch(
     }
     patch.days_off = days_off.iter().map(|off| off.to_date_range()).collect();
     patch
+}
+
+/// The team's days off, replacing the ones set before.
+pub(super) fn team_days_off_patch(days_off: &[DaysOff]) -> TeamSettingsDaysOffPatch {
+    let mut patch = TeamSettingsDaysOffPatch::new();
+    patch.days_off = days_off.iter().map(|off| off.to_date_range()).collect();
+    patch
+}
+
+pub(super) async fn set_team_days_off(
+    project: &str,
+    team: &str,
+    iteration_id: &str,
+    days_off: &[DaysOff],
+) -> Result<()> {
+    let creds = get_credentials()?;
+    create_work_client()?
+        .teamdaysoff_client()
+        .update(
+            creds.organization.clone(),
+            team_days_off_patch(days_off),
+            project,
+            iteration_id,
+            team,
+        )
+        .await
+        .map_err(|e| anyhow!("Failed to set the days off of team '{team}': {e}"))?;
+    Ok(())
 }
 
 pub(super) async fn set_member_capacity(
@@ -669,6 +699,21 @@ mod tests {
         assert_eq!(
             serde_json::to_value(capacity_patch(None, None, &[off])).unwrap()["activities"],
             serde_json::Value::Null
+        );
+    }
+
+    #[test]
+    fn team_days_off_patch_lists_each_run() {
+        let off = [
+            DaysOff::parse("2026-11-24").unwrap(),
+            DaysOff::parse("2026-12-24..2026-12-26").unwrap(),
+        ];
+        assert_eq!(
+            serde_json::to_value(team_days_off_patch(&off)).unwrap(),
+            serde_json::json!({"daysOff": [
+                {"start": "2026-11-24T00:00:00Z", "end": "2026-11-24T00:00:00Z"},
+                {"start": "2026-12-24T00:00:00Z", "end": "2026-12-26T00:00:00Z"},
+            ]})
         );
     }
 

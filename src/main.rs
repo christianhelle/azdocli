@@ -61,6 +61,7 @@ const STRUCTURED_OUTPUT_COMMANDS: &[&str] = &[
     "boards sprint show",
     "boards sprint capacity",
     "boards sprint set-capacity",
+    "boards sprint set-days-off",
 ];
 
 /// The subcommand names the user typed, e.g. `repos pr list`.
@@ -376,6 +377,7 @@ mod tests {
             "boards sprint show",
             "boards sprint capacity",
             "boards sprint set-capacity",
+            "boards sprint set-days-off",
         ] {
             assert!(check_output_support(OutputFormat::Yaml, command).is_ok());
         }
