@@ -21,6 +21,7 @@ mod classification;
 mod history;
 mod iteration;
 mod link;
+mod queries;
 mod sprint;
 mod views;
 
@@ -54,16 +55,29 @@ pub enum BoardsSubCommands {
         subcommand: backlog::BacklogSubCommands,
     },
     /// Run a WIQL query and list the work items it returns
+    #[clap(group(clap::ArgGroup::new("source").required(true).args(["wiql", "saved"])))]
     Query {
         /// The WIQL query to run
         #[clap(short, long)]
-        wiql: String,
+        wiql: Option<String>,
+        /// A saved query to run, by path (e.g. "Shared Queries/Active Bugs") or id
+        #[clap(long)]
+        saved: Option<String>,
         /// Team project name (optional if default project is set)
         #[clap(short, long)]
         project: Option<String>,
         /// Maximum number of work items to return (default: 50)
         #[clap(long, default_value = "50", value_parser = clap::value_parser!(i32).range(1..))]
         limit: i32,
+    },
+    /// List the project's saved queries
+    Queries {
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Levels of folders to list below the root folders (1 or 2)
+        #[clap(long, default_value = "2", value_parser = clap::value_parser!(i32).range(1..=2))]
+        depth: i32,
     },
 }
 
@@ -1386,13 +1400,23 @@ pub async fn handle_command(subcommand: &BoardsSubCommands, format: OutputFormat
         BoardsSubCommands::Backlog { subcommand } => {
             backlog::handle_command(subcommand, format).await
         }
+        BoardsSubCommands::Queries { project, depth } => {
+            let project_name = get_project_or_default(project.as_deref())?;
+            output::emit(&queries::list_queries(&project_name, *depth).await?, format)
+        }
         BoardsSubCommands::Query {
             wiql,
+            saved,
             project,
             limit,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
-            match run_wiql_query(&project_name, wiql, *limit).await {
+            let wiql = match (wiql, saved) {
+                (Some(wiql), _) => wiql.clone(),
+                (None, Some(saved)) => queries::saved_query_wiql(&project_name, saved).await?,
+                (None, None) => return Err(anyhow!("Provide --wiql or --saved")),
+            };
+            match run_wiql_query(&project_name, &wiql, *limit).await {
                 Ok(work_items) => print_work_items("Query Results", &work_items, format)?,
                 Err(e) => {
                     eprintln!("❌ Failed to execute WIQL query");

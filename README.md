@@ -245,7 +245,7 @@ These commands support every format so far: `repos list`, `repos show`, `repos p
 `repos pr show`, `pipelines list`, `pipelines show`, `pipelines runs list`, `boards work-item list`,
 `boards work-item show`, `boards work-item create`, `boards work-item update`,
 `boards work-item attachment list`, `boards work-item link list`, `boards work-item link add`,
-`boards work-item link remove`, `boards work-item history`, `boards query`, `boards backlog list`, `boards work-item move`, `boards sprint show`, `boards sprint capacity`, `boards sprint set-capacity` and `boards sprint set-days-off`. The other commands accept only `text` and fail with a
+`boards work-item link remove`, `boards work-item history`, `boards query`, `boards queries`, `boards backlog list`, `boards work-item move`, `boards sprint show`, `boards sprint capacity`, `boards sprint set-capacity` and `boards sprint set-days-off`. The other commands accept only `text` and fail with a
 clear error for any other format.
 
 ## Features
@@ -1145,6 +1145,19 @@ azdocli boards query --wiql "SELECT [System.Id] FROM WorkItems WHERE [System.Sta
 # Cap the number of results
 azdocli boards query --wiql "SELECT [System.Id] FROM WorkItems" --limit 10
 ```
+
+Saved (shared and personal) queries can be listed and run too:
+
+```sh
+# List saved queries as a tree (folders are marked; --depth 1 or 2, default 2)
+azdocli boards queries
+
+# Run a saved query by path (case-insensitive) or by id
+azdocli boards query --saved "Shared Queries/Active Bugs"
+azdocli boards query --saved 7b09e90a-11fd-443b-9526-6e15a73ff4f7 --limit 20
+```
+
+`--saved` and `--wiql` are mutually exclusive; exactly one is required. Only flat queries can be run with `--saved`; folders and tree or one-hop queries are refused. `boards queries` lists at most two folder levels per call.
 
 **Query Features:**
 

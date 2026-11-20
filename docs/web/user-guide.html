@@ -280,6 +280,7 @@ azdocli boards work-item show --id 42 -o yaml</code></pre>
               <code>boards work-item link remove</code>,
               <code>boards work-item history</code>,
               <code>boards query</code>,
+              <code>boards queries</code>,
               <code>boards backlog list</code>,
               <code>boards work-item move</code>,
               <code>boards sprint show</code>,
@@ -1379,11 +1380,20 @@ azdocli boards sprint set-days-off --day-off 2026-12-24..2026-12-26 --day-off 20
 azdocli boards query --wiql "SELECT [System.Id] FROM WorkItems WHERE [System.State] = 'Active'"
 
 # Cap the number of results
-azdocli boards query --wiql "SELECT [System.Id] FROM WorkItems" --limit 10</code></pre>
+azdocli boards query --wiql "SELECT [System.Id] FROM WorkItems" --limit 10
+
+# List saved queries as a tree (--depth 1 or 2, default 2)
+azdocli boards queries
+
+# Run a saved query by path (case-insensitive) or id
+azdocli boards query --saved "Shared Queries/Active Bugs"
+azdocli boards query --saved 7b09e90a-11fd-443b-9526-6e15a73ff4f7 --limit 20</code></pre>
             <p>
               <strong>Features</strong>: Anything the Azure DevOps query editor
               accepts, rendered in the same table as work-item list, with a
-              configurable result limit.
+              configurable result limit. <code>--saved</code> and
+              <code>--wiql</code> are mutually exclusive; only flat saved
+              queries can be run.
             </p>
           </div>
         </div>
