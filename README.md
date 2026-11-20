@@ -245,7 +245,7 @@ These commands support every format so far: `repos list`, `repos show`, `repos p
 `repos pr show`, `pipelines list`, `pipelines show`, `pipelines runs list`, `boards work-item list`,
 `boards work-item show`, `boards work-item create`, `boards work-item update`,
 `boards work-item attachment list`, `boards work-item link list`, `boards work-item link add`,
-`boards work-item link remove`, `boards query`, `boards sprint show` and `boards sprint capacity`. The other commands accept only `text` and fail with a
+`boards work-item link remove`, `boards query`, `boards sprint show`, `boards sprint capacity`, `boards sprint set-capacity` and `boards sprint set-days-off`. The other commands accept only `text` and fail with a
 clear error for any other format.
 
 ## Features
@@ -1081,6 +1081,19 @@ azdocli boards sprint capacity
 
 # Another team's capacity, as JSON for scripts
 azdocli boards sprint capacity --team "Web Team" -o json
+```
+
+`boards sprint set-capacity` sets a member's hours a day, days off, or both, in the current sprint; `boards sprint set-days-off` sets the days the whole team is off. Both replace what was set before and then show the team's capacity. A day off is a date, `2026-11-24`, or a run of days, `2026-11-24..2026-11-26`; repeat `--day-off` for more.
+
+```sh
+# 6 hours a day of development, off on 24 November
+azdocli boards sprint set-capacity --member "@me" --per-day 6 --activity Development --day-off 2026-11-24
+
+# Change only someone's days off, keeping their hours
+azdocli boards sprint set-capacity --member jane@example.com --day-off 2026-11-24..2026-11-26
+
+# Public holidays for the whole team
+azdocli boards sprint set-days-off --day-off 2026-12-24..2026-12-26 --day-off 2026-12-31
 ```
 
 #### WIQL Queries
