@@ -156,19 +156,25 @@ pub(super) fn find_member<'a>(
     wanted: &str,
     team: &str,
 ) -> Result<&'a TeamMember> {
-    if let Some(member) = members
-        .iter()
-        .find(|m| m.unique_name.eq_ignore_ascii_case(wanted))
-    {
+    // Names compare by their lowercase form, which folds beyond ASCII.
+    let key = wanted.to_lowercase();
+    if let Some(member) = members.iter().find(|m| m.unique_name.to_lowercase() == key) {
         return Ok(member);
     }
     let named: Vec<_> = members
         .iter()
-        .filter(|m| m.name.eq_ignore_ascii_case(wanted))
+        .filter(|m| m.name.to_lowercase() == key)
         .collect();
     match named.as_slice() {
         [member] => Ok(member),
-        [] => Err(anyhow!("Team '{team}' has no member '{wanted}'")),
+        [] => Err(anyhow!(
+            "Team '{team}' has no member '{wanted}'; its members are {}",
+            members
+                .iter()
+                .map(|m| format!("{} ({})", m.name, m.unique_name))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
         several => Err(anyhow!(
             "Several members of team '{team}' are called '{wanted}'; use one of {}",
             several
@@ -676,11 +682,31 @@ mod tests {
     }
 
     #[test]
+    fn display_names_match_ignoring_case_beyond_ascii() {
+        let mut team = team();
+        team.push(TeamMember {
+            id: "4".into(),
+            unique_name: "jorg@one.com".into(),
+            name: "Jörg".into(),
+        });
+        assert_eq!(find_member(&team, "JÖRG", "T").unwrap().id, "4");
+        team.push(TeamMember {
+            id: "5".into(),
+            unique_name: "jorg@two.com".into(),
+            name: "JÖRG".into(),
+        });
+        assert!(find_member(&team, "jörg", "T")
+            .unwrap_err()
+            .to_string()
+            .starts_with("Several members of team 'T' are called 'jörg'"));
+    }
+
+    #[test]
     fn unknown_or_shared_names_are_refused() {
         let team = team();
         assert_eq!(
             find_member(&team, "Bob", "Web").unwrap_err().to_string(),
-            "Team 'Web' has no member 'Bob'"
+            "Team 'Web' has no member 'Bob'; its members are Ann (ann@one.com), Alex (alex@one.com), Alex (alex@two.com)"
         );
         assert_eq!(
             find_member(&team, "alex", "Web").unwrap_err().to_string(),
