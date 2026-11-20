@@ -186,6 +186,14 @@ pub(super) fn find_member<'a>(
     }
 }
 
+/// Reads hours a day, from 0 to 24, so the value survives the API's f32.
+pub(crate) fn parse_hours_a_day(value: &str) -> Result<f64, String> {
+    match value.trim().parse::<f64>() {
+        Ok(hours) if (0.0..=24.0).contains(&hours) => Ok(hours),
+        _ => Err(format!("'{value}' is not a number of hours from 0 to 24")),
+    }
+}
+
 /// The change to a member's capacity: hours a day for one activity, days
 /// off, or both. What is not given is left as it is.
 pub(super) fn capacity_patch(
@@ -712,6 +720,19 @@ mod tests {
             find_member(&team, "alex", "Web").unwrap_err().to_string(),
             "Several members of team 'Web' are called 'alex'; use one of alex@one.com, alex@two.com"
         );
+    }
+
+    #[test]
+    fn hours_a_day_must_be_a_number_from_0_to_24() {
+        assert_eq!(parse_hours_a_day("6.5"), Ok(6.5));
+        assert_eq!(parse_hours_a_day("0"), Ok(0.0));
+        assert_eq!(parse_hours_a_day("24"), Ok(24.0));
+        for bad in ["NaN", "inf", "1e39", "-1", "24.5", "six"] {
+            assert_eq!(
+                parse_hours_a_day(bad),
+                Err(format!("'{bad}' is not a number of hours from 0 to 24")),
+            );
+        }
     }
 
     #[test]

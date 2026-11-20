@@ -54,7 +54,7 @@ pub enum SprintSubCommands {
         #[clap(long)]
         member: String,
         /// Hours a day the member can work; replaces their activities
-        #[clap(long)]
+        #[clap(long, value_parser = capacity::parse_hours_a_day)]
         per_day: Option<f64>,
         /// The activity the hours are for, such as Development
         #[clap(long, requires = "per_day")]
