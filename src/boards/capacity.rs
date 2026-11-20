@@ -229,22 +229,31 @@ impl Render for CapacityOverview<'_> {
         writeln!(w, "📅 {} · 👥 {}", self.period(), self.team)?;
         writeln!(w)?;
         if self.plan.members.is_empty() {
-            writeln!(w, "No capacity is set for this sprint.")?;
+            writeln!(w, "No capacity is set for this sprint.\n")?;
         }
+        let rows = self.rows();
+        // The name column fits the longest name.
+        let width = rows
+            .iter()
+            .map(|row| row[0].chars().count())
+            .max()
+            .unwrap_or(0)
+            .max(30);
         let line = |w: &mut dyn Write, row: &[String]| {
             writeln!(
                 w,
-                "{:<30} {:>8} {:>5} {:>9} {:>9} {:>9}",
+                "{:<width$} {:>8} {:>5} {:>9} {:>9} {:>9}",
                 row[0], row[1], row[2], row[3], row[4], row[5]
             )
         };
+        let rule = "-".repeat(width + 45);
         line(w, &HEADERS.map(String::from))?;
-        writeln!(w, "{}", "-".repeat(75))?;
-        let rows = self.rows();
+        writeln!(w, "{rule}")?;
         let members = self.plan.members.len();
         for (index, row) in rows.iter().enumerate() {
-            if index == members || index == members + 1 {
-                writeln!(w, "{}", "-".repeat(75))?;
+            // Rules set off the total, between the members and other work.
+            if (index == members && members > 0) || index == members + 1 {
+                writeln!(w, "{rule}")?;
             }
             line(w, row)?;
         }
@@ -641,7 +650,26 @@ mod tests {
     #[test]
     fn overview_says_when_no_capacity_is_set() {
         let overview = overview(&[], &[item(1, None, 2.0)]);
-        assert!(rendered(|w| overview.text(w)).contains("No capacity is set for this sprint."));
+        let text = rendered(|w| overview.text(w));
+        assert!(text.contains("No capacity is set for this sprint.\n\n"));
+        let rule = "-".repeat(75);
+        assert!(
+            !text.contains(&format!("{rule}\n{rule}")),
+            "rules in a row in\n{text}"
+        );
+    }
+
+    #[test]
+    fn overview_name_column_fits_long_names() {
+        let name = "Someone With A Very Long Display Name";
+        let overview = overview(&[], &[item(1, Some(name), 2.0)]);
+        let text = rendered(|w| overview.text(w));
+        let label = format!("{name} (no capacity)");
+        assert!(
+            text.contains(&format!("{label} {:>8}", "")),
+            "name not padded in\n{text}"
+        );
+        assert!(text.contains(&"-".repeat(label.len() + 45)));
     }
 
     #[test]
