@@ -10,14 +10,19 @@ use azure_devops_rust_api::wit::models::WorkItem;
 use azure_devops_rust_api::work::models::ReorderOperation;
 use clap::Subcommand;
 use serde::Serialize;
+use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
 
 /// The backlog level of requirements: product backlog items, user stories or
 /// requirements, depending on the process.
 const REQUIREMENT_BACKLOG: &str = "Microsoft.RequirementCategory";
 
-/// States of work items that are finished and no longer on the backlog.
-const FINISHED_STATES: [&str; 4] = ["Closed", "Done", "Completed", "Removed"];
+/// State categories of work items that are finished and no longer on the
+/// backlog.
+const FINISHED_CATEGORIES: [&str; 2] = ["Completed", "Removed"];
+
+/// The (work item type, state) pairs, lowercased, in a finished category.
+type FinishedStates = HashSet<(String, String)>;
 
 #[derive(Subcommand, Clone)]
 pub enum BacklogSubCommands {
@@ -94,18 +99,53 @@ pub(super) async fn backlog_items(project: &str, team: &str) -> Result<Vec<WorkI
                 .value,
         );
     }
-    Ok(in_backlog_order(&ids, fetched))
+    let finished = finished_states(project, &fetched).await?;
+    Ok(in_backlog_order(&ids, fetched, &finished))
+}
+
+/// The finished states of every work item type in `items`, by state category.
+async fn finished_states(project: &str, items: &[WorkItem]) -> Result<FinishedStates> {
+    let mut types: Vec<&str> = items
+        .iter()
+        .filter_map(|item| field_str(item, "System.WorkItemType"))
+        .collect();
+    types.sort_unstable();
+    types.dedup();
+    let mut finished = FinishedStates::new();
+    for work_item_type in types {
+        for state in super::list_work_item_states(project, work_item_type).await? {
+            let category = state.category.as_deref().unwrap_or_default();
+            if FINISHED_CATEGORIES
+                .iter()
+                .any(|c| c.eq_ignore_ascii_case(category))
+            {
+                finished.insert(finished_key(
+                    work_item_type,
+                    state.name.as_deref().unwrap_or_default(),
+                ));
+            }
+        }
+    }
+    Ok(finished)
+}
+
+fn finished_key(work_item_type: &str, state: &str) -> (String, String) {
+    (work_item_type.to_lowercase(), state.to_lowercase())
 }
 
 /// `items` arranged as `order` says, without the finished ones.
-fn in_backlog_order(order: &[i32], mut items: Vec<WorkItem>) -> Vec<WorkItem> {
-    items.retain(|item| !is_finished(item));
-    items.sort_by_key(|item| {
-        order
-            .iter()
-            .position(|id| *id == item.id)
-            .unwrap_or(usize::MAX)
-    });
+fn in_backlog_order(
+    order: &[i32],
+    mut items: Vec<WorkItem>,
+    finished: &FinishedStates,
+) -> Vec<WorkItem> {
+    items.retain(|item| !is_finished(item, finished));
+    let positions: HashMap<i32, usize> = order
+        .iter()
+        .enumerate()
+        .map(|(index, id)| (*id, index))
+        .collect();
+    items.sort_by_key(|item| positions.get(&item.id).copied().unwrap_or(usize::MAX));
     items
 }
 
@@ -113,12 +153,16 @@ fn field_str<'a>(item: &'a WorkItem, field: &str) -> Option<&'a str> {
     item.fields.get(field).and_then(serde_json::Value::as_str)
 }
 
-fn is_finished(item: &WorkItem) -> bool {
-    field_str(item, "System.State").is_some_and(|state| {
-        FINISHED_STATES
-            .iter()
-            .any(|s| s.eq_ignore_ascii_case(state))
-    })
+fn is_finished(item: &WorkItem, finished: &FinishedStates) -> bool {
+    match (
+        field_str(item, "System.WorkItemType"),
+        field_str(item, "System.State"),
+    ) {
+        (Some(work_item_type), Some(state)) => {
+            finished.contains(&finished_key(work_item_type, state))
+        }
+        _ => false,
+    }
 }
 
 fn assignee(item: &WorkItem) -> &str {
@@ -361,14 +405,19 @@ mod tests {
     }
 
     #[test]
-    fn items_follow_the_backlog_order_without_finished_ones() {
+    fn items_follow_the_backlog_order_without_finished_states() {
         let items = vec![
             item(1, "New", json!({})),
             item(2, "Closed", json!({})),
             item(3, "Active", json!({})),
             item(4, "Removed", json!({})),
         ];
-        let ordered = in_backlog_order(&[3, 2, 4, 1], items);
+        let finished: FinishedStates = [
+            ("user story".to_string(), "closed".to_string()),
+            ("user story".to_string(), "removed".to_string()),
+        ]
+        .into();
+        let ordered = in_backlog_order(&[3, 2, 4, 1], items, &finished);
         let ids: Vec<_> = ordered.iter().map(|i| i.id).collect();
         assert_eq!(ids, [3, 1]);
     }
