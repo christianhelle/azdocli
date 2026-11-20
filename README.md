@@ -245,7 +245,7 @@ These commands support every format so far: `repos list`, `repos show`, `repos p
 `repos pr show`, `pipelines list`, `pipelines show`, `pipelines runs list`, `boards work-item list`,
 `boards work-item show`, `boards work-item create`, `boards work-item update`,
 `boards work-item attachment list`, `boards work-item link list`, `boards work-item link add`,
-`boards work-item link remove`, `boards query`, `boards backlog list`, `boards work-item move`, `boards sprint show`, `boards sprint capacity`, `boards sprint set-capacity` and `boards sprint set-days-off`. The other commands accept only `text` and fail with a
+`boards work-item link remove`, `boards work-item history`, `boards query`, `boards backlog list`, `boards work-item move`, `boards sprint show`, `boards sprint capacity`, `boards sprint set-capacity` and `boards sprint set-days-off`. The other commands accept only `text` and fail with a
 clear error for any other format.
 
 ## Features
@@ -1020,6 +1020,27 @@ azdocli boards work-item link add --id 123 --type related --target 200
 azdocli boards work-item link remove --id 123 --target 125 --type predecessor
 azdocli boards work-item link remove --id 123 --target 200
 ```
+
+#### Work Item History
+
+`boards work-item history` shows a work item's updates, newest first: the revision, when it
+happened, who made it and each changed field as `old → new`, plus added and removed links.
+Fields that change on every revision (`System.Rev`, `System.ChangedDate` and so on) are left out:
+
+```sh
+# Everything that changed on work item 123
+azdocli boards work-item history --id 123
+
+# Only the newest 5 updates that changed the state or the remaining work
+azdocli boards work-item history --id 123 --field State --field RemainingWork --top 5
+
+# Full values as JSON
+azdocli boards work-item history --id 123 -o json
+```
+
+`--field` takes a reference name (`Microsoft.VSTS.Scheduling.RemainingWork`), its last part
+(`RemainingWork`) or its readable name (`Remaining Work`), ignoring case. Text output shortens long
+HTML values such as a description; JSON and YAML keep them whole.
 
 #### Work Item Comments
 
