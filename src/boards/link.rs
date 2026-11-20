@@ -1,6 +1,7 @@
 //! Links between work items: parents and children, related items and
 //! dependencies.
 
+use super::iteration::WORK_ITEMS_PER_REQUEST;
 use super::{
     add_relation_op, create_wit_client, parse_work_item_id, revision_test_op, update_work_item,
 };
@@ -374,20 +375,25 @@ async fn with_details(project: &str, mut links: Vec<WorkItemLink>) -> Result<Vec
     }
     let creds = get_credentials()?;
     let client = create_wit_client()?.work_items_client();
-    // One request for up to 200 linked items, which covers any real backlog
-    // item; the rest are listed by id alone.
-    let ids: Vec<String> = links.iter().take(200).map(|l| l.id.to_string()).collect();
-    match client
-        .list(creds.organization, ids.join(","), project)
-        .error_policy("omit")
-        .fields("System.WorkItemType,System.State,System.Title")
-        .await
-    {
-        Ok(linked) => describe(&mut links, &linked.value),
-        // A linked item in another project or one the user cannot read
-        // should not hide the links themselves.
-        Err(e) => eprintln!("⚠️ Could not read the linked work items: {e}"),
+    let mut ids: Vec<i32> = links.iter().map(|link| link.id).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    let mut linked = Vec::new();
+    for chunk in ids.chunks(WORK_ITEMS_PER_REQUEST) {
+        let ids: Vec<String> = chunk.iter().map(i32::to_string).collect();
+        match client
+            .list(creds.organization.clone(), ids.join(","), project)
+            .error_policy("omit")
+            .fields("System.WorkItemType,System.State,System.Title")
+            .await
+        {
+            Ok(list) => linked.extend(list.value),
+            // A linked item in another project or one the user cannot read
+            // should not hide the links themselves.
+            Err(e) => eprintln!("⚠️ Could not read some linked work items: {e}"),
+        }
     }
+    describe(&mut links, &linked);
     Ok(links)
 }
 
