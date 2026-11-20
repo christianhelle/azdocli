@@ -278,6 +278,7 @@ azdocli boards work-item show --id 42 -o yaml</code></pre>
               <code>boards work-item link list</code>,
               <code>boards work-item link add</code>,
               <code>boards work-item link remove</code>,
+              <code>boards work-item history</code>,
               <code>boards query</code>,
               <code>boards backlog list</code>,
               <code>boards work-item move</code>,
@@ -1163,6 +1164,24 @@ azdocli boards work-item link remove --id 123 --target 200</code></pre>
             <p>
               Link types: parent, child, related, predecessor, successor,
               duplicate, duplicate-of.
+            </p>
+          </div>
+
+          <div class="command-example">
+            <h4>Work Item History</h4>
+            <pre><code># Who changed what, newest first
+azdocli boards work-item history --id 123
+
+# Only state and remaining work changes, newest 5
+azdocli boards work-item history --id 123 --field State --field RemainingWork --top 5
+
+# Full values as JSON
+azdocli boards work-item history --id 123 -o json</code></pre>
+            <p>
+              Each update shows the revision, date, author and every changed
+              field as old &rarr; new, plus added and removed links.
+              <code>--field</code> accepts a reference name, its last part or
+              its readable name, ignoring case.
             </p>
           </div>
 
