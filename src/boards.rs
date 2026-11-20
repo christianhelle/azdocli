@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 
 mod area;
 mod attachment;
+mod backlog;
 mod capacity;
 mod classification;
 mod iteration;
@@ -45,6 +46,11 @@ pub enum BoardsSubCommands {
     Sprint {
         #[clap(subcommand)]
         subcommand: sprint::SprintSubCommands,
+    },
+    /// List a team's product backlog in backlog order
+    Backlog {
+        #[clap(subcommand)]
+        subcommand: backlog::BacklogSubCommands,
     },
     /// Run a WIQL query and list the work items it returns
     Query {
@@ -219,6 +225,33 @@ pub enum WorkItemSubCommands {
     Link {
         #[clap(subcommand)]
         subcommand: link::LinkSubCommands,
+    },
+    /// Move a work item up or down the team's product backlog
+    #[clap(group(
+        clap::ArgGroup::new("placement")
+            .required(true)
+            .multiple(false)
+            .args(["before", "after", "top"])
+    ))]
+    Move {
+        /// ID of the work item to move
+        #[clap(short, long, value_parser = clap::value_parser!(i32).range(1..))]
+        id: i32,
+        /// Team project name (optional if default project is set)
+        #[clap(short, long)]
+        project: Option<String>,
+        /// Team whose backlog to reorder (default: the project's default team)
+        #[clap(long)]
+        team: Option<String>,
+        /// Put the item directly above this work item
+        #[clap(long, value_name = "ID")]
+        before: Option<i32>,
+        /// Put the item directly below this work item
+        #[clap(long, value_name = "ID")]
+        after: Option<i32>,
+        /// Put the item at the top of the backlog
+        #[clap(long)]
+        top: bool,
     },
     /// Update one or more work items
     Update {
@@ -1334,6 +1367,9 @@ pub async fn handle_command(subcommand: &BoardsSubCommands, format: OutputFormat
         BoardsSubCommands::Sprint { subcommand } => {
             sprint::handle_command(subcommand, format).await
         }
+        BoardsSubCommands::Backlog { subcommand } => {
+            backlog::handle_command(subcommand, format).await
+        }
         BoardsSubCommands::Query {
             wiql,
             project,
@@ -1634,6 +1670,22 @@ async fn handle_work_item_command(
         }
         WorkItemSubCommands::Attachment { subcommand } => {
             return attachment::handle_command(subcommand, format).await;
+        }
+        WorkItemSubCommands::Move {
+            id,
+            project,
+            team,
+            before,
+            after,
+            top: _,
+        } => {
+            let project = get_project_or_default(project.as_deref())?;
+            let placement = match (before, after) {
+                (Some(target), _) => backlog::Placement::Before(*target),
+                (_, Some(target)) => backlog::Placement::After(*target),
+                _ => backlog::Placement::Top,
+            };
+            return backlog::move_item(&project, team.as_deref(), *id, placement, format).await;
         }
         WorkItemSubCommands::Link { subcommand } => {
             return link::handle_command(subcommand, format).await;

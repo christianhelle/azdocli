@@ -245,7 +245,7 @@ These commands support every format so far: `repos list`, `repos show`, `repos p
 `repos pr show`, `pipelines list`, `pipelines show`, `pipelines runs list`, `boards work-item list`,
 `boards work-item show`, `boards work-item create`, `boards work-item update`,
 `boards work-item attachment list`, `boards work-item link list`, `boards work-item link add`,
-`boards work-item link remove`, `boards query`, `boards sprint show`, `boards sprint capacity`, `boards sprint set-capacity` and `boards sprint set-days-off`. The other commands accept only `text` and fail with a
+`boards work-item link remove`, `boards query`, `boards backlog list`, `boards work-item move`, `boards sprint show`, `boards sprint capacity`, `boards sprint set-capacity` and `boards sprint set-days-off`. The other commands accept only `text` and fail with a
 clear error for any other format.
 
 ## Features
@@ -1059,6 +1059,23 @@ The `boards work-item states` command lists the states a type moves through, wit
 ```sh
 # New, Approved, Committed, Done and Removed in a Scrum project
 azdocli boards work-item states pbi
+```
+
+#### Backlog
+
+`boards backlog list` shows a team's product backlog (the product backlog item, user story or requirement level) in backlog order, with position, effort, assignee and title. Finished items are left out. `boards work-item move` reorders it like dragging in the web UI: put an item `--top`, `--before` or `--after` another item, then see its new position.
+
+```bash
+# The first 10 items of the default team's backlog
+azdocli boards backlog list --top 10
+
+# Another team's backlog as JSON
+azdocli boards backlog list --team "Web Team" -o json
+
+# Move item 42 to the top, or next to another item
+azdocli boards work-item move --id 42 --top
+azdocli boards work-item move --id 42 --before 17
+azdocli boards work-item move --id 42 --after 17
 ```
 
 #### Sprint Overview

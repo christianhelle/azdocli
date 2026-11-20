@@ -275,6 +275,8 @@ azdocli boards work-item show --id 42 -o yaml</code></pre>
               <code>boards work-item link add</code>,
               <code>boards work-item link remove</code>,
               <code>boards query</code>,
+              <code>boards backlog list</code>,
+              <code>boards work-item move</code>,
               <code>boards sprint show</code>,
               <code>boards sprint capacity</code>,
               <code>boards sprint set-capacity</code> and
@@ -1258,6 +1260,27 @@ azdocli boards work-item types --project MyProject</code></pre>
             <pre><code># New, Approved, Committed, Done and Removed in a Scrum project
 azdocli boards work-item states pbi</code></pre>
           </div>
+        </div>
+
+        <div class="command-section">
+          <h3>Backlog</h3>
+          <p>
+            The boards backlog list command shows a team's product backlog
+            in backlog order, with position, effort, assignee and title.
+            Finished items are left out. The boards work-item move command
+            reorders it like dragging in the web UI: put an item --top,
+            --before or --after another item.
+          </p>
+          <pre><code># The first 10 items of the default team's backlog
+azdocli boards backlog list --top 10
+
+# Another team's backlog as JSON
+azdocli boards backlog list --team "Web Team" -o json
+
+# Move item 42 to the top, or next to another item
+azdocli boards work-item move --id 42 --top
+azdocli boards work-item move --id 42 --before 17
+azdocli boards work-item move --id 42 --after 17</code></pre>
         </div>
 
         <div class="command-section">
