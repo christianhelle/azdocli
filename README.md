@@ -281,7 +281,7 @@ azdocli repos list --project Other  # Overrides default with "Other"
 
 **Default Project Features:**
 
-- **Persistent storage**: Default project is saved in your user configuration
+- **Persistent storage**: Default project is saved as `default_project` in `~/.azdocli/config.json`. It survives `azdocli login`; `azdocli logout` clears it along with the credentials
 - **Optional override**: Use `--project` to override the default for any command
 - **All modules supported**: Works with repos, pipelines, boards, and projects
 - **Helpful error messages**: Clear feedback when no default is set and no --project is provided

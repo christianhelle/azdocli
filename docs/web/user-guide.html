@@ -218,7 +218,11 @@
           <div class="command-example">
             <h4>Logout from Azure DevOps</h4>
             <pre><code>azdocli logout</code></pre>
-            <p>Clears stored credentials and logs you out of Azure DevOps.</p>
+            <p>
+              Clears stored credentials and the default project, and logs you
+              out of Azure DevOps. To replace your PAT while keeping the default
+              project, run <code>azdocli login</code> again instead.
+            </p>
           </div>
         </div>
       </section>
@@ -366,8 +370,10 @@ azdocli projects processes</code></pre>
           <h4>Features:</h4>
           <ul>
             <li>
-              <strong>Persistent storage</strong>: Default project is saved in
-              your user configuration
+              <strong>Persistent storage</strong>: Default project is saved as
+              <code>default_project</code> in <code>~/.azdocli/config.json</code>.
+              It survives <code>azdocli login</code>;
+              <code>azdocli logout</code> clears it along with the credentials
             </li>
             <li>
               <strong>Optional override</strong>: Use --project to override the
