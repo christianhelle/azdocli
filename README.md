@@ -1073,7 +1073,7 @@ azdocli boards sprint show
 azdocli boards sprint show --team "Web Team" -o json
 ```
 
-The `boards sprint capacity` command shows each member's capacity for the rest of the sprint against the remaining work assigned to them. Capacity counts the team's working days from today to the sprint's finish date, less team and personal days off; a ⚠️ marks members with more work than capacity. Remaining work assigned to someone without capacity, or to no one, is listed below the total.
+The `boards sprint capacity` command shows each member's capacity for the rest of the sprint against the remaining work assigned to them. Capacity counts the team's working days from today (your computer's local date) to the sprint's finish date, less team and personal days off; a ⚠️ marks members with more work than capacity. Remaining work assigned to someone without capacity, or to no one, is listed below the total.
 
 ```sh
 # Capacity left in the default team's current sprint
