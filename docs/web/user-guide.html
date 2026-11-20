@@ -274,8 +274,9 @@ azdocli boards work-item show --id 42 -o yaml</code></pre>
               <code>boards work-item link list</code>,
               <code>boards work-item link add</code>,
               <code>boards work-item link remove</code>,
-              <code>boards query</code> and
-              <code>boards sprint show</code>.
+              <code>boards query</code>,
+              <code>boards sprint show</code> and
+              <code>boards sprint capacity</code>.
               The other commands accept only <code>text</code> and fail with a
               clear error for any other format.
             </p>
@@ -1272,6 +1273,25 @@ azdocli boards sprint show
 
 # Another team's sprint, as JSON for scripts
 azdocli boards sprint show --team "Web Team" -o json</code></pre>
+          </div>
+
+          <p>
+            The boards sprint capacity command shows each member's capacity
+            for the rest of the sprint against the remaining work assigned to
+            them. Capacity counts the team's working days from today (your computer's local
+            date) to the sprint's finish date, less team and personal days off; a warning
+            marks members with more work than capacity. Remaining work
+            assigned to someone without capacity, or to no one, is listed
+            below the total.
+          </p>
+
+          <div class="command-example">
+            <h4>Show Sprint Capacity</h4>
+            <pre><code># Capacity left in the default team's current sprint
+azdocli boards sprint capacity
+
+# Another team's capacity, as JSON for scripts
+azdocli boards sprint capacity --team "Web Team" -o json</code></pre>
           </div>
         </div>
 
