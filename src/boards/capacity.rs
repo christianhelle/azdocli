@@ -196,10 +196,22 @@ impl<'a> CapacityOverview<'a> {
         // Days differ per member, so they do not add up.
         total[2] = String::new();
         rows.push(total);
-        rows.extend(self.plan.other_work.iter().map(|other| {
-            let name = match &other.assigned_to {
-                Some(name) => format!("{name} (no capacity)"),
-                None => "Unassigned".into(),
+        let others = &self.plan.other_work;
+        rows.extend(others.iter().map(|other| {
+            let shared = |name: &String| {
+                others
+                    .iter()
+                    .filter(|o| o.assigned_to.as_ref() == Some(name))
+                    .count()
+                    > 1
+            };
+            let name = match (&other.assigned_to, &other.unique_name) {
+                // People with the same name are told apart by unique name.
+                (Some(name), Some(unique_name)) if shared(name) => {
+                    format!("{name} <{unique_name}> (no capacity)")
+                }
+                (Some(name), _) => format!("{name} (no capacity)"),
+                (None, _) => "Unassigned".into(),
             };
             let blank = String::new;
             [
@@ -306,8 +318,11 @@ pub(super) struct MemberCapacity {
 #[derive(Serialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct OtherWork {
-    /// `None` for unassigned work.
+    /// The assignee's display name; `None` for unassigned work.
     pub assigned_to: Option<String>,
+    /// The assignee's unique name, which tells apart people with the same
+    /// display name.
+    pub unique_name: Option<String>,
     pub remaining_work: f64,
 }
 
@@ -390,11 +405,17 @@ pub(super) fn plan(members: &[Member], period: &Period, items: &[WorkItem]) -> C
             row.assigned += work;
             continue;
         }
-        let assigned_to = assignee.map(|(_, name)| name.to_string());
-        match other_work.iter_mut().find(|o| o.assigned_to == assigned_to) {
+        let unique_name = assignee.map(|(unique_name, _)| unique_name);
+        let same_person = |other: &&mut OtherWork| match (&other.unique_name, unique_name) {
+            (Some(a), Some(b)) => a.eq_ignore_ascii_case(b),
+            (None, None) => true,
+            _ => false,
+        };
+        match other_work.iter_mut().find(same_person) {
             Some(other) => other.remaining_work += work,
             None => other_work.push(OtherWork {
-                assigned_to,
+                assigned_to: assignee.map(|(_, name)| name.to_string()),
+                unique_name: unique_name.map(str::to_string),
                 remaining_work: work,
             }),
         }
@@ -583,15 +604,79 @@ mod tests {
                 other_work: vec![
                     OtherWork {
                         assigned_to: None,
+                        unique_name: None,
                         remaining_work: 2.5,
                     },
                     OtherWork {
                         assigned_to: Some("Eve".into()),
+                        unique_name: Some("eve@example.com".into()),
                         remaining_work: 1.0,
                     },
                 ],
             }
         );
+    }
+
+    fn item_for(id: i32, name: &str, unique_name: &str, remaining: f64) -> WorkItem {
+        let mut item = item(id, Some(name), remaining);
+        item.fields["System.AssignedTo"] =
+            serde_json::json!({"displayName": name, "uniqueName": unique_name});
+        item
+    }
+
+    #[test]
+    fn other_work_is_kept_apart_per_person_even_when_names_match() {
+        let period = Period {
+            from: date("2026-11-09"),
+            to: date("2026-11-09"),
+            weekdays: &WEEKDAYS,
+            team_days_off: &[],
+        };
+        let items = [
+            item_for(1, "Eve", "eve@one.com", 1.0),
+            item_for(2, "Eve", "eve@two.com", 2.0),
+            item_for(3, "Eve", "EVE@one.com", 4.0),
+        ];
+        let plan = plan(&[], &period, &items);
+        assert_eq!(
+            plan.other_work,
+            [
+                OtherWork {
+                    assigned_to: Some("Eve".into()),
+                    unique_name: Some("eve@one.com".into()),
+                    remaining_work: 5.0,
+                },
+                OtherWork {
+                    assigned_to: Some("Eve".into()),
+                    unique_name: Some("eve@two.com".into()),
+                    remaining_work: 2.0,
+                },
+            ]
+        );
+        let overview = CapacityOverview {
+            team: "Web Team",
+            iteration: SprintInfo {
+                name: "Sprint 3".into(),
+                path: "Proj\\Sprint 3".into(),
+                start_date: None,
+                finish_date: None,
+            },
+            from: period.from,
+            to: period.to,
+            working_days: 1,
+            total: MemberCapacity {
+                name: "Total".into(),
+                capacity_per_day: 0.0,
+                days: 0,
+                capacity: 0.0,
+                assigned: 0.0,
+                left: 0.0,
+            },
+            plan,
+        };
+        let text = rendered(|w| overview.text(w));
+        assert!(text.contains("Eve <eve@one.com> (no capacity)"), "{text}");
+        assert!(text.contains("Eve <eve@two.com> (no capacity)"), "{text}");
     }
 
     #[test]
