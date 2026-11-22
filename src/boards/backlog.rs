@@ -3,6 +3,7 @@
 use super::iteration::{self, WORK_ITEMS_PER_REQUEST};
 use super::{create_wit_client, create_work_client, EFFORT_FIELDS};
 use crate::auth::get_credentials;
+use crate::connection::Connection;
 use crate::output::{md_table, Render};
 use crate::text::escape_control_characters;
 use anyhow::{anyhow, bail, Result};
@@ -41,14 +42,14 @@ pub enum BacklogSubCommands {
 }
 
 pub(super) async fn handle_command(
-    conn: &super::Connection,
+    conn: &Connection,
     subcommand: &BacklogSubCommands,
     format: crate::output::OutputFormat,
 ) -> Result<()> {
     match subcommand {
         BacklogSubCommands::List { project, team, top } => {
             let project = crate::project::get_project_or_default(project.as_deref())?;
-            let team = team_or_default(&project, team.as_deref()).await?;
+            let team = team_or_default(conn, &project, team.as_deref()).await?;
             let mut items = backlog_items(conn, &project, &team).await?;
             if let Some(top) = top {
                 items.truncate(*top as usize);
@@ -58,16 +59,20 @@ pub(super) async fn handle_command(
     }
 }
 
-pub(super) async fn team_or_default(project: &str, team: Option<&str>) -> Result<String> {
+pub(super) async fn team_or_default(
+    conn: &Connection,
+    project: &str,
+    team: Option<&str>,
+) -> Result<String> {
     match team {
         Some(team) => Ok(team.to_string()),
-        None => iteration::default_team(project).await,
+        None => iteration::default_team(conn, project).await,
     }
 }
 
 /// The open work items on a team's requirement backlog, in backlog order.
 pub(super) async fn backlog_items(
-    conn: &super::Connection,
+    conn: &Connection,
     project: &str,
     team: &str,
 ) -> Result<Vec<WorkItem>> {
@@ -110,7 +115,7 @@ pub(super) async fn backlog_items(
 
 /// The finished states of every work item type in `items`, by state category.
 async fn finished_states(
-    conn: &super::Connection,
+    conn: &Connection,
     project: &str,
     items: &[WorkItem],
 ) -> Result<FinishedStates> {
@@ -346,14 +351,14 @@ impl Render for MoveResult<'_> {
 
 /// Moves work item `id` within the team's backlog, then reports its position.
 pub(super) async fn move_item(
-    conn: &super::Connection,
+    conn: &Connection,
     project: &str,
     team: Option<&str>,
     id: i32,
     placement: Placement,
     format: crate::output::OutputFormat,
 ) -> Result<()> {
-    let team = team_or_default(project, team).await?;
+    let team = team_or_default(conn, project, team).await?;
     let order: Vec<i32> = backlog_items(conn, project, &team)
         .await?
         .iter()

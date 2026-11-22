@@ -7,6 +7,7 @@ use super::{
 };
 use crate::auth::get_credentials;
 use crate::auth::url::api_work_item_url;
+use crate::connection::Connection;
 use crate::output::{self, md_table, OutputFormat, Render};
 use crate::project::get_project_or_default;
 use crate::text::escape_control_characters;
@@ -252,7 +253,7 @@ fn add_links_patch(
 }
 
 async fn add_links(
-    conn: &super::Connection,
+    conn: &Connection,
     project: &str,
     id: &str,
     link_type: LinkType,
@@ -353,7 +354,7 @@ pub(super) fn set_parent_ops(
 }
 
 async fn remove_links(
-    conn: &super::Connection,
+    conn: &Connection,
     project: &str,
     id: &str,
     targets: &[i32],
@@ -459,7 +460,7 @@ impl Render for LinkList {
 }
 
 pub async fn handle_command(
-    conn: &super::Connection,
+    conn: &Connection,
     subcommand: &LinkSubCommands,
     format: OutputFormat,
 ) -> Result<()> {

@@ -1400,7 +1400,9 @@ pub async fn handle_command(
             handle_work_item_command(conn, subcommand, format).await
         }
         BoardsSubCommands::Area { subcommand } => area::handle_command(subcommand).await,
-        BoardsSubCommands::Iteration { subcommand } => iteration::handle_command(subcommand).await,
+        BoardsSubCommands::Iteration { subcommand } => {
+            iteration::handle_command(conn, subcommand).await
+        }
         BoardsSubCommands::Sprint { subcommand } => {
             sprint::handle_command(conn, subcommand, format).await
         }
@@ -1502,6 +1504,7 @@ async fn handle_work_item_command(
             let parent_url = parent
                 .map(|id| api_work_item_url(&conn.credentials().base_url, conn.organization(), id));
             let iteration_path = iteration::resolve_iteration_path(
+                conn,
                 &project_name,
                 content.team.as_deref(),
                 iteration_path.as_deref(),
@@ -1798,6 +1801,7 @@ async fn handle_work_item_command(
                     completed_work: content.completed_work,
                     extra: content.fields.clone(),
                     iteration_path: iteration::resolve_iteration_path(
+                        conn,
                         &project_name,
                         content.team.as_deref(),
                         iteration_path.as_deref(),
