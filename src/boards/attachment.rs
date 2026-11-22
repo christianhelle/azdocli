@@ -1,11 +1,11 @@
 //! Work item attachments: uploading files to attach on create and update,
 //! and listing and downloading what is attached.
 
-use super::{add_relation_op, create_wit_client, parse_work_item_id};
-use crate::auth::{get_credentials, Credentials};
+use super::{add_relation_op, parse_work_item_id};
+use crate::auth::Credentials;
+use crate::connection::Connection;
 use crate::migrate::http_client;
 use crate::output::{self, md_table, OutputFormat, Render};
-use crate::project::get_project_or_default;
 use crate::text::escape_control_characters;
 use anyhow::{anyhow, bail, Context, Result};
 use azure_devops_rust_api::wit::models::{JsonPatchOperation, WorkItem};
@@ -115,6 +115,7 @@ pub(crate) fn attach_op(url: &str, name: &str) -> JsonPatchOperation {
 
 /// Uploads each file and returns the patch operations that attach them.
 pub(crate) async fn upload_all(
+    conn: &Connection,
     project: &str,
     paths: &[PathBuf],
     format: OutputFormat,
@@ -122,11 +123,10 @@ pub(crate) async fn upload_all(
     if paths.is_empty() {
         return Ok(Vec::new());
     }
-    let creds = get_credentials()?;
     let http = http_client::client();
     let mut ops = Vec::new();
     for path in paths {
-        let (name, url) = upload(&http, &creds, project, path).await?;
+        let (name, url) = upload(&http, conn.credentials(), project, path).await?;
         if format == OutputFormat::Text {
             println!("📎 Uploaded {name}");
         }
@@ -159,11 +159,11 @@ async fn upload(
     Ok((name, url))
 }
 
-async fn get_attachments(project: &str, id: &str) -> Result<Vec<Attachment>> {
-    let creds = get_credentials()?;
-    let work_item = create_wit_client()?
+async fn get_attachments(conn: &Connection, project: &str, id: &str) -> Result<Vec<Attachment>> {
+    let work_item = conn
+        .wit()
         .work_items_client()
-        .get_work_item(creds.organization, parse_work_item_id(id)?, project)
+        .get_work_item(conn.organization(), parse_work_item_id(id)?, project)
         .expand("relations")
         .await?;
     Ok(attachments(&work_item))
@@ -184,9 +184,14 @@ fn select<'a>(attachments: &'a [Attachment], name: Option<&str>) -> Result<Vec<&
     Ok(selected)
 }
 
-async fn download(project: &str, id: &str, name: Option<&str>, dir: &Path) -> Result<Vec<PathBuf>> {
-    let attachments = get_attachments(project, id).await?;
-    let creds = get_credentials()?;
+async fn download(
+    conn: &Connection,
+    project: &str,
+    id: &str,
+    name: Option<&str>,
+    dir: &Path,
+) -> Result<Vec<PathBuf>> {
+    let attachments = get_attachments(conn, project, id).await?;
     let http = http_client::client();
     tokio::fs::create_dir_all(dir)
         .await
@@ -195,11 +200,12 @@ async fn download(project: &str, id: &str, name: Option<&str>, dir: &Path) -> Re
     let mut saved = Vec::new();
     for attachment in select(&attachments, name)? {
         let target = dir.join(safe_file_name(&attachment.name)?);
-        let bytes = http_client::download_attachment(&http, &creds, project, &attachment.id)
-            .await?
-            .bytes()
-            .await
-            .with_context(|| format!("Failed to download '{}'", attachment.name))?;
+        let bytes =
+            http_client::download_attachment(&http, conn.credentials(), project, &attachment.id)
+                .await?
+                .bytes()
+                .await
+                .with_context(|| format!("Failed to download '{}'", attachment.name))?;
         save_new(&target, &bytes).await?;
         saved.push(target);
     }
@@ -270,13 +276,14 @@ impl Render for AttachmentList {
 }
 
 pub async fn handle_command(
+    conn: &Connection,
     subcommand: &AttachmentSubCommands,
     format: OutputFormat,
 ) -> Result<()> {
     match subcommand {
         AttachmentSubCommands::List { id, project } => {
-            let project_name = get_project_or_default(project.as_deref())?;
-            match get_attachments(&project_name, id).await {
+            let project_name = conn.project(project.as_deref())?;
+            match get_attachments(conn, &project_name, id).await {
                 Ok(attachments) => output::emit(&AttachmentList(attachments), format),
                 Err(e) => {
                     eprintln!("❌ Failed to list the attachments of work item {id}");
@@ -291,8 +298,8 @@ pub async fn handle_command(
             name,
             dir,
         } => {
-            let project_name = get_project_or_default(project.as_deref())?;
-            match download(&project_name, id, name.as_deref(), dir).await {
+            let project_name = conn.project(project.as_deref())?;
+            match download(conn, &project_name, id, name.as_deref(), dir).await {
                 Ok(saved) if saved.is_empty() => {
                     println!("No attachments found.");
                     Ok(())

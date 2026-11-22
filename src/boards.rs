@@ -1524,8 +1524,9 @@ async fn handle_work_item_command(
             };
 
             let mut patch = create_work_item_patch(&fields, parent_url.as_deref());
-            patch
-                .extend(attachment::upload_all(&project_name, &content.attachments, format).await?);
+            patch.extend(
+                attachment::upload_all(conn, &project_name, &content.attachments, format).await?,
+            );
 
             let work_item =
                 match create_work_item(conn, &project_name, &work_item_type, patch).await {
@@ -1716,7 +1717,7 @@ async fn handle_work_item_command(
             return handle_work_item_comment_command(conn, subcommand).await;
         }
         WorkItemSubCommands::Attachment { subcommand } => {
-            return attachment::handle_command(subcommand, format).await;
+            return attachment::handle_command(conn, subcommand, format).await;
         }
         WorkItemSubCommands::History {
             id,
@@ -1808,8 +1809,13 @@ async fn handle_work_item_command(
                 removed_tags: remove_tags,
                 effort: content.effort,
                 parent,
-                attachments: attachment::upload_all(&project_name, &content.attachments, format)
-                    .await?,
+                attachments: attachment::upload_all(
+                    conn,
+                    &project_name,
+                    &content.attachments,
+                    format,
+                )
+                .await?,
             };
 
             if let [id] = ids.as_slice() {
