@@ -252,7 +252,7 @@ async fn handle_project_command(
         } => {
             let project = conn.project(project.as_deref())?;
             let path = NodePath::parse_or_root(path.as_deref(), &project, GROUP);
-            classification::get_node(&project, GROUP, &path, Some(*depth))
+            classification::get_node(conn, &project, GROUP, &path, Some(*depth))
                 .await
                 .map(|node| classification::display_tree(GROUP, &node))
                 .map_err(|e| e.context("Failed to list iterations"))
@@ -260,7 +260,7 @@ async fn handle_project_command(
         IterationProjectSubCommands::Show { project, path } => {
             let project = conn.project(project.as_deref())?;
             let path = NodePath::parse(path, &project, GROUP);
-            classification::get_node(&project, GROUP, &path, None)
+            classification::get_node(conn, &project, GROUP, &path, None)
                 .await
                 .map(|node| classification::display_node(GROUP, &node))
                 .map_err(|e| e.context("Failed to show iteration"))
@@ -275,7 +275,9 @@ async fn handle_project_command(
             let project = conn.project(project.as_deref())?;
             let parent = NodePath::parse_or_root(path.as_deref(), &project, GROUP);
             let attributes = dates(*start_date, *finish_date)?;
-            match classification::create_node(&project, GROUP, &parent, name, attributes).await {
+            match classification::create_node(conn, &project, GROUP, &parent, name, attributes)
+                .await
+            {
                 Ok(node) => {
                     println!("{}", "✅ Iteration created successfully!".green());
                     classification::display_node(GROUP, &node);
@@ -291,7 +293,7 @@ async fn handle_project_command(
         } => {
             let project = conn.project(project.as_deref())?;
             let node_path = NodePath::parse(path, &project, GROUP);
-            classification::delete_node(&project, GROUP, &node_path, *reclassify_id)
+            classification::delete_node(conn, &project, GROUP, &node_path, *reclassify_id)
                 .await
                 .map(|_| {
                     println!(
@@ -312,15 +314,23 @@ async fn handle_project_command(
             let project = conn.project(project.as_deref())?;
             let node_path = NodePath::parse(path, &project, GROUP);
             let attributes = dates(*start_date, *finish_date)?;
-            update_iteration(&project, &node_path, name.as_deref(), *child_id, attributes)
-                .await
-                .map_err(|e| e.context("Failed to update iteration"))
+            update_iteration(
+                conn,
+                &project,
+                &node_path,
+                name.as_deref(),
+                *child_id,
+                attributes,
+            )
+            .await
+            .map_err(|e| e.context("Failed to update iteration"))
         }
     }
 }
 
 /// Moves `child_id` under the iteration first, since renaming changes its path.
 async fn update_iteration(
+    conn: &Connection,
     project: &str,
     path: &NodePath,
     name: Option<&str>,
@@ -328,7 +338,7 @@ async fn update_iteration(
     attributes: Option<serde_json::Value>,
 ) -> Result<()> {
     if let Some(child_id) = child_id {
-        classification::move_node(project, GROUP, path, child_id).await?;
+        classification::move_node(conn, project, GROUP, path, child_id).await?;
         println!(
             "{}",
             format!(
@@ -340,9 +350,9 @@ async fn update_iteration(
     }
 
     let node = if name.is_some() || attributes.is_some() {
-        classification::update_node(project, GROUP, path, name, attributes).await?
+        classification::update_node(conn, project, GROUP, path, name, attributes).await?
     } else {
-        classification::get_node(project, GROUP, path, None).await?
+        classification::get_node(conn, project, GROUP, path, None).await?
     };
 
     println!("{}", "✅ Iteration updated successfully!".green());
@@ -435,7 +445,8 @@ async fn handle_team_command(
                         id: id.clone(),
                         path: path.clone(),
                     };
-                    patch.default_iteration = Some(resolve_iteration_id(&project, &selector).await?)
+                    patch.default_iteration =
+                        Some(resolve_iteration_id(conn, &project, &selector).await?)
                 }
             }
             update_team_settings(conn, &project, team, patch)
@@ -471,7 +482,7 @@ async fn handle_team_command(
         } => {
             let project = conn.project(project.as_deref())?;
             let mut patch = TeamSettingsPatch::new();
-            patch.backlog_iteration = Some(resolve_iteration_id(&project, iteration).await?);
+            patch.backlog_iteration = Some(resolve_iteration_id(conn, &project, iteration).await?);
             update_team_settings(conn, &project, team, patch)
                 .await
                 .map(|settings| {
@@ -492,7 +503,11 @@ async fn handle_team_command(
 
 /// The team settings APIs know iterations only by their identifier, so a path
 /// is looked up first.
-async fn resolve_iteration_id(project: &str, selector: &IterationSelector) -> Result<String> {
+async fn resolve_iteration_id(
+    conn: &Connection,
+    project: &str,
+    selector: &IterationSelector,
+) -> Result<String> {
     if let Some(id) = &selector.id {
         return Ok(id.clone());
     }
@@ -501,10 +516,16 @@ async fn resolve_iteration_id(project: &str, selector: &IterationSelector) -> Re
         .path
         .as_deref()
         .ok_or_else(|| anyhow!("Either --id or --path is required"))?;
-    classification::get_node(project, GROUP, &NodePath::parse(path, project, GROUP), None)
-        .await?
-        .identifier
-        .ok_or_else(|| anyhow!("Iteration '{path}' has no identifier"))
+    classification::get_node(
+        conn,
+        project,
+        GROUP,
+        &NodePath::parse(path, project, GROUP),
+        None,
+    )
+    .await?
+    .identifier
+    .ok_or_else(|| anyhow!("Iteration '{path}' has no identifier"))
 }
 
 /// The `--iteration` value that stands for a team's current sprint.
@@ -598,7 +619,7 @@ async fn add_team_iteration(
     selector: &IterationSelector,
 ) -> Result<TeamSettingsIteration> {
     let mut iteration = TeamSettingsIteration::new();
-    iteration.id = Some(resolve_iteration_id(project, selector).await?);
+    iteration.id = Some(resolve_iteration_id(conn, project, selector).await?);
 
     Ok(conn
         .work()
@@ -613,7 +634,7 @@ async fn remove_team_iteration(
     team: &str,
     selector: &IterationSelector,
 ) -> Result<()> {
-    let id = resolve_iteration_id(project, selector).await?;
+    let id = resolve_iteration_id(conn, project, selector).await?;
 
     conn.work()
         .iterations_client()
@@ -628,7 +649,7 @@ async fn list_iteration_work_items(
     team: &str,
     selector: &IterationSelector,
 ) -> Result<()> {
-    let id = resolve_iteration_id(project, selector).await?;
+    let id = resolve_iteration_id(conn, project, selector).await?;
     let work_items = iteration_work_items(conn, project, team, &id).await?;
 
     let heading = "Iteration Work Items";

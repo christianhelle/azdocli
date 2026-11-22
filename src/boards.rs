@@ -621,12 +621,6 @@ pub(super) fn create_wit_client() -> Result<wit::Client> {
     Ok(factory.build_wit())
 }
 
-pub(super) fn create_work_client() -> Result<azure_devops_rust_api::work::Client> {
-    let creds = get_credentials()?;
-    let factory = CredentialClientFactory::new(&creds)?;
-    Ok(factory.build_work())
-}
-
 async fn get_work_item(conn: &Connection, project: &str, id: &str) -> Result<models::WorkItem> {
     let id_int = parse_work_item_id(id)?;
 
@@ -1399,7 +1393,7 @@ pub async fn handle_command(
         BoardsSubCommands::WorkItem { subcommand } => {
             handle_work_item_command(conn, subcommand, format).await
         }
-        BoardsSubCommands::Area { subcommand } => area::handle_command(subcommand).await,
+        BoardsSubCommands::Area { subcommand } => area::handle_command(conn, subcommand).await,
         BoardsSubCommands::Iteration { subcommand } => {
             iteration::handle_command(conn, subcommand).await
         }
