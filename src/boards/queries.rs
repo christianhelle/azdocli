@@ -1,8 +1,7 @@
 //! Saved (shared and personal) work item queries.
 
-use super::create_wit_client;
-use crate::auth::get_credentials;
 use crate::auth::url::percent_encode_path_segment;
+use crate::connection::Connection;
 use crate::output::{md_table, Render};
 use crate::text::escape_control_characters;
 use anyhow::{bail, Context, Result};
@@ -152,11 +151,15 @@ impl Render for QueryList {
 }
 
 /// Lists the saved queries of a project, `depth` levels below the roots.
-pub(super) async fn list_queries(project: &str, depth: i32) -> Result<QueryList> {
-    let creds = get_credentials()?;
-    let roots = create_wit_client()?
+pub(super) async fn list_queries(
+    conn: &Connection,
+    project: &str,
+    depth: i32,
+) -> Result<QueryList> {
+    let roots = conn
+        .wit()
         .queries_client()
-        .list(creds.organization.clone(), project)
+        .list(conn.organization(), project)
         .depth(depth)
         .await
         .context("Failed to list saved queries")?
@@ -167,11 +170,15 @@ pub(super) async fn list_queries(project: &str, depth: i32) -> Result<QueryList>
 }
 
 /// The WIQL of the saved query at `path_or_id`.
-pub(super) async fn saved_query_wiql(project: &str, path_or_id: &str) -> Result<String> {
-    let creds = get_credentials()?;
-    let item = create_wit_client()?
+pub(super) async fn saved_query_wiql(
+    conn: &Connection,
+    project: &str,
+    path_or_id: &str,
+) -> Result<String> {
+    let item = conn
+        .wit()
         .queries_client()
-        .get(creds.organization.clone(), project, route(path_or_id))
+        .get(conn.organization(), project, route(path_or_id))
         .expand("wiql")
         .await
         .with_context(|| {

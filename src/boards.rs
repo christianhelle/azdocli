@@ -1,13 +1,11 @@
-use crate::auth::factory::{ClientFactory, CredentialClientFactory};
-use crate::auth::get_credentials;
 use crate::auth::url::{api_work_item_url, web_work_item_url};
 use crate::connection::Connection;
 use crate::output::{self, OutputFormat};
 use crate::text::escape_control_characters;
 use anyhow::{anyhow, Result};
+use azure_devops_rust_api::wit::models;
 use azure_devops_rust_api::wit::models::json_patch_operation::Op;
 use azure_devops_rust_api::wit::models::JsonPatchOperation;
-use azure_devops_rust_api::wit::{self, models};
 use clap::{Args, Subcommand};
 use colored::Colorize;
 use serde_json::json;
@@ -613,12 +611,6 @@ fn display_work_item_comments(comments: &[models::Comment]) {
 fn parse_work_item_id(id: &str) -> Result<i32> {
     id.parse::<i32>()
         .map_err(|_| anyhow!("Invalid work item ID '{id}', must be a number"))
-}
-
-pub(super) fn create_wit_client() -> Result<wit::Client> {
-    let creds = get_credentials()?;
-    let factory = CredentialClientFactory::new(&creds)?;
-    Ok(factory.build_wit())
 }
 
 async fn get_work_item(conn: &Connection, project: &str, id: &str) -> Result<models::WorkItem> {
@@ -1405,7 +1397,10 @@ pub async fn handle_command(
         }
         BoardsSubCommands::Queries { project, depth } => {
             let project_name = conn.project(project.as_deref())?;
-            output::emit(&queries::list_queries(&project_name, *depth).await?, format)
+            output::emit(
+                &queries::list_queries(conn, &project_name, *depth).await?,
+                format,
+            )
         }
         BoardsSubCommands::Query {
             wiql,
@@ -1416,7 +1411,9 @@ pub async fn handle_command(
             let project_name = conn.project(project.as_deref())?;
             let wiql = match (wiql, saved) {
                 (Some(wiql), _) => wiql.clone(),
-                (None, Some(saved)) => queries::saved_query_wiql(&project_name, saved).await?,
+                (None, Some(saved)) => {
+                    queries::saved_query_wiql(conn, &project_name, saved).await?
+                }
                 (None, None) => return Err(anyhow!("Provide --wiql or --saved")),
             };
             match run_wiql_query(conn, &project_name, &wiql, *limit).await {
