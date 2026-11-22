@@ -7,7 +7,6 @@ use super::views::WorkItemList;
 use super::EFFORT_FIELDS;
 use crate::connection::Connection;
 use crate::output::{self, md_table, OutputFormat, Render};
-use crate::project::get_project_or_default;
 use crate::text::escape_control_characters;
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::wit::models::WorkItem;
@@ -89,7 +88,7 @@ pub(super) async fn handle_command(
 ) -> Result<()> {
     match subcommand {
         SprintSubCommands::Show { project, team } => {
-            let project = get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let (team, current) =
                 iteration::current_iteration(conn, &project, team.as_deref()).await?;
             let id = current.id.clone().unwrap_or_default();
@@ -99,7 +98,7 @@ pub(super) async fn handle_command(
             output::emit(&SprintOverview::new(&team, info, &items), format)
         }
         SprintSubCommands::Capacity { project, team } => {
-            let project = get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let (team, current) =
                 iteration::current_iteration(conn, &project, team.as_deref()).await?;
             show_capacity(conn, &project, &team, &current, format).await
@@ -112,17 +111,17 @@ pub(super) async fn handle_command(
             activity,
             days_off,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let (team, current) =
                 iteration::current_iteration(conn, &project, team.as_deref()).await?;
             let member = super::resolve_assignee(conn, Some(member))
                 .await?
                 .unwrap_or_default();
-            let members = capacity::team_members(&project, &team).await?;
+            let members = capacity::team_members(conn, &project, &team).await?;
             let member = capacity::find_member(&members, &member, &team)?;
             let id = current.id.clone().unwrap_or_default();
             let patch = capacity::capacity_patch(*per_day, activity.as_deref(), days_off);
-            capacity::set_member_capacity(&project, &team, &id, &member.id, patch).await?;
+            capacity::set_member_capacity(conn, &project, &team, &id, &member.id, patch).await?;
             if format == OutputFormat::Text {
                 println!(
                     "✅ Set the capacity of {} in {}\n",
@@ -137,11 +136,11 @@ pub(super) async fn handle_command(
             team,
             days_off,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let (team, current) =
                 iteration::current_iteration(conn, &project, team.as_deref()).await?;
             let id = current.id.clone().unwrap_or_default();
-            capacity::set_team_days_off(&project, &team, &id, days_off).await?;
+            capacity::set_team_days_off(conn, &project, &team, &id, days_off).await?;
             if format == OutputFormat::Text {
                 println!(
                     "✅ Set the days off of team {} in {}\n",
@@ -174,7 +173,7 @@ async fn show_capacity(
         ));
     };
     let id = current.id.clone().unwrap_or_default();
-    let settings = capacity::team_capacity(project, team, &id).await?;
+    let settings = capacity::team_capacity(conn, project, team, &id).await?;
     let items = iteration::iteration_work_items(conn, project, team, &id).await?;
     // Only the days still ahead count, today included, by the local
     // calendar so a working day is not dropped early.
