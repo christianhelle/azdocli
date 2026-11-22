@@ -252,6 +252,7 @@ fn add_links_patch(
 }
 
 async fn add_links(
+    conn: &super::Connection,
     project: &str,
     id: &str,
     link_type: LinkType,
@@ -267,7 +268,7 @@ async fn add_links(
         target_url,
         comment,
     )?;
-    let updated = update_work_item(project, id, patch).await?;
+    let updated = update_work_item(conn, project, id, patch).await?;
     let added = links(&updated)
         .into_iter()
         .filter(|link| link.link_type == link_type && targets.contains(&link.id))
@@ -352,6 +353,7 @@ pub(super) fn set_parent_ops(
 }
 
 async fn remove_links(
+    conn: &super::Connection,
     project: &str,
     id: &str,
     targets: &[i32],
@@ -364,7 +366,7 @@ async fn remove_links(
         .expand("relations")
         .await?;
     let (patch, removed) = remove_links_patch(&work_item, targets, link_type)?;
-    update_work_item(project, id, patch).await?;
+    update_work_item(conn, project, id, patch).await?;
     with_details(project, removed).await
 }
 
@@ -456,7 +458,11 @@ impl Render for LinkList {
     }
 }
 
-pub async fn handle_command(subcommand: &LinkSubCommands, format: OutputFormat) -> Result<()> {
+pub async fn handle_command(
+    conn: &super::Connection,
+    subcommand: &LinkSubCommands,
+    format: OutputFormat,
+) -> Result<()> {
     match subcommand {
         LinkSubCommands::List { id, project } => {
             let project_name = get_project_or_default(project.as_deref())?;
@@ -477,7 +483,16 @@ pub async fn handle_command(subcommand: &LinkSubCommands, format: OutputFormat) 
             project,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
-            match add_links(&project_name, id, *link_type, targets, comment.as_deref()).await {
+            match add_links(
+                conn,
+                &project_name,
+                id,
+                *link_type,
+                targets,
+                comment.as_deref(),
+            )
+            .await
+            {
                 Ok(added) if format == OutputFormat::Text => {
                     for link in &added {
                         println!("🔗 #{} is now {} #{id}", link.id, link_type.role());
@@ -500,7 +515,7 @@ pub async fn handle_command(subcommand: &LinkSubCommands, format: OutputFormat) 
             project,
         } => {
             let project_name = get_project_or_default(project.as_deref())?;
-            match remove_links(&project_name, id, targets, *link_type).await {
+            match remove_links(conn, &project_name, id, targets, *link_type).await {
                 Ok(removed) if format == OutputFormat::Text => {
                     for link in &removed {
                         println!(

@@ -41,6 +41,7 @@ pub enum BacklogSubCommands {
 }
 
 pub(super) async fn handle_command(
+    conn: &super::Connection,
     subcommand: &BacklogSubCommands,
     format: crate::output::OutputFormat,
 ) -> Result<()> {
@@ -48,7 +49,7 @@ pub(super) async fn handle_command(
         BacklogSubCommands::List { project, team, top } => {
             let project = crate::project::get_project_or_default(project.as_deref())?;
             let team = team_or_default(&project, team.as_deref()).await?;
-            let mut items = backlog_items(&project, &team).await?;
+            let mut items = backlog_items(conn, &project, &team).await?;
             if let Some(top) = top {
                 items.truncate(*top as usize);
             }
@@ -65,7 +66,11 @@ pub(super) async fn team_or_default(project: &str, team: Option<&str>) -> Result
 }
 
 /// The open work items on a team's requirement backlog, in backlog order.
-pub(super) async fn backlog_items(project: &str, team: &str) -> Result<Vec<WorkItem>> {
+pub(super) async fn backlog_items(
+    conn: &super::Connection,
+    project: &str,
+    team: &str,
+) -> Result<Vec<WorkItem>> {
     let creds = get_credentials()?;
     let links = create_work_client()?
         .backlogs_client()
@@ -99,12 +104,16 @@ pub(super) async fn backlog_items(project: &str, team: &str) -> Result<Vec<WorkI
                 .value,
         );
     }
-    let finished = finished_states(project, &fetched).await?;
+    let finished = finished_states(conn, project, &fetched).await?;
     Ok(in_backlog_order(&ids, fetched, &finished))
 }
 
 /// The finished states of every work item type in `items`, by state category.
-async fn finished_states(project: &str, items: &[WorkItem]) -> Result<FinishedStates> {
+async fn finished_states(
+    conn: &super::Connection,
+    project: &str,
+    items: &[WorkItem],
+) -> Result<FinishedStates> {
     let mut types: Vec<&str> = items
         .iter()
         .filter_map(|item| field_str(item, "System.WorkItemType"))
@@ -113,7 +122,7 @@ async fn finished_states(project: &str, items: &[WorkItem]) -> Result<FinishedSt
     types.dedup();
     let mut finished = FinishedStates::new();
     for work_item_type in types {
-        for state in super::list_work_item_states(project, work_item_type).await? {
+        for state in super::list_work_item_states(conn, project, work_item_type).await? {
             let category = state.category.as_deref().unwrap_or_default();
             if FINISHED_CATEGORIES
                 .iter()
@@ -337,6 +346,7 @@ impl Render for MoveResult<'_> {
 
 /// Moves work item `id` within the team's backlog, then reports its position.
 pub(super) async fn move_item(
+    conn: &super::Connection,
     project: &str,
     team: Option<&str>,
     id: i32,
@@ -344,7 +354,7 @@ pub(super) async fn move_item(
     format: crate::output::OutputFormat,
 ) -> Result<()> {
     let team = team_or_default(project, team).await?;
-    let order: Vec<i32> = backlog_items(project, &team)
+    let order: Vec<i32> = backlog_items(conn, project, &team)
         .await?
         .iter()
         .map(|item| item.id)
@@ -361,7 +371,7 @@ pub(super) async fn move_item(
         .reorder_backlog_work_items(creds.organization, body, project, &team)
         .await
         .map_err(|e| anyhow!("Failed to move work item {id}: {e}"))?;
-    let items = backlog_items(project, &team).await?;
+    let items = backlog_items(conn, project, &team).await?;
     let index = items
         .iter()
         .position(|item| item.id == id)

@@ -82,6 +82,7 @@ pub enum SprintSubCommands {
 }
 
 pub(super) async fn handle_command(
+    conn: &super::Connection,
     subcommand: &SprintSubCommands,
     format: OutputFormat,
 ) -> Result<()> {
@@ -110,7 +111,7 @@ pub(super) async fn handle_command(
         } => {
             let project = get_project_or_default(project.as_deref())?;
             let (team, current) = iteration::current_iteration(&project, team.as_deref()).await?;
-            let member = super::resolve_assignee(Some(member))
+            let member = super::resolve_assignee(conn, Some(member))
                 .await?
                 .unwrap_or_default();
             let members = capacity::team_members(&project, &team).await?;
