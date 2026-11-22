@@ -2881,4 +2881,44 @@ mod tests {
         assert!(!query.contains("[System.AssignedTo] ="));
         assert!(query.contains("[System.State] = 'Active'"));
     }
+
+    #[tokio::test]
+    async fn get_work_item_requests_the_work_item_from_the_connection_endpoint() {
+        use wiremock::matchers::method;
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": 42,
+                "rev": 1,
+                "fields": { "System.Title": "Stubbed title" },
+                "url": "http://example.invalid/_apis/wit/workItems/42"
+            })))
+            .mount(&server)
+            .await;
+        let conn = Connection::new(
+            crate::auth::Credentials {
+                organization: "contoso".to_string(),
+                pat: "secret-pat".to_string(),
+                base_url: server.uri(),
+            },
+            None,
+        )
+        .unwrap();
+
+        let work_item = get_work_item(&conn, "Fabrikam", "42").await.unwrap();
+
+        assert_eq!(work_item.id, 42);
+        assert_eq!(work_item.fields["System.Title"], "Stubbed title");
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(
+            // The SDK prefixes the organization with an extra slash.
+            requests[0].url.path().trim_start_matches('/'),
+            "contoso/Fabrikam/_apis/wit/workitems/42"
+        );
+        let auth = requests[0].headers.get("authorization").unwrap();
+        assert!(auth.to_str().unwrap().starts_with("Basic "));
+    }
 }
