@@ -1,8 +1,7 @@
 //! A team's product backlog in backlog order, and moving items within it.
 
 use super::iteration::{self, WORK_ITEMS_PER_REQUEST};
-use super::{create_wit_client, create_work_client, EFFORT_FIELDS};
-use crate::auth::get_credentials;
+use super::EFFORT_FIELDS;
 use crate::connection::Connection;
 use crate::output::{md_table, Render};
 use crate::text::escape_control_characters;
@@ -48,7 +47,7 @@ pub(super) async fn handle_command(
 ) -> Result<()> {
     match subcommand {
         BacklogSubCommands::List { project, team, top } => {
-            let project = crate::project::get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let team = team_or_default(conn, &project, team.as_deref()).await?;
             let mut items = backlog_items(conn, &project, &team).await?;
             if let Some(top) = top {
@@ -76,15 +75,10 @@ pub(super) async fn backlog_items(
     project: &str,
     team: &str,
 ) -> Result<Vec<WorkItem>> {
-    let creds = get_credentials()?;
-    let links = create_work_client()?
+    let links = conn
+        .work()
         .backlogs_client()
-        .get_backlog_level_work_items(
-            creds.organization.clone(),
-            project,
-            team,
-            REQUIREMENT_BACKLOG,
-        )
+        .get_backlog_level_work_items(conn.organization(), project, team, REQUIREMENT_BACKLOG)
         .await
         .map_err(|e| anyhow!("Failed to get the backlog of team '{team}': {e}"))?
         .work_items;
@@ -93,7 +87,7 @@ pub(super) async fn backlog_items(
         .filter_map(|link| link.target.as_ref()?.id)
         .collect();
 
-    let client = create_wit_client()?;
+    let client = conn.wit();
     let mut fetched = Vec::with_capacity(ids.len());
     for chunk in ids.chunks(WORK_ITEMS_PER_REQUEST) {
         let chunk = chunk
@@ -104,7 +98,7 @@ pub(super) async fn backlog_items(
         fetched.extend(
             client
                 .work_items_client()
-                .list(creds.organization.clone(), chunk, project)
+                .list(conn.organization(), chunk, project)
                 .await?
                 .value,
         );
@@ -365,15 +359,14 @@ pub(super) async fn move_item(
         .map(|item| item.id)
         .collect();
     let (previous, next) = neighbours(&order, id, placement)?;
-    let creds = get_credentials()?;
     let mut body = ReorderOperation::new();
     body.ids = vec![id];
     body.previous_id = Some(previous);
     body.next_id = Some(next);
     body.parent_id = Some(0);
-    create_work_client()?
+    conn.work()
         .workitemsorder_client()
-        .reorder_backlog_work_items(creds.organization, body, project, &team)
+        .reorder_backlog_work_items(conn.organization(), body, project, &team)
         .await
         .map_err(|e| anyhow!("Failed to move work item {id}: {e}"))?;
     let items = backlog_items(conn, project, &team).await?;
