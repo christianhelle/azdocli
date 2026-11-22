@@ -282,7 +282,8 @@ async fn main() -> anyhow::Result<()> {
             pipelines::handle_command(subcommand, cli.output).await?;
         }
         Some(Commands::Boards { subcommand }) => {
-            boards::handle_command(subcommand, cli.output).await?;
+            let conn = connection::Connection::load()?;
+            boards::handle_command(&conn, subcommand, cli.output).await?;
         }
         Some(Commands::Artifacts { subcommand }) => {
             artifacts::handle_command(subcommand).await?;

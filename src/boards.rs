@@ -1,6 +1,7 @@
 use crate::auth::factory::{ClientFactory, CredentialClientFactory};
 use crate::auth::get_credentials;
 use crate::auth::url::{api_work_item_url, web_work_item_url};
+use crate::connection::Connection;
 use crate::output::{self, OutputFormat};
 use crate::project::get_project_or_default;
 use crate::text::escape_control_characters;
@@ -1386,8 +1387,11 @@ pub(crate) fn display_empty_work_items_table(heading: &str) {
     display_work_items_list(heading, &[]);
 }
 
-pub async fn handle_command(subcommand: &BoardsSubCommands, format: OutputFormat) -> Result<()> {
-    let _credentials = get_credentials()?;
+pub async fn handle_command(
+    _conn: &Connection,
+    subcommand: &BoardsSubCommands,
+    format: OutputFormat,
+) -> Result<()> {
     match subcommand {
         BoardsSubCommands::WorkItem { subcommand } => {
             handle_work_item_command(subcommand, format).await
