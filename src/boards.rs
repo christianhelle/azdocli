@@ -1731,7 +1731,7 @@ async fn handle_work_item_command(
             top,
         } => {
             let project = conn.project(project.as_deref())?;
-            return history::show(id, &project, fields, *top, format).await;
+            return history::show(conn, id, &project, fields, *top, format).await;
         }
         WorkItemSubCommands::Move {
             id,

@@ -1,8 +1,8 @@
 //! A work item's change history: who changed which field, from what to what,
 //! and when.
 
-use super::{create_wit_client, parse_work_item_id};
-use crate::auth::get_credentials;
+use super::parse_work_item_id;
+use crate::connection::Connection;
 use crate::output::{self, md_table, OutputFormat, Render};
 use crate::text::escape_control_characters;
 use anyhow::Result;
@@ -383,14 +383,13 @@ impl Render for History {
 }
 
 /// Every update of the work item, oldest first, fetched page by page.
-async fn fetch_updates(project: &str, id: i32) -> Result<Vec<WorkItemUpdate>> {
-    let creds = get_credentials()?;
-    let client = create_wit_client()?;
+async fn fetch_updates(conn: &Connection, project: &str, id: i32) -> Result<Vec<WorkItemUpdate>> {
+    let client = conn.wit();
     let mut all = Vec::new();
     loop {
         let page = client
             .updates_client()
-            .list(creds.organization.clone(), id, project)
+            .list(conn.organization(), id, project)
             .top(PAGE_SIZE)
             .skip(all.len() as i32)
             .await?
@@ -404,6 +403,7 @@ async fn fetch_updates(project: &str, id: i32) -> Result<Vec<WorkItemUpdate>> {
 }
 
 pub async fn show(
+    conn: &Connection,
     id: &str,
     project: &str,
     fields: &[String],
@@ -412,7 +412,7 @@ pub async fn show(
 ) -> Result<()> {
     let result = async {
         let work_item_id = parse_work_item_id(id)?;
-        let updates = fetch_updates(project, work_item_id).await?;
+        let updates = fetch_updates(conn, project, work_item_id).await?;
         Ok::<_, anyhow::Error>(History {
             work_item_id,
             updates: build_entries(&updates, fields, top),
