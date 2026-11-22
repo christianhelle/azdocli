@@ -11,6 +11,7 @@ mod auth;
 mod boards;
 mod browser;
 mod config;
+mod connection;
 mod migrate;
 mod output;
 mod pipelines;

@@ -191,7 +191,8 @@ fn write_organization_file(path: &Path, organization: &str) -> Result<()> {
     Ok(())
 }
 
-fn get_organization() -> Result<String> {
+/// Reads config.json, failing with the "not logged in" error when it is missing.
+fn read_config() -> Result<serde_json::Value> {
     let config_dir = get_config_dir()?;
     let config_file = config_dir.join("config.json");
 
@@ -202,14 +203,20 @@ fn get_organization() -> Result<String> {
     }
 
     let config_content = fs::read_to_string(config_file)?;
-    let config: serde_json::Value = serde_json::from_str(&config_content)?;
+    Ok(serde_json::from_str(&config_content)?)
+}
 
+fn organization_from_config(config: &serde_json::Value) -> Result<String> {
     let organization = config["organization"]
         .as_str()
         .ok_or_else(|| anyhow!("Invalid config file format"))?
         .to_string();
 
     Ok(organization)
+}
+
+fn get_organization() -> Result<String> {
+    organization_from_config(&read_config()?)
 }
 
 fn get_credentials_file_path() -> Result<PathBuf> {
@@ -433,6 +440,24 @@ pub fn get_credentials() -> Result<Credentials> {
         pat: stored.pat,
         base_url: stored.base_url,
     })
+}
+
+/// Load the default-profile credentials together with the configured default
+/// project, reading config.json only once.
+pub(crate) fn get_credentials_and_default_project() -> Result<(Credentials, Option<String>)> {
+    let config = read_config()?;
+    let organization = organization_from_config(&config)?;
+    let stored = get_stored_credentials()?;
+    let default_project = config["default_project"].as_str().map(str::to_string);
+
+    Ok((
+        Credentials {
+            organization,
+            pat: stored.pat,
+            base_url: stored.base_url,
+        },
+        default_project,
+    ))
 }
 
 fn get_stored_credentials() -> Result<Credentials> {
