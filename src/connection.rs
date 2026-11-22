@@ -10,7 +10,6 @@ pub struct Connection {
     factory: CredentialClientFactory,
 }
 
-#[allow(dead_code)]
 impl Connection {
     /// Reads config.json and credentials.json once.
     pub fn load() -> Result<Self> {
