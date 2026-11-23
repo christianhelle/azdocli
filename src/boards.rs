@@ -544,7 +544,20 @@ async fn list_work_item_comments(
         request = request.top(top);
     }
 
-    Ok(request.await?.comments)
+    let response = request.send().await?.into_raw_response();
+    parse_comment_list(&response.into_body())
+}
+
+/// Azure DevOps omits `url` for empty comment lists, which the SDK's
+/// `CommentList` requires, so only deserialize the comments.
+fn parse_comment_list(body: &[u8]) -> Result<Vec<models::Comment>> {
+    #[derive(serde::Deserialize)]
+    struct LenientCommentList {
+        #[serde(default)]
+        comments: Vec<models::Comment>,
+    }
+
+    Ok(serde_json::from_slice::<LenientCommentList>(body)?.comments)
 }
 
 async fn add_work_item_comment(project: &str, id: &str, message: &str) -> Result<models::Comment> {
@@ -1847,6 +1860,23 @@ async fn handle_work_item_command(
 mod tests {
     use super::*;
     use clap::Parser;
+
+    #[test]
+    fn parse_comment_list_accepts_empty_body_without_url() {
+        let body = br#"{"totalCount":0,"count":0,"comments":[]}"#;
+
+        assert!(parse_comment_list(body).unwrap().is_empty());
+    }
+
+    #[test]
+    fn parse_comment_list_returns_comments() {
+        let body = br#"{"totalCount":1,"count":1,"comments":[{"id":7,"text":"hi","url":"u"}]}"#;
+
+        let comments = parse_comment_list(body).unwrap();
+
+        assert_eq!(comments.len(), 1);
+        assert_eq!(comments[0].text.as_deref(), Some("hi"));
+    }
 
     #[derive(Parser)]
     struct TestCli {
