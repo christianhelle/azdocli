@@ -3,6 +3,13 @@
 ## [Unreleased Changes]
 
 ### Features
+- Resolve the Azure DevOps Connection once for boards commands ([#166](https://github.com/christianhelle/azdocli/pull/166)) ([@christianhelle](https://github.com/christianhelle/))
+- Fix comment list failing on work items with no comments ([#167](https://github.com/christianhelle/azdocli/pull/167)) ([@christianhelle](https://github.com/christianhelle/))
+
+
+## [0.8.0](https://github.com/christianhelle/azdocli/releases/tag/0.8.0) (2026-11-21)
+
+### Features
 - Add saved work item queries ([#165](https://github.com/christianhelle/azdocli/pull/165)) ([@christianhelle](https://github.com/christianhelle/))
 - Add work item history command ([#164](https://github.com/christianhelle/azdocli/pull/164)) ([@christianhelle](https://github.com/christianhelle/))
 - Keep default project when logging in again ([#150](https://github.com/christianhelle/azdocli/pull/150)) ([@christianhelle](https://github.com/christianhelle/))
@@ -17,6 +24,9 @@
 - Support Scrum work item types, acceptance criteria, tags, fields and attachments ([#155](https://github.com/christianhelle/azdocli/pull/155)) ([@christianhelle](https://github.com/christianhelle/))
 - Add PowerShell WinGet script and fix manifest validation ([#152](https://github.com/christianhelle/azdocli/pull/152)) ([@christianhelle](https://github.com/christianhelle/))
 - Set up WinGet distribution ([#151](https://github.com/christianhelle/azdocli/pull/151)) ([@christianhelle](https://github.com/christianhelle/))
+
+### Closed Issues
+- Support Scrum process: Product Backlog Item type, acceptance criteria, tags and attachments on work items ([#154](https://github.com/christianhelle/azdocli/issues/154)) ([@heyjoakim](https://github.com/heyjoakim/))
 
 
 ## [0.7.0](https://github.com/christianhelle/azdocli/releases/tag/0.7.0) (2026-11-17)
