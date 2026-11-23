@@ -1,8 +1,8 @@
 //! A team's product backlog in backlog order, and moving items within it.
 
 use super::iteration::{self, WORK_ITEMS_PER_REQUEST};
-use super::{create_wit_client, create_work_client, EFFORT_FIELDS};
-use crate::auth::get_credentials;
+use super::EFFORT_FIELDS;
+use crate::connection::Connection;
 use crate::output::{md_table, Render};
 use crate::text::escape_control_characters;
 use anyhow::{anyhow, bail, Result};
@@ -41,14 +41,15 @@ pub enum BacklogSubCommands {
 }
 
 pub(super) async fn handle_command(
+    conn: &Connection,
     subcommand: &BacklogSubCommands,
     format: crate::output::OutputFormat,
 ) -> Result<()> {
     match subcommand {
         BacklogSubCommands::List { project, team, top } => {
-            let project = crate::project::get_project_or_default(project.as_deref())?;
-            let team = team_or_default(&project, team.as_deref()).await?;
-            let mut items = backlog_items(&project, &team).await?;
+            let project = conn.project(project.as_deref())?;
+            let team = team_or_default(conn, &project, team.as_deref()).await?;
+            let mut items = backlog_items(conn, &project, &team).await?;
             if let Some(top) = top {
                 items.truncate(*top as usize);
             }
@@ -57,24 +58,27 @@ pub(super) async fn handle_command(
     }
 }
 
-pub(super) async fn team_or_default(project: &str, team: Option<&str>) -> Result<String> {
+pub(super) async fn team_or_default(
+    conn: &Connection,
+    project: &str,
+    team: Option<&str>,
+) -> Result<String> {
     match team {
         Some(team) => Ok(team.to_string()),
-        None => iteration::default_team(project).await,
+        None => iteration::default_team(conn, project).await,
     }
 }
 
 /// The open work items on a team's requirement backlog, in backlog order.
-pub(super) async fn backlog_items(project: &str, team: &str) -> Result<Vec<WorkItem>> {
-    let creds = get_credentials()?;
-    let links = create_work_client()?
+pub(super) async fn backlog_items(
+    conn: &Connection,
+    project: &str,
+    team: &str,
+) -> Result<Vec<WorkItem>> {
+    let links = conn
+        .work()
         .backlogs_client()
-        .get_backlog_level_work_items(
-            creds.organization.clone(),
-            project,
-            team,
-            REQUIREMENT_BACKLOG,
-        )
+        .get_backlog_level_work_items(conn.organization(), project, team, REQUIREMENT_BACKLOG)
         .await
         .map_err(|e| anyhow!("Failed to get the backlog of team '{team}': {e}"))?
         .work_items;
@@ -83,7 +87,7 @@ pub(super) async fn backlog_items(project: &str, team: &str) -> Result<Vec<WorkI
         .filter_map(|link| link.target.as_ref()?.id)
         .collect();
 
-    let client = create_wit_client()?;
+    let client = conn.wit();
     let mut fetched = Vec::with_capacity(ids.len());
     for chunk in ids.chunks(WORK_ITEMS_PER_REQUEST) {
         let chunk = chunk
@@ -94,17 +98,21 @@ pub(super) async fn backlog_items(project: &str, team: &str) -> Result<Vec<WorkI
         fetched.extend(
             client
                 .work_items_client()
-                .list(creds.organization.clone(), chunk, project)
+                .list(conn.organization(), chunk, project)
                 .await?
                 .value,
         );
     }
-    let finished = finished_states(project, &fetched).await?;
+    let finished = finished_states(conn, project, &fetched).await?;
     Ok(in_backlog_order(&ids, fetched, &finished))
 }
 
 /// The finished states of every work item type in `items`, by state category.
-async fn finished_states(project: &str, items: &[WorkItem]) -> Result<FinishedStates> {
+async fn finished_states(
+    conn: &Connection,
+    project: &str,
+    items: &[WorkItem],
+) -> Result<FinishedStates> {
     let mut types: Vec<&str> = items
         .iter()
         .filter_map(|item| field_str(item, "System.WorkItemType"))
@@ -113,7 +121,7 @@ async fn finished_states(project: &str, items: &[WorkItem]) -> Result<FinishedSt
     types.dedup();
     let mut finished = FinishedStates::new();
     for work_item_type in types {
-        for state in super::list_work_item_states(project, work_item_type).await? {
+        for state in super::list_work_item_states(conn, project, work_item_type).await? {
             let category = state.category.as_deref().unwrap_or_default();
             if FINISHED_CATEGORIES
                 .iter()
@@ -337,31 +345,31 @@ impl Render for MoveResult<'_> {
 
 /// Moves work item `id` within the team's backlog, then reports its position.
 pub(super) async fn move_item(
+    conn: &Connection,
     project: &str,
     team: Option<&str>,
     id: i32,
     placement: Placement,
     format: crate::output::OutputFormat,
 ) -> Result<()> {
-    let team = team_or_default(project, team).await?;
-    let order: Vec<i32> = backlog_items(project, &team)
+    let team = team_or_default(conn, project, team).await?;
+    let order: Vec<i32> = backlog_items(conn, project, &team)
         .await?
         .iter()
         .map(|item| item.id)
         .collect();
     let (previous, next) = neighbours(&order, id, placement)?;
-    let creds = get_credentials()?;
     let mut body = ReorderOperation::new();
     body.ids = vec![id];
     body.previous_id = Some(previous);
     body.next_id = Some(next);
     body.parent_id = Some(0);
-    create_work_client()?
+    conn.work()
         .workitemsorder_client()
-        .reorder_backlog_work_items(creds.organization, body, project, &team)
+        .reorder_backlog_work_items(conn.organization(), body, project, &team)
         .await
         .map_err(|e| anyhow!("Failed to move work item {id}: {e}"))?;
-    let items = backlog_items(project, &team).await?;
+    let items = backlog_items(conn, project, &team).await?;
     let index = items
         .iter()
         .position(|item| item.id == id)

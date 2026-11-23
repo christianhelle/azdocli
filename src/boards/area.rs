@@ -1,7 +1,5 @@
 use super::classification::{self, NodePath, StructureGroup};
-use super::create_work_client;
-use crate::auth::get_credentials;
-use crate::project::get_project_or_default;
+use crate::connection::Connection;
 use crate::text::escape_control_characters;
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::work::models::{TeamFieldValue, TeamFieldValues, TeamFieldValuesPatch};
@@ -151,10 +149,10 @@ pub enum AreaTeamSubCommands {
     },
 }
 
-pub(super) async fn handle_command(subcommand: &AreaSubCommands) -> Result<()> {
+pub(super) async fn handle_command(conn: &Connection, subcommand: &AreaSubCommands) -> Result<()> {
     let result = match subcommand {
-        AreaSubCommands::Project { subcommand } => handle_project_command(subcommand).await,
-        AreaSubCommands::Team { subcommand } => handle_team_command(subcommand).await,
+        AreaSubCommands::Project { subcommand } => handle_project_command(conn, subcommand).await,
+        AreaSubCommands::Team { subcommand } => handle_team_command(conn, subcommand).await,
     };
 
     if let Err(e) = &result {
@@ -166,24 +164,27 @@ pub(super) async fn handle_command(subcommand: &AreaSubCommands) -> Result<()> {
     result
 }
 
-async fn handle_project_command(subcommand: &AreaProjectSubCommands) -> Result<()> {
+async fn handle_project_command(
+    conn: &Connection,
+    subcommand: &AreaProjectSubCommands,
+) -> Result<()> {
     match subcommand {
         AreaProjectSubCommands::List {
             project,
             path,
             depth,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let path = NodePath::parse_or_root(path.as_deref(), &project, GROUP);
-            classification::get_node(&project, GROUP, &path, Some(*depth))
+            classification::get_node(conn, &project, GROUP, &path, Some(*depth))
                 .await
                 .map(|node| classification::display_tree(GROUP, &node))
                 .map_err(|e| e.context("Failed to list areas"))
         }
         AreaProjectSubCommands::Show { project, path } => {
-            let project = get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let path = NodePath::parse(path, &project, GROUP);
-            classification::get_node(&project, GROUP, &path, None)
+            classification::get_node(conn, &project, GROUP, &path, None)
                 .await
                 .map(|node| classification::display_node(GROUP, &node))
                 .map_err(|e| e.context("Failed to show area"))
@@ -193,9 +194,9 @@ async fn handle_project_command(subcommand: &AreaProjectSubCommands) -> Result<(
             name,
             path,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let parent = NodePath::parse_or_root(path.as_deref(), &project, GROUP);
-            match classification::create_node(&project, GROUP, &parent, name, None).await {
+            match classification::create_node(conn, &project, GROUP, &parent, name, None).await {
                 Ok(node) => {
                     println!("{}", "✅ Area created successfully!".green());
                     classification::display_node(GROUP, &node);
@@ -209,9 +210,9 @@ async fn handle_project_command(subcommand: &AreaProjectSubCommands) -> Result<(
             path,
             reclassify_id,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let node_path = NodePath::parse(path, &project, GROUP);
-            classification::delete_node(&project, GROUP, &node_path, *reclassify_id)
+            classification::delete_node(conn, &project, GROUP, &node_path, *reclassify_id)
                 .await
                 .map(|_| {
                     println!(
@@ -227,9 +228,9 @@ async fn handle_project_command(subcommand: &AreaProjectSubCommands) -> Result<(
             name,
             child_id,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let node_path = NodePath::parse(path, &project, GROUP);
-            update_area(&project, &node_path, name.as_deref(), *child_id)
+            update_area(conn, &project, &node_path, name.as_deref(), *child_id)
                 .await
                 .map_err(|e| e.context("Failed to update area"))
         }
@@ -238,13 +239,14 @@ async fn handle_project_command(subcommand: &AreaProjectSubCommands) -> Result<(
 
 /// Moves `child_id` under the area first, since renaming changes its path.
 async fn update_area(
+    conn: &Connection,
     project: &str,
     path: &NodePath,
     name: Option<&str>,
     child_id: Option<i32>,
 ) -> Result<()> {
     if let Some(child_id) = child_id {
-        classification::move_node(project, GROUP, path, child_id).await?;
+        classification::move_node(conn, project, GROUP, path, child_id).await?;
         println!(
             "{}",
             format!("✅ Moved area {child_id} under '{}'", path.logical(project)).green()
@@ -252,8 +254,10 @@ async fn update_area(
     }
 
     let node = match name {
-        Some(name) => classification::update_node(project, GROUP, path, Some(name), None).await?,
-        None => classification::get_node(project, GROUP, path, None).await?,
+        Some(name) => {
+            classification::update_node(conn, project, GROUP, path, Some(name), None).await?
+        }
+        None => classification::get_node(conn, project, GROUP, path, None).await?,
     };
 
     println!("{}", "✅ Area updated successfully!".green());
@@ -261,11 +265,11 @@ async fn update_area(
     Ok(())
 }
 
-async fn handle_team_command(subcommand: &AreaTeamSubCommands) -> Result<()> {
+async fn handle_team_command(conn: &Connection, subcommand: &AreaTeamSubCommands) -> Result<()> {
     match subcommand {
         AreaTeamSubCommands::List { project, team } => {
-            let project = get_project_or_default(project.as_deref())?;
-            get_team_areas(&project, team)
+            let project = conn.project(project.as_deref())?;
+            get_team_areas(conn, &project, team)
                 .await
                 .map(|areas| display_team_areas(team, &areas))
                 .map_err(|e| e.context(format!("Failed to list the areas of team '{team}'")))
@@ -277,9 +281,9 @@ async fn handle_team_command(subcommand: &AreaTeamSubCommands) -> Result<()> {
             include_sub_areas,
             set_as_default,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let path = NodePath::parse(path, &project, GROUP).logical(&project);
-            change_team_areas(&project, team, |current| {
+            change_team_areas(conn, &project, team, |current| {
                 add_team_area(
                     current,
                     &path,
@@ -302,18 +306,20 @@ async fn handle_team_command(subcommand: &AreaTeamSubCommands) -> Result<()> {
             team,
             path,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let path = NodePath::parse(path, &project, GROUP).logical(&project);
-            change_team_areas(&project, team, |current| remove_team_area(current, &path))
-                .await
-                .map(|areas| {
-                    println!(
-                        "{}",
-                        format!("✅ Removed area '{path}' from team '{team}'").green()
-                    );
-                    display_team_areas(team, &areas);
-                })
-                .map_err(|e| e.context(format!("Failed to remove an area from team '{team}'")))
+            change_team_areas(conn, &project, team, |current| {
+                remove_team_area(current, &path)
+            })
+            .await
+            .map(|areas| {
+                println!(
+                    "{}",
+                    format!("✅ Removed area '{path}' from team '{team}'").green()
+                );
+                display_team_areas(team, &areas);
+            })
+            .map_err(|e| e.context(format!("Failed to remove an area from team '{team}'")))
         }
         AreaTeamSubCommands::Update {
             project,
@@ -322,9 +328,9 @@ async fn handle_team_command(subcommand: &AreaTeamSubCommands) -> Result<()> {
             include_sub_areas,
             set_as_default,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let path = NodePath::parse(path, &project, GROUP).logical(&project);
-            change_team_areas(&project, team, |current| {
+            change_team_areas(conn, &project, team, |current| {
                 update_team_area(current, &path, *include_sub_areas, *set_as_default)
             })
             .await
@@ -340,27 +346,28 @@ async fn handle_team_command(subcommand: &AreaTeamSubCommands) -> Result<()> {
     }
 }
 
-async fn get_team_areas(project: &str, team: &str) -> Result<TeamFieldValues> {
-    let creds = get_credentials()?;
-    Ok(create_work_client()?
+async fn get_team_areas(conn: &Connection, project: &str, team: &str) -> Result<TeamFieldValues> {
+    Ok(conn
+        .work()
         .teamfieldvalues_client()
-        .get(creds.organization, project, team)
+        .get(conn.organization(), project, team)
         .await?)
 }
 
 /// Reads a team's areas, changes them with `change` and writes them back.
 async fn change_team_areas(
+    conn: &Connection,
     project: &str,
     team: &str,
     change: impl FnOnce(&TeamFieldValues) -> Result<TeamFieldValuesPatch>,
 ) -> Result<TeamFieldValues> {
-    let current = get_team_areas(project, team).await?;
+    let current = get_team_areas(conn, project, team).await?;
     let patch = change(&current)?;
 
-    let creds = get_credentials()?;
-    Ok(create_work_client()?
+    Ok(conn
+        .work()
         .teamfieldvalues_client()
-        .update(creds.organization, patch, project, team)
+        .update(conn.organization(), patch, project, team)
         .await?)
 }
 

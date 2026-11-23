@@ -1,13 +1,11 @@
-use crate::auth::factory::{ClientFactory, CredentialClientFactory};
-use crate::auth::get_credentials;
 use crate::auth::url::{api_work_item_url, web_work_item_url};
+use crate::connection::Connection;
 use crate::output::{self, OutputFormat};
-use crate::project::get_project_or_default;
 use crate::text::escape_control_characters;
 use anyhow::{anyhow, Result};
+use azure_devops_rust_api::wit::models;
 use azure_devops_rust_api::wit::models::json_patch_operation::Op;
 use azure_devops_rust_api::wit::models::JsonPatchOperation;
-use azure_devops_rust_api::wit::{self, models};
 use clap::{Args, Subcommand};
 use colored::Colorize;
 use serde_json::json;
@@ -421,10 +419,10 @@ fn signed_in_account(connection_data: &serde_json::Value) -> Option<String> {
 }
 
 /// `assignee`, with `@me` swapped for the signed-in user's account name.
-async fn resolve_assignee(assignee: Option<&str>) -> Result<Option<String>> {
+async fn resolve_assignee(conn: &Connection, assignee: Option<&str>) -> Result<Option<String>> {
     match assignee {
         Some(value) if is_me(value) => {
-            let data = crate::auth::connection_data(&get_credentials()?).await?;
+            let data = crate::auth::connection_data(conn.credentials()).await?;
             signed_in_account(&data)
                 .map(Some)
                 .ok_or_else(|| anyhow!("Could not tell which account the PAT belongs to"))
@@ -444,25 +442,28 @@ fn text_or_file(text: Option<&str>, file: Option<&Path>) -> Result<Option<String
     }
 }
 
-async fn list_work_item_types(project: &str) -> Result<Vec<models::WorkItemType>> {
-    let creds = get_credentials()?;
-    let client = create_wit_client()?;
+async fn list_work_item_types(
+    conn: &Connection,
+    project: &str,
+) -> Result<Vec<models::WorkItemType>> {
+    let client = conn.wit();
 
     Ok(client
         .work_item_types_client()
-        .list(creds.organization, project)
+        .list(conn.organization(), project)
         .await?
         .value)
 }
 
 async fn list_work_item_states(
+    conn: &Connection,
     project: &str,
     work_item_type: &str,
 ) -> Result<Vec<models::WorkItemStateColor>> {
-    let creds = get_credentials()?;
-    Ok(create_wit_client()?
+    Ok(conn
+        .wit()
         .work_item_type_states_client()
-        .list(creds.organization, project, work_item_type)
+        .list(conn.organization(), project, work_item_type)
         .await?
         .value)
 }
@@ -528,17 +529,18 @@ fn display_work_item_types(work_item_types: &[models::WorkItemType]) {
 }
 
 async fn list_work_item_comments(
+    conn: &Connection,
     project: &str,
     id: &str,
     top: Option<i32>,
 ) -> Result<Vec<models::Comment>> {
-    let creds = get_credentials()?;
-    let client = create_wit_client()?;
+    let client = conn.wit();
 
-    let mut request =
-        client
-            .comments_client()
-            .get_comments(creds.organization, project, parse_work_item_id(id)?);
+    let mut request = client.comments_client().get_comments(
+        conn.organization(),
+        project,
+        parse_work_item_id(id)?,
+    );
 
     if let Some(top) = top {
         request = request.top(top);
@@ -561,14 +563,18 @@ fn parse_comment_list(body: &[u8]) -> Result<Vec<models::Comment>> {
     Ok(list.comments.unwrap_or_default())
 }
 
-async fn add_work_item_comment(project: &str, id: &str, message: &str) -> Result<models::Comment> {
-    let creds = get_credentials()?;
-    let client = create_wit_client()?;
+async fn add_work_item_comment(
+    conn: &Connection,
+    project: &str,
+    id: &str,
+    message: &str,
+) -> Result<models::Comment> {
+    let client = conn.wit();
 
     Ok(client
         .comments_client()
         .add_comment(
-            creds.organization,
+            conn.organization(),
             models::CommentCreate {
                 text: Some(message.to_string()),
             },
@@ -621,36 +627,16 @@ fn parse_work_item_id(id: &str) -> Result<i32> {
         .map_err(|_| anyhow!("Invalid work item ID '{id}', must be a number"))
 }
 
-fn create_wit_client() -> Result<wit::Client> {
-    let creds = get_credentials()?;
-    let factory = CredentialClientFactory::new(&creds)?;
-    Ok(factory.build_wit())
-}
-
-fn create_work_client() -> Result<azure_devops_rust_api::work::Client> {
-    let creds = get_credentials()?;
-    let factory = CredentialClientFactory::new(&creds)?;
-    Ok(factory.build_work())
-}
-
-async fn get_work_item(project: &str, id: &str) -> Result<models::WorkItem> {
+async fn get_work_item(conn: &Connection, project: &str, id: &str) -> Result<models::WorkItem> {
     let id_int = parse_work_item_id(id)?;
 
-    match get_credentials() {
-        Ok(creds) => {
-            let client = create_wit_client()?;
-            let work_item = client
-                .work_items_client()
-                .get_work_item(creds.organization, id_int, project)
-                .await?;
+    let client = conn.wit();
+    let work_item = client
+        .work_items_client()
+        .get_work_item(conn.organization(), id_int, project)
+        .await?;
 
-            Ok(work_item)
-        }
-        Err(e) => {
-            eprintln!("Unable to retrieve work item");
-            Err(e)
-        }
-    }
+    Ok(work_item)
 }
 
 /// The fields a create or update sets. Unset fields are left alone.
@@ -832,6 +818,7 @@ fn effort_field(fields: &[&str]) -> Option<&'static str> {
 
 /// Pairs `effort` with the field that holds it for `work_item_type`.
 async fn effort_assignment(
+    conn: &Connection,
     project: &str,
     work_item_type: &str,
     effort: Option<f64>,
@@ -839,10 +826,10 @@ async fn effort_assignment(
     let Some(effort) = effort else {
         return Ok(None);
     };
-    let creds = get_credentials()?;
-    let fields = create_wit_client()?
+    let fields = conn
+        .wit()
         .work_item_types_field_client()
-        .list(creds.organization, project, work_item_type)
+        .list(conn.organization(), project, work_item_type)
         .await?
         .value;
     let names: Vec<&str> = fields
@@ -941,7 +928,7 @@ struct UpdatePlan<'a> {
     attachments: Vec<JsonPatchOperation>,
 }
 
-async fn update_one(plan: &UpdatePlan<'_>, id: i32) -> Result<models::WorkItem> {
+async fn update_one(conn: &Connection, plan: &UpdatePlan<'_>, id: i32) -> Result<models::WorkItem> {
     let project = plan.project;
     // Setting System.Tags replaces them, so new tags join the existing
     // ones, and --effort needs the item's type to pick its effort field.
@@ -949,11 +936,11 @@ async fn update_one(plan: &UpdatePlan<'_>, id: i32) -> Result<models::WorkItem> 
     // another client in between fails it instead of being lost or misread.
     // A new parent replaces the old one, which is found among the relations.
     let current = if plan.parent.is_some() {
-        Some(get_work_item_with_relations(project, id).await?)
+        Some(get_work_item_with_relations(conn, project, id).await?)
     } else if plan.added_tags.is_empty() && plan.removed_tags.is_empty() && plan.effort.is_none() {
         None
     } else {
-        Some(get_work_item(project, &id.to_string()).await?)
+        Some(get_work_item(conn, project, &id.to_string()).await?)
     };
     let field = |name| {
         current
@@ -962,7 +949,9 @@ async fn update_one(plan: &UpdatePlan<'_>, id: i32) -> Result<models::WorkItem> 
             .and_then(|v| v.as_str())
     };
     let effort = match requested_type(&plan.fields.extra, field("System.WorkItemType")) {
-        Some(work_item_type) => effort_assignment(project, work_item_type, plan.effort).await?,
+        Some(work_item_type) => {
+            effort_assignment(conn, project, work_item_type, plan.effort).await?
+        }
         None => None,
     };
     let fields = WorkItemFields {
@@ -983,7 +972,7 @@ async fn update_one(plan: &UpdatePlan<'_>, id: i32) -> Result<models::WorkItem> 
         patch.extend(link::set_parent_ops(current, *parent, parent_url)?);
     }
     patch.extend(plan.attachments.iter().cloned());
-    update_work_item(project, &id.to_string(), patch).await
+    update_work_item(conn, project, &id.to_string(), patch).await
 }
 
 fn work_item_title(work_item: &models::WorkItem) -> &str {
@@ -1065,11 +1054,15 @@ fn read_back_failure(parent: i32, tasks: &[i32]) -> String {
     format!("Created #{parent} with tasks {tasks}, but could not read it back")
 }
 
-async fn get_work_item_with_relations(project: &str, id: i32) -> Result<models::WorkItem> {
-    let creds = get_credentials()?;
-    Ok(create_wit_client()?
+async fn get_work_item_with_relations(
+    conn: &Connection,
+    project: &str,
+    id: i32,
+) -> Result<models::WorkItem> {
+    Ok(conn
+        .wit()
         .work_items_client()
-        .get_work_item(creds.organization, id, project)
+        .get_work_item(conn.organization(), id, project)
         .expand("relations")
         .await?)
 }
@@ -1092,15 +1085,16 @@ fn create_work_item_patch(
 }
 
 async fn create_work_item(
+    conn: &Connection,
     project: &str,
     work_item_type: &str,
     patch: Vec<JsonPatchOperation>,
 ) -> Result<models::WorkItem> {
-    let creds = get_credentials()?;
-    Ok(create_wit_client()?
+    Ok(conn
+        .wit()
         .work_items_client()
         .create(
-            creds.organization,
+            conn.organization(),
             patch,
             project.to_string(),
             work_item_type,
@@ -1109,83 +1103,74 @@ async fn create_work_item(
 }
 
 async fn update_work_item(
+    conn: &Connection,
     project: &str,
     id: &str,
     patch_operations: Vec<JsonPatchOperation>,
 ) -> Result<models::WorkItem> {
     let id_int = parse_work_item_id(id)?;
 
-    match get_credentials() {
-        Ok(creds) => {
-            let client = create_wit_client()?;
-            let work_item = client
-                .work_items_client()
-                .update(
-                    creds.organization,
-                    patch_operations,
-                    id_int,
-                    project.to_string(),
-                )
-                .await?;
-            Ok(work_item)
-        }
-        Err(e) => {
-            eprintln!("Unable to update work item");
-            Err(e)
-        }
-    }
+    let client = conn.wit();
+    let work_item = client
+        .work_items_client()
+        .update(
+            conn.organization(),
+            patch_operations,
+            id_int,
+            project.to_string(),
+        )
+        .await?;
+    Ok(work_item)
 }
 
-async fn delete_work_item(project: &str, id: &str, soft_delete: bool) -> Result<()> {
+async fn delete_work_item(
+    conn: &Connection,
+    project: &str,
+    id: &str,
+    soft_delete: bool,
+) -> Result<()> {
     let id_int = parse_work_item_id(id)?;
-    match get_credentials() {
-        Ok(creds) => {
-            if soft_delete {
-                let work_item = get_work_item(project, id).await?;
-                let work_item_type = work_item
-                    .fields
-                    .get("System.WorkItemType")
-                    .and_then(|v| v.as_str());
-                let state = work_item_type
-                    .map(|wt| {
-                        if [
-                            "Task",
-                            "User Story",
-                            "Product Backlog Item",
-                            "Feature",
-                            "Epic",
-                        ]
-                        .contains(&wt)
-                        {
-                            "Removed"
-                        } else {
-                            "Closed"
-                        }
-                    })
-                    .unwrap_or("Closed");
-                update_work_item(
-                    project,
-                    id,
-                    WorkItemFields {
-                        state: Some(state.to_string()),
-                        ..Default::default()
-                    }
-                    .patch(),
-                )
-                .await?;
-            } else {
-                create_wit_client()?
-                    .work_items_client()
-                    .delete(creds.organization, id_int, project.to_string())
-                    .await?;
+    if soft_delete {
+        let work_item = get_work_item(conn, project, id).await?;
+        let work_item_type = work_item
+            .fields
+            .get("System.WorkItemType")
+            .and_then(|v| v.as_str());
+        let state = work_item_type
+            .map(|wt| {
+                if [
+                    "Task",
+                    "User Story",
+                    "Product Backlog Item",
+                    "Feature",
+                    "Epic",
+                ]
+                .contains(&wt)
+                {
+                    "Removed"
+                } else {
+                    "Closed"
+                }
+            })
+            .unwrap_or("Closed");
+        update_work_item(
+            conn,
+            project,
+            id,
+            WorkItemFields {
+                state: Some(state.to_string()),
+                ..Default::default()
             }
-            Ok(())
-        }
-        Err(e) => {
-            eprintln!("Unable to delete work item");
-            Err(e)
-        }
+            .patch(),
+        )
+        .await?;
+    } else {
+        conn.wit()
+            .work_items_client()
+            .delete(conn.organization(), id_int, project.to_string())
+            .await?;
     }
+    Ok(())
 }
 
 fn open_work_item_in_browser(
@@ -1223,14 +1208,18 @@ fn print_work_items(
 }
 
 /// Runs a WIQL query and fetches the full work items behind the ids it returns.
-async fn run_wiql_query(project: &str, wiql: &str, limit: i32) -> Result<Vec<models::WorkItem>> {
-    let creds = get_credentials()?;
-    let client = create_wit_client()?;
+async fn run_wiql_query(
+    conn: &Connection,
+    project: &str,
+    wiql: &str,
+    limit: i32,
+) -> Result<Vec<models::WorkItem>> {
+    let client = conn.wit();
 
     let query_result = client
         .wiql_client()
         .query_by_wiql(
-            creds.organization.clone(),
+            conn.organization(),
             models::Wiql {
                 query: Some(wiql.to_string()),
             },
@@ -1251,7 +1240,7 @@ async fn run_wiql_query(project: &str, wiql: &str, limit: i32) -> Result<Vec<mod
         if let Some(id) = work_item_ref.id {
             match client
                 .work_items_client()
-                .get_work_item(creds.organization.clone(), id, project)
+                .get_work_item(conn.organization(), id, project)
                 .await
             {
                 Ok(work_item) => work_items.push(work_item),
@@ -1296,6 +1285,7 @@ impl Assignee {
 }
 
 async fn list_work_items(
+    conn: &Connection,
     project: &str,
     assignee: &Assignee,
     state_filter: Option<&str>,
@@ -1316,7 +1306,7 @@ async fn list_work_items(
     let wiql_query = build_wiql_query(project, assignee, state_filter, work_item_type_filter);
     let heading = assignee.heading();
 
-    match run_wiql_query(project, &wiql_query, limit).await {
+    match run_wiql_query(conn, project, &wiql_query, limit).await {
         Ok(work_items) => print_work_items(&heading, &work_items, format),
         Err(e) => {
             eprintln!("❌ Failed to execute WIQL query: {e}");
@@ -1400,23 +1390,31 @@ pub(crate) fn display_empty_work_items_table(heading: &str) {
     display_work_items_list(heading, &[]);
 }
 
-pub async fn handle_command(subcommand: &BoardsSubCommands, format: OutputFormat) -> Result<()> {
-    let _credentials = get_credentials()?;
+pub async fn handle_command(
+    conn: &Connection,
+    subcommand: &BoardsSubCommands,
+    format: OutputFormat,
+) -> Result<()> {
     match subcommand {
         BoardsSubCommands::WorkItem { subcommand } => {
-            handle_work_item_command(subcommand, format).await
+            handle_work_item_command(conn, subcommand, format).await
         }
-        BoardsSubCommands::Area { subcommand } => area::handle_command(subcommand).await,
-        BoardsSubCommands::Iteration { subcommand } => iteration::handle_command(subcommand).await,
+        BoardsSubCommands::Area { subcommand } => area::handle_command(conn, subcommand).await,
+        BoardsSubCommands::Iteration { subcommand } => {
+            iteration::handle_command(conn, subcommand).await
+        }
         BoardsSubCommands::Sprint { subcommand } => {
-            sprint::handle_command(subcommand, format).await
+            sprint::handle_command(conn, subcommand, format).await
         }
         BoardsSubCommands::Backlog { subcommand } => {
-            backlog::handle_command(subcommand, format).await
+            backlog::handle_command(conn, subcommand, format).await
         }
         BoardsSubCommands::Queries { project, depth } => {
-            let project_name = get_project_or_default(project.as_deref())?;
-            output::emit(&queries::list_queries(&project_name, *depth).await?, format)
+            let project_name = conn.project(project.as_deref())?;
+            output::emit(
+                &queries::list_queries(conn, &project_name, *depth).await?,
+                format,
+            )
         }
         BoardsSubCommands::Query {
             wiql,
@@ -1424,13 +1422,15 @@ pub async fn handle_command(subcommand: &BoardsSubCommands, format: OutputFormat
             project,
             limit,
         } => {
-            let project_name = get_project_or_default(project.as_deref())?;
+            let project_name = conn.project(project.as_deref())?;
             let wiql = match (wiql, saved) {
                 (Some(wiql), _) => wiql.clone(),
-                (None, Some(saved)) => queries::saved_query_wiql(&project_name, saved).await?,
+                (None, Some(saved)) => {
+                    queries::saved_query_wiql(conn, &project_name, saved).await?
+                }
                 (None, None) => return Err(anyhow!("Provide --wiql or --saved")),
             };
-            match run_wiql_query(&project_name, &wiql, *limit).await {
+            match run_wiql_query(conn, &project_name, &wiql, *limit).await {
                 Ok(work_items) => print_work_items("Query Results", &work_items, format)?,
                 Err(e) => {
                     eprintln!("❌ Failed to execute WIQL query");
@@ -1443,11 +1443,14 @@ pub async fn handle_command(subcommand: &BoardsSubCommands, format: OutputFormat
     }
 }
 
-async fn handle_work_item_comment_command(subcommand: &WorkItemCommentSubCommands) -> Result<()> {
+async fn handle_work_item_comment_command(
+    conn: &Connection,
+    subcommand: &WorkItemCommentSubCommands,
+) -> Result<()> {
     match subcommand {
         WorkItemCommentSubCommands::List { id, project, top } => {
-            let project_name = get_project_or_default(project.as_deref())?;
-            match list_work_item_comments(&project_name, id, *top).await {
+            let project_name = conn.project(project.as_deref())?;
+            match list_work_item_comments(conn, &project_name, id, *top).await {
                 Ok(comments) => display_work_item_comments(&comments),
                 Err(e) => {
                     eprintln!("❌ Failed to list comments on work item {id}");
@@ -1461,8 +1464,8 @@ async fn handle_work_item_comment_command(subcommand: &WorkItemCommentSubCommand
             project,
             message,
         } => {
-            let project_name = get_project_or_default(project.as_deref())?;
-            match add_work_item_comment(&project_name, id, message).await {
+            let project_name = conn.project(project.as_deref())?;
+            match add_work_item_comment(conn, &project_name, id, message).await {
                 Ok(comment) => {
                     println!("{}", "✅ Comment added successfully!".green());
                     if let Some(comment_id) = comment.id {
@@ -1482,6 +1485,7 @@ async fn handle_work_item_comment_command(subcommand: &WorkItemCommentSubCommand
 }
 
 async fn handle_work_item_command(
+    conn: &Connection,
     subcommand: &WorkItemSubCommands,
     format: OutputFormat,
 ) -> Result<()> {
@@ -1496,29 +1500,30 @@ async fn handle_work_item_command(
             area_path,
             content,
         } => {
-            let project_name = get_project_or_default(project.as_deref())?;
+            let project_name = conn.project(project.as_deref())?;
             let work_item_type = resolve_work_item_type(work_item_type);
             if format == OutputFormat::Text {
                 println!("Creating a {work_item_type} work item in project: {project_name}");
             }
 
-            let creds = get_credentials()?;
-            let parent_url =
-                parent.map(|id| api_work_item_url(&creds.base_url, &creds.organization, id));
+            let parent_url = parent
+                .map(|id| api_work_item_url(&conn.credentials().base_url, conn.organization(), id));
             let iteration_path = iteration::resolve_iteration_path(
+                conn,
                 &project_name,
                 content.team.as_deref(),
                 iteration_path.as_deref(),
             )
             .await?;
-            let effort = effort_assignment(&project_name, &work_item_type, content.effort).await?;
+            let effort =
+                effort_assignment(conn, &project_name, &work_item_type, content.effort).await?;
             let fields = WorkItemFields {
                 title: Some(title.clone()),
                 effort,
                 description: content.description()?,
                 acceptance_criteria: content.acceptance_criteria()?,
                 tags: merge_tags(None, &content.tags),
-                assigned_to: resolve_assignee(content.assigned_to.as_deref()).await?,
+                assigned_to: resolve_assignee(conn, content.assigned_to.as_deref()).await?,
                 priority: content.priority,
                 remaining_work: content.remaining_work,
                 original_estimate: content.original_estimate,
@@ -1530,21 +1535,28 @@ async fn handle_work_item_command(
             };
 
             let mut patch = create_work_item_patch(&fields, parent_url.as_deref());
-            patch
-                .extend(attachment::upload_all(&project_name, &content.attachments, format).await?);
+            patch.extend(
+                attachment::upload_all(conn, &project_name, &content.attachments, format).await?,
+            );
 
-            let work_item = match create_work_item(&project_name, &work_item_type, patch).await {
-                Ok(work_item) => work_item,
-                Err(e) => {
-                    eprintln!("❌ Failed to create work item: {e}");
-                    return Err(e);
-                }
-            };
+            let work_item =
+                match create_work_item(conn, &project_name, &work_item_type, patch).await {
+                    Ok(work_item) => work_item,
+                    Err(e) => {
+                        eprintln!("❌ Failed to create work item: {e}");
+                        return Err(e);
+                    }
+                };
 
-            let new_url = api_work_item_url(&creds.base_url, &creds.organization, work_item.id);
+            let new_url = api_work_item_url(
+                &conn.credentials().base_url,
+                conn.organization(),
+                work_item.id,
+            );
             let mut created_tasks = Vec::with_capacity(tasks.len());
             for task in tasks {
                 let created = create_work_item(
+                    conn,
                     &project_name,
                     "Task",
                     child_task_patch(task, &work_item, &new_url),
@@ -1564,7 +1576,7 @@ async fn handle_work_item_command(
                 let work_item = if tasks.is_empty() {
                     work_item
                 } else {
-                    get_work_item_with_relations(&project_name, work_item.id)
+                    get_work_item_with_relations(conn, &project_name, work_item.id)
                         .await
                         .map_err(|e| {
                             let task_ids: Vec<i32> =
@@ -1595,7 +1607,7 @@ async fn handle_work_item_command(
             project,
             soft_delete,
         } => {
-            let project_name = get_project_or_default(project.as_deref())?;
+            let project_name = conn.project(project.as_deref())?;
             println!(
                 "{}Deleting work item with id: {} in project: {}",
                 if *soft_delete { "Soft " } else { "" },
@@ -1603,7 +1615,7 @@ async fn handle_work_item_command(
                 project_name
             );
 
-            match delete_work_item(&project_name, id, *soft_delete).await {
+            match delete_work_item(conn, &project_name, id, *soft_delete).await {
                 Ok(_) => {
                     if *soft_delete {
                         println!(
@@ -1629,9 +1641,10 @@ async fn handle_work_item_command(
             work_item_type,
             limit,
         } => {
-            let project_name = get_project_or_default(project.as_deref())?;
+            let project_name = conn.project(project.as_deref())?;
 
             match list_work_items(
+                conn,
                 &project_name,
                 &Assignee::from_args(assigned_to.as_deref(), *all),
                 state.as_deref(),
@@ -1653,34 +1666,26 @@ async fn handle_work_item_command(
             }
         }
         WorkItemSubCommands::Show { id, project, web } => {
-            let project_name = get_project_or_default(project.as_deref())?;
+            let project_name = conn.project(project.as_deref())?;
             if format == OutputFormat::Text {
                 println!("Showing work item with id: {id} in project: {project_name}");
             }
 
             // Open in browser if requested
             if *web {
-                match get_credentials() {
-                    Ok(creds) => {
-                        if let Err(e) = open_work_item_in_browser(
-                            &creds.base_url,
-                            &creds.organization,
-                            &project_name,
-                            id,
-                        ) {
-                            eprintln!("❌ Failed to open work item in browser: {e}");
-                        }
-                        return Ok(());
-                    }
-                    Err(e) => {
-                        eprintln!("❌ Failed to get credentials: {e}");
-                        return Err(e);
-                    }
+                if let Err(e) = open_work_item_in_browser(
+                    &conn.credentials().base_url,
+                    conn.organization(),
+                    &project_name,
+                    id,
+                ) {
+                    eprintln!("❌ Failed to open work item in browser: {e}");
                 }
+                return Ok(());
             }
 
             // Otherwise show in terminal
-            match get_work_item(&project_name, id).await {
+            match get_work_item(conn, &project_name, id).await {
                 Ok(work_item) => {
                     output::emit(&WorkItemDetails(&work_item), format)?;
                 }
@@ -1691,8 +1696,8 @@ async fn handle_work_item_command(
             }
         }
         WorkItemSubCommands::Types { project } => {
-            let project_name = get_project_or_default(project.as_deref())?;
-            match list_work_item_types(&project_name).await {
+            let project_name = conn.project(project.as_deref())?;
+            match list_work_item_types(conn, &project_name).await {
                 Ok(work_item_types) => display_work_item_types(&work_item_types),
                 Err(e) => {
                     eprintln!("❌ Failed to list the work item types of '{project_name}'");
@@ -1705,9 +1710,9 @@ async fn handle_work_item_command(
             work_item_type,
             project,
         } => {
-            let project_name = get_project_or_default(project.as_deref())?;
+            let project_name = conn.project(project.as_deref())?;
             let work_item_type = resolve_work_item_type(work_item_type);
-            match list_work_item_states(&project_name, &work_item_type)
+            match list_work_item_states(conn, &project_name, &work_item_type)
                 .await
                 .and_then(|states| require_states(states, &work_item_type))
             {
@@ -1720,10 +1725,10 @@ async fn handle_work_item_command(
             }
         }
         WorkItemSubCommands::Comment { subcommand } => {
-            return handle_work_item_comment_command(subcommand).await;
+            return handle_work_item_comment_command(conn, subcommand).await;
         }
         WorkItemSubCommands::Attachment { subcommand } => {
-            return attachment::handle_command(subcommand, format).await;
+            return attachment::handle_command(conn, subcommand, format).await;
         }
         WorkItemSubCommands::History {
             id,
@@ -1731,8 +1736,8 @@ async fn handle_work_item_command(
             fields,
             top,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
-            return history::show(id, &project, fields, *top, format).await;
+            let project = conn.project(project.as_deref())?;
+            return history::show(conn, id, &project, fields, *top, format).await;
         }
         WorkItemSubCommands::Move {
             id,
@@ -1742,16 +1747,17 @@ async fn handle_work_item_command(
             after,
             top: _,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let placement = match (before, after) {
                 (Some(target), _) => backlog::Placement::Before(*target),
                 (_, Some(target)) => backlog::Placement::After(*target),
                 _ => backlog::Placement::Top,
             };
-            return backlog::move_item(&project, team.as_deref(), *id, placement, format).await;
+            return backlog::move_item(conn, &project, team.as_deref(), *id, placement, format)
+                .await;
         }
         WorkItemSubCommands::Link { subcommand } => {
-            return link::handle_command(subcommand, format).await;
+            return link::handle_command(conn, subcommand, format).await;
         }
         WorkItemSubCommands::Update {
             ids,
@@ -1764,7 +1770,7 @@ async fn handle_work_item_command(
             parent,
             content,
         } => {
-            let project_name = get_project_or_default(project.as_deref())?;
+            let project_name = conn.project(project.as_deref())?;
             if format == OutputFormat::Text {
                 match ids.as_slice() {
                     [id] => println!("Updating work item with id: {id} in project: {project_name}"),
@@ -1778,8 +1784,11 @@ async fn handle_work_item_command(
             // Everything that is the same for each work item is worked out once.
             let parent = match parent {
                 Some(parent) => {
-                    let creds = get_credentials()?;
-                    let url = api_work_item_url(&creds.base_url, &creds.organization, *parent);
+                    let url = api_work_item_url(
+                        &conn.credentials().base_url,
+                        conn.organization(),
+                        *parent,
+                    );
                     Some((*parent, url))
                 }
                 None => None,
@@ -1791,13 +1800,14 @@ async fn handle_work_item_command(
                     description: content.description()?,
                     acceptance_criteria: content.acceptance_criteria()?,
                     state: state.clone(),
-                    assigned_to: resolve_assignee(content.assigned_to.as_deref()).await?,
+                    assigned_to: resolve_assignee(conn, content.assigned_to.as_deref()).await?,
                     priority: content.priority,
                     remaining_work: content.remaining_work,
                     original_estimate: content.original_estimate,
                     completed_work: content.completed_work,
                     extra: content.fields.clone(),
                     iteration_path: iteration::resolve_iteration_path(
+                        conn,
                         &project_name,
                         content.team.as_deref(),
                         iteration_path.as_deref(),
@@ -1810,12 +1820,17 @@ async fn handle_work_item_command(
                 removed_tags: remove_tags,
                 effort: content.effort,
                 parent,
-                attachments: attachment::upload_all(&project_name, &content.attachments, format)
-                    .await?,
+                attachments: attachment::upload_all(
+                    conn,
+                    &project_name,
+                    &content.attachments,
+                    format,
+                )
+                .await?,
             };
 
             if let [id] = ids.as_slice() {
-                return match update_one(&plan, *id).await {
+                return match update_one(conn, &plan, *id).await {
                     Ok(work_item) if format != OutputFormat::Text => {
                         output::emit(&WorkItemDetails(&work_item), format)
                     }
@@ -1832,7 +1847,7 @@ async fn handle_work_item_command(
 
             let (updated, result) = update_each(
                 ids,
-                |id| update_one(&plan, id),
+                |id| update_one(conn, &plan, id),
                 |outcome| match outcome {
                     Ok(work_item) if format == OutputFormat::Text => {
                         println!(
@@ -2904,5 +2919,45 @@ mod tests {
         let query = build_wiql_query("project", &Assignee::Anyone, Some("Active"), None);
         assert!(!query.contains("[System.AssignedTo] ="));
         assert!(query.contains("[System.State] = 'Active'"));
+    }
+
+    #[tokio::test]
+    async fn get_work_item_requests_the_work_item_from_the_connection_endpoint() {
+        use wiremock::matchers::method;
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": 42,
+                "rev": 1,
+                "fields": { "System.Title": "Stubbed title" },
+                "url": "http://example.invalid/_apis/wit/workItems/42"
+            })))
+            .mount(&server)
+            .await;
+        let conn = Connection::new(
+            crate::auth::Credentials {
+                organization: "contoso".to_string(),
+                pat: "secret-pat".to_string(),
+                base_url: server.uri(),
+            },
+            None,
+        )
+        .unwrap();
+
+        let work_item = get_work_item(&conn, "Fabrikam", "42").await.unwrap();
+
+        assert_eq!(work_item.id, 42);
+        assert_eq!(work_item.fields["System.Title"], "Stubbed title");
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(
+            // The SDK prefixes the organization with an extra slash.
+            requests[0].url.path().trim_start_matches('/'),
+            "contoso/Fabrikam/_apis/wit/workitems/42"
+        );
+        let auth = requests[0].headers.get("authorization").unwrap();
+        assert!(auth.to_str().unwrap().starts_with("Basic "));
     }
 }

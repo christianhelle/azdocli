@@ -2,9 +2,8 @@
 //! classification nodes. Both kinds share one API, so the commands for areas
 //! and iterations share the code here.
 
-use super::create_wit_client;
-use crate::auth::get_credentials;
 use crate::auth::url::percent_encode_path_segment;
+use crate::connection::Connection;
 use crate::text::escape_control_characters;
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::wit::models::{
@@ -152,14 +151,14 @@ fn new_node(
 }
 
 pub(super) async fn get_node(
+    conn: &Connection,
     project: &str,
     group: StructureGroup,
     path: &NodePath,
     depth: Option<i32>,
 ) -> Result<WorkItemClassificationNode> {
-    let creds = get_credentials()?;
-    let mut request = create_wit_client()?.classification_nodes_client().get(
-        creds.organization,
+    let mut request = conn.wit().classification_nodes_client().get(
+        conn.organization(),
         project,
         group.route(),
         path.route(),
@@ -173,17 +172,18 @@ pub(super) async fn get_node(
 }
 
 pub(super) async fn create_node(
+    conn: &Connection,
     project: &str,
     group: StructureGroup,
     parent: &NodePath,
     name: &str,
     attributes: Option<serde_json::Value>,
 ) -> Result<WorkItemClassificationNode> {
-    let creds = get_credentials()?;
-    Ok(create_wit_client()?
+    Ok(conn
+        .wit()
         .classification_nodes_client()
         .create_or_update(
-            creds.organization,
+            conn.organization(),
             new_node(Some(name), group, attributes),
             project,
             group.route(),
@@ -194,19 +194,20 @@ pub(super) async fn create_node(
 
 /// Moves the node with id `child_id`, and everything below it, under `parent`.
 pub(super) async fn move_node(
+    conn: &Connection,
     project: &str,
     group: StructureGroup,
     parent: &NodePath,
     child_id: i32,
 ) -> Result<WorkItemClassificationNode> {
-    let creds = get_credentials()?;
     let mut node = new_node(None, group, None);
     node.id = Some(child_id);
 
-    Ok(create_wit_client()?
+    Ok(conn
+        .wit()
         .classification_nodes_client()
         .create_or_update(
-            creds.organization,
+            conn.organization(),
             node,
             project,
             group.route(),
@@ -217,17 +218,18 @@ pub(super) async fn move_node(
 
 /// Renames a node and/or changes its attributes.
 pub(super) async fn update_node(
+    conn: &Connection,
     project: &str,
     group: StructureGroup,
     path: &NodePath,
     name: Option<&str>,
     attributes: Option<serde_json::Value>,
 ) -> Result<WorkItemClassificationNode> {
-    let creds = get_credentials()?;
-    Ok(create_wit_client()?
+    Ok(conn
+        .wit()
         .classification_nodes_client()
         .update(
-            creds.organization,
+            conn.organization(),
             new_node(name, group, attributes),
             project,
             group.route(),
@@ -237,14 +239,14 @@ pub(super) async fn update_node(
 }
 
 pub(super) async fn delete_node(
+    conn: &Connection,
     project: &str,
     group: StructureGroup,
     path: &NodePath,
     reclassify_id: Option<i32>,
 ) -> Result<()> {
-    let creds = get_credentials()?;
-    let mut request = create_wit_client()?.classification_nodes_client().delete(
-        creds.organization,
+    let mut request = conn.wit().classification_nodes_client().delete(
+        conn.organization(),
         project,
         group.route(),
         path.route(),

@@ -100,10 +100,22 @@ foreach ($subcommand in @("add", "reply", "resolve"))
 Write-Host "`nTesting pipelines help..." -ForegroundColor Yellow
 Invoke-Cli pipelines --help
 
-foreach ($subcommand in @("list", "runs", "show", "logs", "artifacts", "run"))
+foreach ($subcommand in @("list", "show", "run", "runs", "folder", "variable"))
 {
   Write-Host "`nTesting pipelines $subcommand help..." -ForegroundColor Yellow
   Invoke-Cli pipelines $subcommand --help
+}
+
+foreach ($subcommand in @("list", "show", "artifact", "tag", "logs"))
+{
+  Write-Host "`nTesting pipelines runs $subcommand help..." -ForegroundColor Yellow
+  Invoke-Cli pipelines runs $subcommand --help
+}
+
+foreach ($group in @("folder", "variable"))
+{
+  Write-Host "`nTesting pipelines $group list help..." -ForegroundColor Yellow
+  Invoke-Cli pipelines $group list --help
 }
 
 foreach ($group in @("variable-group", "service-connection"))

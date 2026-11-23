@@ -1,10 +1,8 @@
 //! A team's capacity for the rest of its current sprint, set against the
 //! remaining work assigned to each member.
 
-use super::create_work_client;
 use super::sprint::{amount, SprintInfo};
-use crate::auth::factory::{ClientFactory, CredentialClientFactory};
-use crate::auth::get_credentials;
+use crate::connection::Connection;
 use crate::output::{md_table, Render};
 use crate::text::escape_control_characters;
 use anyhow::{anyhow, Result};
@@ -59,16 +57,16 @@ pub(super) struct TeamCapacity {
 }
 
 pub(super) async fn team_capacity(
+    conn: &Connection,
     project: &str,
     team: &str,
     iteration_id: &str,
 ) -> Result<TeamCapacity> {
-    let creds = get_credentials()?;
-    let client = create_work_client()?;
+    let client = conn.work();
     let capacity = client
         .capacities_client()
         .get_capacities_with_identity_ref_and_totals(
-            creds.organization.clone(),
+            conn.organization(),
             project,
             iteration_id,
             team,
@@ -77,12 +75,12 @@ pub(super) async fn team_capacity(
         .map_err(|e| anyhow!("Failed to read the capacity of team '{team}': {e}"))?;
     let team_days_off = client
         .teamdaysoff_client()
-        .get(creds.organization.clone(), project, iteration_id, team)
+        .get(conn.organization(), project, iteration_id, team)
         .await?
         .days_off;
     let settings = client
         .teamsettings_client()
-        .get(creds.organization.clone(), project, team)
+        .get(conn.organization(), project, team)
         .await?;
     let members = capacity
         .team_members
@@ -124,12 +122,15 @@ pub(super) struct TeamMember {
     pub name: String,
 }
 
-pub(super) async fn team_members(project: &str, team: &str) -> Result<Vec<TeamMember>> {
-    let creds = get_credentials()?;
-    let members = CredentialClientFactory::new(&creds)?
-        .build_core()
+pub(super) async fn team_members(
+    conn: &Connection,
+    project: &str,
+    team: &str,
+) -> Result<Vec<TeamMember>> {
+    let members = conn
+        .core()
         .teams_client()
-        .get_team_members_with_extended_properties(creds.organization.clone(), project, team)
+        .get_team_members_with_extended_properties(conn.organization(), project, team)
         .await
         .map_err(|e| anyhow!("Failed to list the members of team '{team}': {e}"))?
         .value;
@@ -222,16 +223,16 @@ pub(super) fn team_days_off_patch(days_off: &[DaysOff]) -> TeamSettingsDaysOffPa
 }
 
 pub(super) async fn set_team_days_off(
+    conn: &Connection,
     project: &str,
     team: &str,
     iteration_id: &str,
     days_off: &[DaysOff],
 ) -> Result<()> {
-    let creds = get_credentials()?;
-    create_work_client()?
+    conn.work()
         .teamdaysoff_client()
         .update(
-            creds.organization.clone(),
+            conn.organization(),
             team_days_off_patch(days_off),
             project,
             iteration_id,
@@ -243,17 +244,17 @@ pub(super) async fn set_team_days_off(
 }
 
 pub(super) async fn set_member_capacity(
+    conn: &Connection,
     project: &str,
     team: &str,
     iteration_id: &str,
     member_id: &str,
     patch: CapacityPatch,
 ) -> Result<()> {
-    let creds = get_credentials()?;
-    create_work_client()?
+    conn.work()
         .capacities_client()
         .update(
-            creds.organization.clone(),
+            conn.organization(),
             patch,
             project,
             iteration_id,

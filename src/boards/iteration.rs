@@ -1,10 +1,6 @@
 use super::classification::{self, NodePath, StructureGroup};
-use super::{
-    create_wit_client, create_work_client, display_empty_work_items_table, display_work_items_list,
-};
-use crate::auth::factory::{ClientFactory, CredentialClientFactory};
-use crate::auth::get_credentials;
-use crate::project::get_project_or_default;
+use super::{display_empty_work_items_table, display_work_items_list};
+use crate::connection::Connection;
 use crate::text::escape_control_characters;
 use anyhow::{anyhow, Result};
 use azure_devops_rust_api::work::models::{TeamSetting, TeamSettingsIteration, TeamSettingsPatch};
@@ -217,10 +213,15 @@ pub enum IterationTeamSubCommands {
     },
 }
 
-pub(super) async fn handle_command(subcommand: &IterationSubCommands) -> Result<()> {
+pub(super) async fn handle_command(
+    conn: &Connection,
+    subcommand: &IterationSubCommands,
+) -> Result<()> {
     let result = match subcommand {
-        IterationSubCommands::Project { subcommand } => handle_project_command(subcommand).await,
-        IterationSubCommands::Team { subcommand } => handle_team_command(subcommand).await,
+        IterationSubCommands::Project { subcommand } => {
+            handle_project_command(conn, subcommand).await
+        }
+        IterationSubCommands::Team { subcommand } => handle_team_command(conn, subcommand).await,
     };
 
     if let Err(e) = &result {
@@ -239,24 +240,27 @@ fn dates(start: Option<NaiveDate>, finish: Option<NaiveDate>) -> Result<Option<s
     }
 }
 
-async fn handle_project_command(subcommand: &IterationProjectSubCommands) -> Result<()> {
+async fn handle_project_command(
+    conn: &Connection,
+    subcommand: &IterationProjectSubCommands,
+) -> Result<()> {
     match subcommand {
         IterationProjectSubCommands::List {
             project,
             path,
             depth,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let path = NodePath::parse_or_root(path.as_deref(), &project, GROUP);
-            classification::get_node(&project, GROUP, &path, Some(*depth))
+            classification::get_node(conn, &project, GROUP, &path, Some(*depth))
                 .await
                 .map(|node| classification::display_tree(GROUP, &node))
                 .map_err(|e| e.context("Failed to list iterations"))
         }
         IterationProjectSubCommands::Show { project, path } => {
-            let project = get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let path = NodePath::parse(path, &project, GROUP);
-            classification::get_node(&project, GROUP, &path, None)
+            classification::get_node(conn, &project, GROUP, &path, None)
                 .await
                 .map(|node| classification::display_node(GROUP, &node))
                 .map_err(|e| e.context("Failed to show iteration"))
@@ -268,10 +272,12 @@ async fn handle_project_command(subcommand: &IterationProjectSubCommands) -> Res
             start_date,
             finish_date,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let parent = NodePath::parse_or_root(path.as_deref(), &project, GROUP);
             let attributes = dates(*start_date, *finish_date)?;
-            match classification::create_node(&project, GROUP, &parent, name, attributes).await {
+            match classification::create_node(conn, &project, GROUP, &parent, name, attributes)
+                .await
+            {
                 Ok(node) => {
                     println!("{}", "✅ Iteration created successfully!".green());
                     classification::display_node(GROUP, &node);
@@ -285,9 +291,9 @@ async fn handle_project_command(subcommand: &IterationProjectSubCommands) -> Res
             path,
             reclassify_id,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let node_path = NodePath::parse(path, &project, GROUP);
-            classification::delete_node(&project, GROUP, &node_path, *reclassify_id)
+            classification::delete_node(conn, &project, GROUP, &node_path, *reclassify_id)
                 .await
                 .map(|_| {
                     println!(
@@ -305,18 +311,26 @@ async fn handle_project_command(subcommand: &IterationProjectSubCommands) -> Res
             start_date,
             finish_date,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let node_path = NodePath::parse(path, &project, GROUP);
             let attributes = dates(*start_date, *finish_date)?;
-            update_iteration(&project, &node_path, name.as_deref(), *child_id, attributes)
-                .await
-                .map_err(|e| e.context("Failed to update iteration"))
+            update_iteration(
+                conn,
+                &project,
+                &node_path,
+                name.as_deref(),
+                *child_id,
+                attributes,
+            )
+            .await
+            .map_err(|e| e.context("Failed to update iteration"))
         }
     }
 }
 
 /// Moves `child_id` under the iteration first, since renaming changes its path.
 async fn update_iteration(
+    conn: &Connection,
     project: &str,
     path: &NodePath,
     name: Option<&str>,
@@ -324,7 +338,7 @@ async fn update_iteration(
     attributes: Option<serde_json::Value>,
 ) -> Result<()> {
     if let Some(child_id) = child_id {
-        classification::move_node(project, GROUP, path, child_id).await?;
+        classification::move_node(conn, project, GROUP, path, child_id).await?;
         println!(
             "{}",
             format!(
@@ -336,9 +350,9 @@ async fn update_iteration(
     }
 
     let node = if name.is_some() || attributes.is_some() {
-        classification::update_node(project, GROUP, path, name, attributes).await?
+        classification::update_node(conn, project, GROUP, path, name, attributes).await?
     } else {
-        classification::get_node(project, GROUP, path, None).await?
+        classification::get_node(conn, project, GROUP, path, None).await?
     };
 
     println!("{}", "✅ Iteration updated successfully!".green());
@@ -346,15 +360,18 @@ async fn update_iteration(
     Ok(())
 }
 
-async fn handle_team_command(subcommand: &IterationTeamSubCommands) -> Result<()> {
+async fn handle_team_command(
+    conn: &Connection,
+    subcommand: &IterationTeamSubCommands,
+) -> Result<()> {
     match subcommand {
         IterationTeamSubCommands::List {
             project,
             team,
             timeframe,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
-            list_team_iterations(&project, team, timeframe.as_deref())
+            let project = conn.project(project.as_deref())?;
+            list_team_iterations(conn, &project, team, timeframe.as_deref())
                 .await
                 .map(|iterations| display_team_iterations(team, &iterations))
                 .map_err(|e| e.context(format!("Failed to list the iterations of team '{team}'")))
@@ -364,8 +381,8 @@ async fn handle_team_command(subcommand: &IterationTeamSubCommands) -> Result<()
             team,
             iteration,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
-            add_team_iteration(&project, team, iteration)
+            let project = conn.project(project.as_deref())?;
+            add_team_iteration(conn, &project, team, iteration)
                 .await
                 .map(|added| {
                     println!("{}", format!("✅ Added iteration to team '{team}'").green());
@@ -378,8 +395,8 @@ async fn handle_team_command(subcommand: &IterationTeamSubCommands) -> Result<()
             team,
             iteration,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
-            remove_team_iteration(&project, team, iteration)
+            let project = conn.project(project.as_deref())?;
+            remove_team_iteration(conn, &project, team, iteration)
                 .await
                 .map(|_| {
                     println!(
@@ -394,14 +411,14 @@ async fn handle_team_command(subcommand: &IterationTeamSubCommands) -> Result<()
             team,
             iteration,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
-            list_iteration_work_items(&project, team, iteration)
+            let project = conn.project(project.as_deref())?;
+            list_iteration_work_items(conn, &project, team, iteration)
                 .await
                 .map_err(|e| e.context("Failed to list the work items of the iteration"))
         }
         IterationTeamSubCommands::ShowDefaultIteration { project, team } => {
-            let project = get_project_or_default(project.as_deref())?;
-            get_team_settings(&project, team)
+            let project = conn.project(project.as_deref())?;
+            get_team_settings(conn, &project, team)
                 .await
                 .map(|settings| display_default_iteration(team, &settings))
                 .map_err(|e| {
@@ -417,7 +434,7 @@ async fn handle_team_command(subcommand: &IterationTeamSubCommands) -> Result<()
             path,
             default_iteration_macro,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let mut patch = TeamSettingsPatch::new();
             match default_iteration_macro {
                 Some(default_iteration_macro) => {
@@ -428,10 +445,11 @@ async fn handle_team_command(subcommand: &IterationTeamSubCommands) -> Result<()
                         id: id.clone(),
                         path: path.clone(),
                     };
-                    patch.default_iteration = Some(resolve_iteration_id(&project, &selector).await?)
+                    patch.default_iteration =
+                        Some(resolve_iteration_id(conn, &project, &selector).await?)
                 }
             }
-            update_team_settings(&project, team, patch)
+            update_team_settings(conn, &project, team, patch)
                 .await
                 .map(|settings| {
                     println!(
@@ -447,8 +465,8 @@ async fn handle_team_command(subcommand: &IterationTeamSubCommands) -> Result<()
                 })
         }
         IterationTeamSubCommands::ShowBacklogIteration { project, team } => {
-            let project = get_project_or_default(project.as_deref())?;
-            get_team_settings(&project, team)
+            let project = conn.project(project.as_deref())?;
+            get_team_settings(conn, &project, team)
                 .await
                 .map(|settings| display_backlog_iteration(team, &settings))
                 .map_err(|e| {
@@ -462,10 +480,10 @@ async fn handle_team_command(subcommand: &IterationTeamSubCommands) -> Result<()
             team,
             iteration,
         } => {
-            let project = get_project_or_default(project.as_deref())?;
+            let project = conn.project(project.as_deref())?;
             let mut patch = TeamSettingsPatch::new();
-            patch.backlog_iteration = Some(resolve_iteration_id(&project, iteration).await?);
-            update_team_settings(&project, team, patch)
+            patch.backlog_iteration = Some(resolve_iteration_id(conn, &project, iteration).await?);
+            update_team_settings(conn, &project, team, patch)
                 .await
                 .map(|settings| {
                     println!(
@@ -485,7 +503,11 @@ async fn handle_team_command(subcommand: &IterationTeamSubCommands) -> Result<()
 
 /// The team settings APIs know iterations only by their identifier, so a path
 /// is looked up first.
-async fn resolve_iteration_id(project: &str, selector: &IterationSelector) -> Result<String> {
+async fn resolve_iteration_id(
+    conn: &Connection,
+    project: &str,
+    selector: &IterationSelector,
+) -> Result<String> {
     if let Some(id) = &selector.id {
         return Ok(id.clone());
     }
@@ -494,10 +516,16 @@ async fn resolve_iteration_id(project: &str, selector: &IterationSelector) -> Re
         .path
         .as_deref()
         .ok_or_else(|| anyhow!("Either --id or --path is required"))?;
-    classification::get_node(project, GROUP, &NodePath::parse(path, project, GROUP), None)
-        .await?
-        .identifier
-        .ok_or_else(|| anyhow!("Iteration '{path}' has no identifier"))
+    classification::get_node(
+        conn,
+        project,
+        GROUP,
+        &NodePath::parse(path, project, GROUP),
+        None,
+    )
+    .await?
+    .identifier
+    .ok_or_else(|| anyhow!("Iteration '{path}' has no identifier"))
 }
 
 /// The `--iteration` value that stands for a team's current sprint.
@@ -518,14 +546,15 @@ fn current(iterations: Vec<TeamSettingsIteration>, team: &str) -> Result<TeamSet
 /// The current iteration of `team`, or of the project's default team, along
 /// with the team's name.
 pub(super) async fn current_iteration(
+    conn: &Connection,
     project: &str,
     team: Option<&str>,
 ) -> Result<(String, TeamSettingsIteration)> {
     let team = match team {
         Some(team) => team.to_string(),
-        None => default_team(project).await?,
+        None => default_team(conn, project).await?,
     };
-    let iterations = list_team_iterations(project, &team, Some("current"))
+    let iterations = list_team_iterations(conn, project, &team, Some("current"))
         .await
         .map_err(|e| {
             e.context(format!(
@@ -539,6 +568,7 @@ pub(super) async fn current_iteration(
 /// `path`, with `@current` swapped for the current iteration of `team`, or of
 /// the project's default team when no team is given.
 pub(super) async fn resolve_iteration_path(
+    conn: &Connection,
     project: &str,
     team: Option<&str>,
     path: Option<&str>,
@@ -549,16 +579,15 @@ pub(super) async fn resolve_iteration_path(
     if !is_current_iteration(path) {
         return Ok(Some(path.to_string()));
     }
-    let (_, iteration) = current_iteration(project, team).await?;
+    let (_, iteration) = current_iteration(conn, project, team).await?;
     Ok(iteration.path)
 }
 
-pub(super) async fn default_team(project: &str) -> Result<String> {
-    let creds = get_credentials()?;
-    let client = CredentialClientFactory::new(&creds)?.build_core();
+pub(super) async fn default_team(conn: &Connection, project: &str) -> Result<String> {
+    let client = conn.core();
     client
         .projects_client()
-        .get(creds.organization, project)
+        .get(conn.organization(), project)
         .await?
         .default_team
         .and_then(|team| team.name)
@@ -566,15 +595,15 @@ pub(super) async fn default_team(project: &str) -> Result<String> {
 }
 
 async fn list_team_iterations(
+    conn: &Connection,
     project: &str,
     team: &str,
     timeframe: Option<&str>,
 ) -> Result<Vec<TeamSettingsIteration>> {
-    let creds = get_credentials()?;
-    let mut request =
-        create_work_client()?
-            .iterations_client()
-            .list(creds.organization, project, team);
+    let mut request = conn
+        .work()
+        .iterations_client()
+        .list(conn.organization(), project, team);
 
     if let Some(timeframe) = timeframe {
         request = request.timeframe(timeframe);
@@ -584,42 +613,44 @@ async fn list_team_iterations(
 }
 
 async fn add_team_iteration(
+    conn: &Connection,
     project: &str,
     team: &str,
     selector: &IterationSelector,
 ) -> Result<TeamSettingsIteration> {
     let mut iteration = TeamSettingsIteration::new();
-    iteration.id = Some(resolve_iteration_id(project, selector).await?);
+    iteration.id = Some(resolve_iteration_id(conn, project, selector).await?);
 
-    let creds = get_credentials()?;
-    Ok(create_work_client()?
+    Ok(conn
+        .work()
         .iterations_client()
-        .post_team_iteration(creds.organization, iteration, project, team)
+        .post_team_iteration(conn.organization(), iteration, project, team)
         .await?)
 }
 
 async fn remove_team_iteration(
+    conn: &Connection,
     project: &str,
     team: &str,
     selector: &IterationSelector,
 ) -> Result<()> {
-    let id = resolve_iteration_id(project, selector).await?;
+    let id = resolve_iteration_id(conn, project, selector).await?;
 
-    let creds = get_credentials()?;
-    create_work_client()?
+    conn.work()
         .iterations_client()
-        .delete(creds.organization, project, id, team)
+        .delete(conn.organization(), project, id, team)
         .await?;
     Ok(())
 }
 
 async fn list_iteration_work_items(
+    conn: &Connection,
     project: &str,
     team: &str,
     selector: &IterationSelector,
 ) -> Result<()> {
-    let id = resolve_iteration_id(project, selector).await?;
-    let work_items = iteration_work_items(project, team, &id).await?;
+    let id = resolve_iteration_id(conn, project, selector).await?;
+    let work_items = iteration_work_items(conn, project, team, &id).await?;
 
     let heading = "Iteration Work Items";
     if work_items.is_empty() {
@@ -632,14 +663,15 @@ async fn list_iteration_work_items(
 
 /// The work items in a team's iteration, by the iteration's id.
 pub(super) async fn iteration_work_items(
+    conn: &Connection,
     project: &str,
     team: &str,
     id: &str,
 ) -> Result<Vec<azure_devops_rust_api::wit::models::WorkItem>> {
-    let creds = get_credentials()?;
-    let relations = create_work_client()?
+    let relations = conn
+        .work()
         .iterations_client()
-        .get_iteration_work_items(creds.organization.clone(), project, id, team)
+        .get_iteration_work_items(conn.organization(), project, id, team)
         .await?
         .work_item_relations;
 
@@ -654,7 +686,7 @@ pub(super) async fn iteration_work_items(
         }
     }
 
-    let client = create_wit_client()?;
+    let client = conn.wit();
     let mut work_items = Vec::with_capacity(ids.len());
     for chunk in ids.chunks(WORK_ITEMS_PER_REQUEST) {
         let ids = chunk
@@ -665,7 +697,7 @@ pub(super) async fn iteration_work_items(
         work_items.extend(
             client
                 .work_items_client()
-                .list(creds.organization.clone(), ids, project)
+                .list(conn.organization(), ids, project)
                 .await?
                 .value,
         );
@@ -673,23 +705,24 @@ pub(super) async fn iteration_work_items(
     Ok(work_items)
 }
 
-async fn get_team_settings(project: &str, team: &str) -> Result<TeamSetting> {
-    let creds = get_credentials()?;
-    Ok(create_work_client()?
+async fn get_team_settings(conn: &Connection, project: &str, team: &str) -> Result<TeamSetting> {
+    Ok(conn
+        .work()
         .teamsettings_client()
-        .get(creds.organization, project, team)
+        .get(conn.organization(), project, team)
         .await?)
 }
 
 async fn update_team_settings(
+    conn: &Connection,
     project: &str,
     team: &str,
     patch: TeamSettingsPatch,
 ) -> Result<TeamSetting> {
-    let creds = get_credentials()?;
-    Ok(create_work_client()?
+    Ok(conn
+        .work()
         .teamsettings_client()
-        .update(creds.organization, patch, project, team)
+        .update(conn.organization(), patch, project, team)
         .await?)
 }
 

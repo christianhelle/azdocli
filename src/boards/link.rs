@@ -2,13 +2,10 @@
 //! dependencies.
 
 use super::iteration::WORK_ITEMS_PER_REQUEST;
-use super::{
-    add_relation_op, create_wit_client, parse_work_item_id, revision_test_op, update_work_item,
-};
-use crate::auth::get_credentials;
+use super::{add_relation_op, parse_work_item_id, revision_test_op, update_work_item};
 use crate::auth::url::api_work_item_url;
+use crate::connection::Connection;
 use crate::output::{self, md_table, OutputFormat, Render};
-use crate::project::get_project_or_default;
 use crate::text::escape_control_characters;
 use anyhow::{bail, Result};
 use azure_devops_rust_api::wit::models::json_patch_operation::Op;
@@ -223,14 +220,14 @@ fn describe(links: &mut [WorkItemLink], linked: &[WorkItem]) {
     }
 }
 
-async fn get_links(project: &str, id: &str) -> Result<Vec<WorkItemLink>> {
-    let creds = get_credentials()?;
-    let work_item = create_wit_client()?
+async fn get_links(conn: &Connection, project: &str, id: &str) -> Result<Vec<WorkItemLink>> {
+    let work_item = conn
+        .wit()
         .work_items_client()
-        .get_work_item(creds.organization, parse_work_item_id(id)?, project)
+        .get_work_item(conn.organization(), parse_work_item_id(id)?, project)
         .expand("relations")
         .await?;
-    with_details(project, links(&work_item)).await
+    with_details(conn, project, links(&work_item)).await
 }
 
 /// The patch that links work item `id` to each of `targets` as `link_type`.
@@ -252,14 +249,15 @@ fn add_links_patch(
 }
 
 async fn add_links(
+    conn: &Connection,
     project: &str,
     id: &str,
     link_type: LinkType,
     targets: &[i32],
     comment: Option<&str>,
 ) -> Result<Vec<WorkItemLink>> {
-    let creds = get_credentials()?;
-    let target_url = |target| api_work_item_url(&creds.base_url, &creds.organization, target);
+    let target_url =
+        |target| api_work_item_url(&conn.credentials().base_url, conn.organization(), target);
     let patch = add_links_patch(
         parse_work_item_id(id)?,
         link_type,
@@ -267,12 +265,12 @@ async fn add_links(
         target_url,
         comment,
     )?;
-    let updated = update_work_item(project, id, patch).await?;
+    let updated = update_work_item(conn, project, id, patch).await?;
     let added = links(&updated)
         .into_iter()
         .filter(|link| link.link_type == link_type && targets.contains(&link.id))
         .collect();
-    with_details(project, added).await
+    with_details(conn, project, added).await
 }
 
 /// The patch that removes the links from `work_item` to each of `targets`,
@@ -352,29 +350,33 @@ pub(super) fn set_parent_ops(
 }
 
 async fn remove_links(
+    conn: &Connection,
     project: &str,
     id: &str,
     targets: &[i32],
     link_type: Option<LinkType>,
 ) -> Result<Vec<WorkItemLink>> {
-    let creds = get_credentials()?;
-    let work_item = create_wit_client()?
+    let work_item = conn
+        .wit()
         .work_items_client()
-        .get_work_item(creds.organization, parse_work_item_id(id)?, project)
+        .get_work_item(conn.organization(), parse_work_item_id(id)?, project)
         .expand("relations")
         .await?;
     let (patch, removed) = remove_links_patch(&work_item, targets, link_type)?;
-    update_work_item(project, id, patch).await?;
-    with_details(project, removed).await
+    update_work_item(conn, project, id, patch).await?;
+    with_details(conn, project, removed).await
 }
 
 /// Fills in the type, state and title of the linked work items.
-async fn with_details(project: &str, mut links: Vec<WorkItemLink>) -> Result<Vec<WorkItemLink>> {
+async fn with_details(
+    conn: &Connection,
+    project: &str,
+    mut links: Vec<WorkItemLink>,
+) -> Result<Vec<WorkItemLink>> {
     if links.is_empty() {
         return Ok(links);
     }
-    let creds = get_credentials()?;
-    let client = create_wit_client()?.work_items_client();
+    let client = conn.wit().work_items_client();
     let mut ids: Vec<i32> = links.iter().map(|link| link.id).collect();
     ids.sort_unstable();
     ids.dedup();
@@ -382,7 +384,7 @@ async fn with_details(project: &str, mut links: Vec<WorkItemLink>) -> Result<Vec
     for chunk in ids.chunks(WORK_ITEMS_PER_REQUEST) {
         let ids: Vec<String> = chunk.iter().map(i32::to_string).collect();
         match client
-            .list(creds.organization.clone(), ids.join(","), project)
+            .list(conn.organization(), ids.join(","), project)
             .error_policy("omit")
             .fields("System.WorkItemType,System.State,System.Title")
             .await
@@ -456,11 +458,15 @@ impl Render for LinkList {
     }
 }
 
-pub async fn handle_command(subcommand: &LinkSubCommands, format: OutputFormat) -> Result<()> {
+pub async fn handle_command(
+    conn: &Connection,
+    subcommand: &LinkSubCommands,
+    format: OutputFormat,
+) -> Result<()> {
     match subcommand {
         LinkSubCommands::List { id, project } => {
-            let project_name = get_project_or_default(project.as_deref())?;
-            match get_links(&project_name, id).await {
+            let project_name = conn.project(project.as_deref())?;
+            match get_links(conn, &project_name, id).await {
                 Ok(links) => output::emit(&LinkList(links), format),
                 Err(e) => {
                     eprintln!("❌ Failed to list the links of work item {id}");
@@ -476,8 +482,17 @@ pub async fn handle_command(subcommand: &LinkSubCommands, format: OutputFormat) 
             comment,
             project,
         } => {
-            let project_name = get_project_or_default(project.as_deref())?;
-            match add_links(&project_name, id, *link_type, targets, comment.as_deref()).await {
+            let project_name = conn.project(project.as_deref())?;
+            match add_links(
+                conn,
+                &project_name,
+                id,
+                *link_type,
+                targets,
+                comment.as_deref(),
+            )
+            .await
+            {
                 Ok(added) if format == OutputFormat::Text => {
                     for link in &added {
                         println!("🔗 #{} is now {} #{id}", link.id, link_type.role());
@@ -499,8 +514,8 @@ pub async fn handle_command(subcommand: &LinkSubCommands, format: OutputFormat) 
             link_type,
             project,
         } => {
-            let project_name = get_project_or_default(project.as_deref())?;
-            match remove_links(&project_name, id, targets, *link_type).await {
+            let project_name = conn.project(project.as_deref())?;
+            match remove_links(conn, &project_name, id, targets, *link_type).await {
                 Ok(removed) if format == OutputFormat::Text => {
                     for link in &removed {
                         println!(
