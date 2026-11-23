@@ -554,10 +554,11 @@ fn parse_comment_list(body: &[u8]) -> Result<Vec<models::Comment>> {
     #[derive(serde::Deserialize)]
     struct LenientCommentList {
         #[serde(default)]
-        comments: Vec<models::Comment>,
+        comments: Option<Vec<models::Comment>>,
     }
 
-    Ok(serde_json::from_slice::<LenientCommentList>(body)?.comments)
+    let list = serde_json::from_slice::<LenientCommentList>(body)?;
+    Ok(list.comments.unwrap_or_default())
 }
 
 async fn add_work_item_comment(project: &str, id: &str, message: &str) -> Result<models::Comment> {
@@ -1864,6 +1865,13 @@ mod tests {
     #[test]
     fn parse_comment_list_accepts_empty_body_without_url() {
         let body = br#"{"totalCount":0,"count":0,"comments":[]}"#;
+
+        assert!(parse_comment_list(body).unwrap().is_empty());
+    }
+
+    #[test]
+    fn parse_comment_list_treats_null_comments_as_empty() {
+        let body = br#"{"url":"u","count":0,"comments":null}"#;
 
         assert!(parse_comment_list(body).unwrap().is_empty());
     }
