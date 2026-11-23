@@ -233,6 +233,8 @@ Fixes #<issue-number>
 - **Building from Source**: Update if build process changes
 - **Examples**: Ensure all examples work with current code
 
+**src/README.md** is the shorter README shown on crates.io. Its only installation method is Cargo, but it also covers authentication, usage examples, commands and features. Whenever you update README.md, update any matching content in src/README.md too, such as a changed flag in an example, a new subcommand or a major feature.
+
 ## Getting Help
 
 - Create an issue for bugs or feature requests
