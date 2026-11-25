@@ -64,6 +64,39 @@ winget install ChristianHelle.AzureDevOpsCLI
 
 Update it later with `winget upgrade ChristianHelle.AzureDevOpsCLI`.
 
+### Install using Homebrew (macOS and Linux)
+
+```bash
+brew install christianhelle/tap/azdocli
+```
+
+Update it later with `brew upgrade azdocli`.
+
+### Install using Chocolatey (Windows)
+
+```powershell
+choco install azdocli
+```
+
+Update it later with `choco upgrade azdocli`. New versions go through Chocolatey community moderation, so they can take a few days to appear.
+
+### Install using Scoop (Windows)
+
+```powershell
+scoop bucket add christianhelle https://github.com/christianhelle/scoop-bucket
+scoop install azdocli
+```
+
+Update it later with `scoop update azdocli`.
+
+### Install using cargo-binstall
+
+```bash
+cargo binstall azdocli
+```
+
+Downloads the pre-built binary from GitHub Releases instead of compiling it.
+
 ### Install from GitHub Releases
 
 You can also download pre-built binaries from the [GitHub Releases page](https://github.com/christianhelle/azdocli/releases):
@@ -101,7 +134,7 @@ azdocli check-update
 azdocli update
 ```
 
-`azdocli update` checks the download against GitHub's SHA-256 checksum before installing it. If azdocli was installed by Cargo, Snap, Homebrew, Chocolatey or WinGet, it tells you to update through that package manager instead.
+`azdocli update` checks the download against GitHub's SHA-256 checksum before installing it. If azdocli was installed by Cargo, Snap, Homebrew, Chocolatey, WinGet or Scoop, it tells you to update through that package manager instead.
 
 Once a day, after a command, azdocli also checks for a newer release and mentions it on stderr. The notice is skipped when stderr isn't a terminal or `--output` isn't `text`. Turn it off with `--no-update-check` or by setting `AZDOCLI_NO_UPDATE_CHECK`.
 

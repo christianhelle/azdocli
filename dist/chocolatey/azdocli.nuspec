@@ -15,14 +15,19 @@
     <projectSourceUrl>https://github.com/christianhelle/azdocli</projectSourceUrl>
     <docsUrl>https://christianhelle.com/azdocli</docsUrl>
     <bugTrackerUrl>https://github.com/christianhelle/azdocli/issues</bugTrackerUrl>
-    <tags>azure devops cli command-line git repository pipeline board</tags>
+    <tags>azure devops cli command-line git repository pipeline board artifacts release migrate</tags>
     <summary>CLI tool for interacting with Azure DevOps</summary>
-    <description>A powerful command-line interface for Azure DevOps that provides repository management, pipeline management, and board management capabilities.
+    <description>A powerful command-line interface for Azure DevOps that provides repository, pull request, pipeline, release, artifact, board, project, user and migration management.
 
 Features include:
-- Repository management (list, create, delete, clone, view, and manage pull requests)
+- Repository management (list, create, delete, clone, view, browse and manage pull requests)
 - Pipeline management
+- Release management (list releases, show a release, create a release from a build)
+- Azure Artifacts feeds, packages and Universal Packages (download and publish)
+- Project and team management, including process templates
+- Cross-tenant team-project migration with `azdocli migrate`
 - Board management
+- User management
 - Authentication using Personal Access Tokens (PAT)
 - Default project support</description>
     <releaseNotes>https://github.com/christianhelle/azdocli/releases</releaseNotes>

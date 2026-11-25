@@ -23,9 +23,12 @@ cp "$DIST_DIR"/*.yaml "$OUTPUT_DIR/"
 
 # Update version and SHA256 in all manifests
 for file in "$OUTPUT_DIR"/*.yaml; do
-    sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" "$file"
-    sed -i "s/SHA256_X64_PLACEHOLDER/$WIN_X64_SHA/g" "$file"
-    sed -i "s/SHA256_ARM64_PLACEHOLDER/$WIN_ARM64_SHA/g" "$file"
+    sed -i.bak "s/VERSION_PLACEHOLDER/$VERSION/g" "$file"
+    rm -f "$file".bak
+    sed -i.bak "s/SHA256_X64_PLACEHOLDER/$WIN_X64_SHA/g" "$file"
+    rm -f "$file".bak
+    sed -i.bak "s/SHA256_ARM64_PLACEHOLDER/$WIN_ARM64_SHA/g" "$file"
+    rm -f "$file".bak
 done
 
 echo "WinGet manifests created in $OUTPUT_DIR/"

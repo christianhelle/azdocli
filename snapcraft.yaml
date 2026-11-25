@@ -1,6 +1,6 @@
 name: azdocli
 base: core22
-version: 0.7.0
+adopt-info: azdocli
 summary: CLI tool for interacting with Azure DevOps
 description: |
   A powerful, extensible command-line interface for Azure DevOps, designed for
@@ -52,11 +52,18 @@ apps:
   azdocli:
     command: bin/azdocli
     aliases: [ado, azdo, adocli]
+    plugs: [network, home]
 
 parts:
   azdocli:
     plugin: rust
     source: .
+    override-pull: |
+      craftctl default
+      craftctl set version="$(git describe --tags --abbrev=0)"
+    override-build: |
+      sed -i "s/^version = \"0.1.0\"/version = \"$(craftctl get version)\"/" Cargo.toml
+      craftctl default
     build-packages:
       - libssl-dev
       - pkg-config

@@ -127,6 +127,8 @@ pub enum PackageManager {
     Homebrew,
     Chocolatey,
     WinGet,
+    Scoop,
+    ScoopGlobal,
 }
 
 impl PackageManager {
@@ -138,7 +140,14 @@ impl PackageManager {
             PackageManager::Homebrew => "brew upgrade azdocli",
             PackageManager::Chocolatey => "choco upgrade azdocli",
             PackageManager::WinGet => "winget upgrade ChristianHelle.AzureDevOpsCLI",
+            PackageManager::Scoop => "scoop update azdocli",
+            PackageManager::ScoopGlobal => "scoop update azdocli --global",
         }
+    }
+
+    /// Whether `update_command` must run from an elevated (administrator) shell.
+    pub fn needs_elevation(self) -> bool {
+        matches!(self, PackageManager::ScoopGlobal)
     }
 }
 
@@ -172,8 +181,32 @@ pub fn package_manager(exe: &Path, cargo_bin: Option<&Path>) -> Option<PackageMa
         Some(PackageManager::Chocolatey)
     } else if path.contains("/microsoft/winget/") {
         Some(PackageManager::WinGet)
+    } else if path.contains("/programdata/scoop/apps/") {
+        Some(PackageManager::ScoopGlobal)
+    } else if let Some(manager) = scoop(exe) {
+        Some(manager)
+    } else if path.contains("/scoop/apps/") {
+        Some(PackageManager::Scoop)
     } else {
         None
+    }
+}
+
+/// Whether Scoop installed `exe`, in whatever root it was given, and if so,
+/// whether globally. Scoop writes `install.json` next to the binaries of every
+/// app it installs, at `<root>/apps/<app>/<version>/`. Scoop installs itself
+/// into the local root only, so a root without `apps/scoop` is the global one,
+/// whether it was set by `SCOOP_GLOBAL` or Scoop's `global_path` config.
+fn scoop(exe: &Path) -> Option<PackageManager> {
+    let dir = exe.parent()?;
+    if !dir.join("install.json").is_file() {
+        return None;
+    }
+    let apps = dir.parent()?.parent()?;
+    if apps.join("scoop").is_dir() {
+        Some(PackageManager::Scoop)
+    } else {
+        Some(PackageManager::ScoopGlobal)
     }
 }
 
@@ -409,8 +442,13 @@ pub async fn update_running(client: &Client, base_url: &str, path: &Path) -> Res
     let exe = std::env::current_exe().context("could not find the running azdocli")?;
     if let Some(manager) = package_manager(&exe, cargo_bin().as_deref()) {
         bail!(
-            "{manager:?} installed azdocli; update it with `{}`",
-            manager.update_command()
+            "{manager:?} installed azdocli; update it with `{}`{}",
+            manager.update_command(),
+            if manager.needs_elevation() {
+                " from an elevated shell"
+            } else {
+                ""
+            }
         );
     }
     let current = current();
@@ -561,6 +599,14 @@ mod tests {
                 r"C:\Users\u\AppData\Local\Microsoft\WinGet\Links\azdocli.exe",
                 PackageManager::WinGet,
             ),
+            (
+                r"C:\Users\u\scoop\apps\azdocli\current\azdocli.exe",
+                PackageManager::Scoop,
+            ),
+            (
+                r"C:\ProgramData\scoop\apps\azdocli\0.8.0\azdocli.exe",
+                PackageManager::ScoopGlobal,
+            ),
         ] {
             assert_eq!(
                 package_manager(Path::new(exe), None),
@@ -568,6 +614,45 @@ mod tests {
                 "{exe}"
             );
         }
+    }
+
+    /// A Scoop root under a temp dir with azdocli installed in it, and Scoop
+    /// itself too when `local`. Returns the root and azdocli's binary.
+    fn scoop_root(local: bool) -> (tempfile::TempDir, PathBuf) {
+        let root = tempfile::tempdir().unwrap();
+        let apps = root.path().join("apps");
+        let version = apps.join("azdocli").join("0.8.0");
+        std::fs::create_dir_all(&version).unwrap();
+        std::fs::write(version.join("install.json"), "{}").unwrap();
+        if local {
+            std::fs::create_dir_all(apps.join("scoop").join("current")).unwrap();
+        }
+        (root, version.join("azdocli.exe"))
+    }
+
+    #[test]
+    fn a_binary_in_a_custom_scoop_root_is_scoops() {
+        let (_root, exe) = scoop_root(true);
+        assert_eq!(package_manager(&exe, None), Some(PackageManager::Scoop));
+    }
+
+    #[test]
+    fn a_binary_in_a_custom_global_scoop_root_is_scoops_global() {
+        let (_root, exe) = scoop_root(false);
+        assert_eq!(
+            package_manager(&exe, None),
+            Some(PackageManager::ScoopGlobal)
+        );
+    }
+
+    #[test]
+    fn scoop_global_installs_update_globally() {
+        assert_eq!(
+            PackageManager::ScoopGlobal.update_command(),
+            "scoop update azdocli --global"
+        );
+        assert!(PackageManager::ScoopGlobal.needs_elevation());
+        assert!(!PackageManager::Scoop.needs_elevation());
     }
 
     #[test]

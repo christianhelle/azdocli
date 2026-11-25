@@ -1,10 +1,11 @@
 name: Packaging
 
-# Generates validated package manager artifacts (Homebrew, Chocolatey, WinGet)
-# from a published GitHub release. WinGet is auto-submitted to winget-pkgs when
-# the WINGET_TOKEN secret is set; the rest are NOT auto-published and are
-# uploaded as workflow artifacts for manual submission to the respective
-# package managers.
+# Generates and validates package manager artifacts (Homebrew, Chocolatey,
+# WinGet, Scoop, Snap) from a published GitHub release. Each channel publishes
+# only when its secret is set: WINGET_TOKEN (winget-pkgs PR), CHOCOLATEY_API_KEY
+# (push.chocolatey.org), PACKAGES_TOKEN (homebrew-tap and scoop-bucket) and
+# SNAPCRAFT_STORE_CREDENTIALS (Snap Store). Without a secret the job still
+# validates and uploads its workflow artifact. See dist/README.md.
 
 on:
   release:
@@ -42,12 +43,13 @@ jobs:
           echo "Resolved version: $VERSION"
 
   homebrew:
-    name: Generate & validate Homebrew formula
+    name: Generate, validate & publish Homebrew formula
     needs: prepare
     runs-on: macos-latest
     env:
       GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.prepare.outputs.version }}
+      PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
     steps:
       - uses: actions/checkout@v6
       - name: Download release assets
@@ -56,25 +58,58 @@ jobs:
             --repo "${{ github.repository }}" \
             --pattern "macos-x64.zip" \
             --pattern "macos-arm64.zip" \
+            --pattern "linux-x64.zip" \
+            --pattern "linux-arm64.zip" \
             --dir assets
       - name: Calculate SHA256 checksums
         id: checksums
         run: |
           echo "macos_x64_sha=$(shasum -a 256 assets/macos-x64.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
           echo "macos_arm64_sha=$(shasum -a 256 assets/macos-arm64.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "linux_x64_sha=$(shasum -a 256 assets/linux-x64.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "linux_arm64_sha=$(shasum -a 256 assets/linux-arm64.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
       - name: Generate Homebrew formula
         run: |
           ./scripts/generate-homebrew.sh "$VERSION" \
             "${{ steps.checksums.outputs.macos_x64_sha }}" \
-            "${{ steps.checksums.outputs.macos_arm64_sha }}"
-      - name: Validate formula (brew style)
+            "${{ steps.checksums.outputs.macos_arm64_sha }}" \
+            "${{ steps.checksums.outputs.linux_x64_sha }}" \
+            "${{ steps.checksums.outputs.linux_arm64_sha }}"
+      - name: Validate formula (brew style, install, test)
         run: |
-          brew style "output/homebrew/azdocli-$VERSION.rb"
+          brew tap-new --no-git local/test
+          mkdir -p "$(brew --repository local/test)/Formula"
+          cp output/homebrew/azdocli.rb "$(brew --repository local/test)/Formula/azdocli.rb"
+          brew style local/test
+          brew install --formula local/test/azdocli
+          brew test local/test/azdocli
       - name: Upload Homebrew artifact
         uses: actions/upload-artifact@v7
         with:
           name: homebrew-formula
-          path: output/homebrew/azdocli-${{ env.VERSION }}.rb
+          path: output/homebrew/azdocli.rb
+      - name: Publish formula to homebrew-tap
+        if: env.PACKAGES_TOKEN != ''
+        run: |
+          case "$VERSION" in *-*) echo "Prerelease $VERSION is not published to the tap"; exit 0;; esac
+          git clone "https://x-access-token:${PACKAGES_TOKEN}@github.com/christianhelle/homebrew-tap" tap
+          current=$(sed -n 's/^  version "\(.*\)"$/\1/p' tap/Formula/azdocli.rb 2>/dev/null || true)
+          if [ -n "$current" ] && [ "$(printf '%s\n%s\n' "$current" "$VERSION" | sort -V | tail -n1)" != "$VERSION" ]; then
+            echo "Published version $current is newer than $VERSION; not downgrading"
+            exit 0
+          fi
+          mkdir -p tap/Formula
+          cp output/homebrew/azdocli.rb tap/Formula/azdocli.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/azdocli.rb
+          if git diff --cached --quiet; then
+            echo "Formula unchanged"
+          else
+            git commit -m "azdocli $VERSION"
+            git push
+          fi
 
   chocolatey:
     name: Generate & validate Chocolatey package
@@ -83,6 +118,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.prepare.outputs.version }}
+      CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
     steps:
       - uses: actions/checkout@v6
       - name: Download release assets
@@ -107,6 +143,12 @@ jobs:
         run: |
           Set-Location "output/chocolatey"
           choco pack
+      - name: Publish package to Chocolatey
+        if: env.CHOCOLATEY_API_KEY != ''
+        shell: pwsh
+        run: |
+          Set-Location "output/chocolatey"
+          choco push "azdocli.$($env:VERSION).nupkg" --source https://push.chocolatey.org/ --api-key $env:CHOCOLATEY_API_KEY
       - name: Upload Chocolatey artifact
         uses: actions/upload-artifact@v7
         with:
@@ -163,3 +205,110 @@ jobs:
           release-tag: ${{ env.VERSION }}
           installers-regex: '^windows-(x64|arm64)\.zip$'
           token: ${{ secrets.WINGET_TOKEN }}
+
+  scoop:
+    name: Generate, validate & publish Scoop manifest
+    needs: prepare
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download release assets
+        shell: bash
+        run: |
+          gh release download "$VERSION" \
+            --repo "${{ github.repository }}" \
+            --pattern "windows-x64.zip" \
+            --pattern "windows-arm64.zip" \
+            --dir assets
+      - name: Calculate SHA256 checksums
+        id: checksums
+        shell: bash
+        run: |
+          echo "windows_x64_sha=$(sha256sum assets/windows-x64.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "windows_arm64_sha=$(sha256sum assets/windows-arm64.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - name: Generate Scoop manifest
+        shell: bash
+        run: |
+          ./scripts/generate-scoop.sh "$VERSION" \
+            "${{ steps.checksums.outputs.windows_x64_sha }}" \
+            "${{ steps.checksums.outputs.windows_arm64_sha }}"
+      - name: Install Scoop
+        shell: pwsh
+        run: |
+          Invoke-RestMethod -Uri https://get.scoop.sh -OutFile install-scoop.ps1
+          ./install-scoop.ps1 -RunAsAdmin
+          "$env:USERPROFILE\scoop\shims" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Validate manifest (scoop install)
+        shell: pwsh
+        run: |
+          scoop install "$env:GITHUB_WORKSPACE/output/scoop/azdocli.json"
+          $shim = "$env:USERPROFILE\scoop\shims\azdocli.exe"
+          & $shim --help
+          $reported = & $shim --version
+          if (-not ($reported -match [regex]::Escape($env:VERSION))) {
+            throw "Expected azdocli $env:VERSION, got: $reported"
+          }
+      - name: Upload Scoop artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: scoop-manifest
+          path: output/scoop/azdocli.json
+      - name: Publish manifest to scoop-bucket
+        if: env.PACKAGES_TOKEN != ''
+        shell: bash
+        run: |
+          case "$VERSION" in *-*) echo "Prerelease $VERSION is not published to the bucket"; exit 0;; esac
+          git clone "https://x-access-token:${PACKAGES_TOKEN}@github.com/christianhelle/scoop-bucket" bucket
+          current=$(sed -n 's/^ *"version": "\(.*\)",$/\1/p' bucket/bucket/azdocli.json 2>/dev/null || true)
+          if [ -n "$current" ] && [ "$(printf '%s\n%s\n' "$current" "$VERSION" | sort -V | tail -n1)" != "$VERSION" ]; then
+            echo "Published version $current is newer than $VERSION; not downgrading"
+            exit 0
+          fi
+          mkdir -p bucket/bucket
+          cp output/scoop/azdocli.json bucket/bucket/azdocli.json
+          cd bucket
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bucket/azdocli.json
+          if git diff --cached --quiet; then
+            echo "Manifest unchanged"
+          else
+            git commit -m "azdocli $VERSION"
+            git push
+          fi
+
+  snap:
+    name: Build & publish snap (${{ matrix.os }})
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.version }}
+          fetch-depth: 0
+      - name: Build snap
+        id: build
+        uses: snapcore/action-build@v1
+      - name: Upload snap artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: snap-${{ matrix.os }}
+          path: ${{ steps.build.outputs.snap }}
+      - name: Publish snap to Snap Store (stable)
+        if: env.SNAPCRAFT_STORE_CREDENTIALS != ''
+        uses: snapcore/action-publish@v1
+        with:
+          store_login: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+          snap: ${{ steps.build.outputs.snap }}
+          release: stable
