@@ -4,7 +4,6 @@
 # (push.chocolatey.org), PACKAGES_TOKEN (homebrew-tap and scoop-bucket) and
 # SNAPCRAFT_STORE_CREDENTIALS (Snap Store). Without a secret the job still
 # validates and uploads its workflow artifact. See dist/README.md.
-# package managers.
 
 on:
   release:
