@@ -127,6 +127,7 @@ pub enum PackageManager {
     Homebrew,
     Chocolatey,
     WinGet,
+    Scoop,
 }
 
 impl PackageManager {
@@ -138,6 +139,7 @@ impl PackageManager {
             PackageManager::Homebrew => "brew upgrade azdocli",
             PackageManager::Chocolatey => "choco upgrade azdocli",
             PackageManager::WinGet => "winget upgrade ChristianHelle.AzureDevOpsCLI",
+            PackageManager::Scoop => "scoop update azdocli",
         }
     }
 }
@@ -172,6 +174,8 @@ pub fn package_manager(exe: &Path, cargo_bin: Option<&Path>) -> Option<PackageMa
         Some(PackageManager::Chocolatey)
     } else if path.contains("/microsoft/winget/") {
         Some(PackageManager::WinGet)
+    } else if path.contains("/scoop/apps/") {
+        Some(PackageManager::Scoop)
     } else {
         None
     }
@@ -560,6 +564,10 @@ mod tests {
             (
                 r"C:\Users\u\AppData\Local\Microsoft\WinGet\Links\azdocli.exe",
                 PackageManager::WinGet,
+            ),
+            (
+                r"C:\Users\u\scoop\apps\azdocli\current\azdocli.exe",
+                PackageManager::Scoop,
             ),
         ] {
             assert_eq!(
