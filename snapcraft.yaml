@@ -52,6 +52,7 @@ apps:
   azdocli:
     command: bin/azdocli
     aliases: [ado, azdo, adocli]
+    plugs: [network, home]
 
 parts:
   azdocli:
