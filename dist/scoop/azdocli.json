@@ -1,0 +1,30 @@
+{
+    "version": "VERSION_PLACEHOLDER",
+    "description": "CLI tool for interacting with Azure DevOps",
+    "homepage": "https://christianhelle.com/azdocli",
+    "license": "MIT",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/christianhelle/azdocli/releases/download/VERSION_PLACEHOLDER/windows-x64.zip",
+            "hash": "SHA256_X64_PLACEHOLDER"
+        },
+        "arm64": {
+            "url": "https://github.com/christianhelle/azdocli/releases/download/VERSION_PLACEHOLDER/windows-arm64.zip",
+            "hash": "SHA256_ARM64_PLACEHOLDER"
+        }
+    },
+    "bin": "azdocli.exe",
+    "checkver": {
+        "github": "https://github.com/christianhelle/azdocli"
+    },
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/christianhelle/azdocli/releases/download/$version/windows-x64.zip"
+            },
+            "arm64": {
+                "url": "https://github.com/christianhelle/azdocli/releases/download/$version/windows-arm64.zip"
+            }
+        }
+    }
+}
