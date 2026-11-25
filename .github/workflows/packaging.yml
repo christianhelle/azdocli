@@ -91,6 +91,7 @@ jobs:
       - name: Publish formula to homebrew-tap
         if: env.PACKAGES_TOKEN != ''
         run: |
+          case "$VERSION" in *-*) echo "Prerelease $VERSION is not published to the tap"; exit 0;; esac
           git clone "https://x-access-token:${PACKAGES_TOKEN}@github.com/christianhelle/homebrew-tap" tap
           current=$(sed -n 's/^  version "\(.*\)"$/\1/p' tap/Formula/azdocli.rb 2>/dev/null || true)
           if [ -n "$current" ] && [ "$(printf '%s\n%s\n' "$current" "$VERSION" | sort -V | tail -n1)" != "$VERSION" ]; then
@@ -260,6 +261,7 @@ jobs:
         if: env.PACKAGES_TOKEN != ''
         shell: bash
         run: |
+          case "$VERSION" in *-*) echo "Prerelease $VERSION is not published to the bucket"; exit 0;; esac
           git clone "https://x-access-token:${PACKAGES_TOKEN}@github.com/christianhelle/scoop-bucket" bucket
           current=$(sed -n 's/^ *"version": "\(.*\)",$/\1/p' bucket/bucket/azdocli.json 2>/dev/null || true)
           if [ -n "$current" ] && [ "$(printf '%s\n%s\n' "$current" "$VERSION" | sort -V | tail -n1)" != "$VERSION" ]; then

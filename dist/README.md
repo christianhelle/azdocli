@@ -31,7 +31,8 @@ exist).
 3. **Publish**: each publish step runs only when its secret is set. Without the
    secret the job still validates and uploads its workflow artifact. The tap
    and bucket only move forward: if they already hold a newer version, the
-   publish step skips. Roll back by editing those repos by hand.
+   publish step skips. Prerelease versions (containing `-`) are never
+   published there. Roll back by editing those repos by hand.
 
 Run a generator locally with dummy values to check its output:
 
