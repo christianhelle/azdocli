@@ -1,3 +1,5 @@
+name: Packaging
+
 # Generates and validates package manager artifacts (Homebrew, Chocolatey,
 # WinGet, Scoop, Snap) from a published GitHub release. Each channel publishes
 # only when its secret is set: WINGET_TOKEN (winget-pkgs PR), CHOCOLATEY_API_KEY
