@@ -29,7 +29,9 @@ exist).
    generates its files and validates them natively (`brew style`/`brew test`,
    `choco pack`, `winget validate`, `scoop install`, `snapcore/action-build`).
 3. **Publish**: each publish step runs only when its secret is set. Without the
-   secret the job still validates and uploads its workflow artifact.
+   secret the job still validates and uploads its workflow artifact. The tap
+   and bucket only move forward: if they already hold a newer version, the
+   publish step skips. Roll back by editing those repos by hand.
 
 Run a generator locally with dummy values to check its output:
 

@@ -92,6 +92,11 @@ jobs:
         if: env.PACKAGES_TOKEN != ''
         run: |
           git clone "https://x-access-token:${PACKAGES_TOKEN}@github.com/christianhelle/homebrew-tap" tap
+          current=$(sed -n 's/^  version "\(.*\)"$/\1/p' tap/Formula/azdocli.rb 2>/dev/null || true)
+          if [ -n "$current" ] && [ "$(printf '%s\n%s\n' "$current" "$VERSION" | sort -V | tail -n1)" != "$VERSION" ]; then
+            echo "Published version $current is newer than $VERSION; not downgrading"
+            exit 0
+          fi
           mkdir -p tap/Formula
           cp output/homebrew/azdocli.rb tap/Formula/azdocli.rb
           cd tap
@@ -256,6 +261,11 @@ jobs:
         shell: bash
         run: |
           git clone "https://x-access-token:${PACKAGES_TOKEN}@github.com/christianhelle/scoop-bucket" bucket
+          current=$(sed -n 's/^ *"version": "\(.*\)",$/\1/p' bucket/bucket/azdocli.json 2>/dev/null || true)
+          if [ -n "$current" ] && [ "$(printf '%s\n%s\n' "$current" "$VERSION" | sort -V | tail -n1)" != "$VERSION" ]; then
+            echo "Published version $current is newer than $VERSION; not downgrading"
+            exit 0
+          fi
           mkdir -p bucket/bucket
           cp output/scoop/azdocli.json bucket/bucket/azdocli.json
           cd bucket
