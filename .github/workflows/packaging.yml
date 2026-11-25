@@ -235,6 +235,7 @@ jobs:
         run: |
           Invoke-RestMethod -Uri https://get.scoop.sh -OutFile install-scoop.ps1
           ./install-scoop.ps1 -RunAsAdmin
+          "$env:USERPROFILE\scoop\shims" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
       - name: Validate manifest (scoop install)
         shell: pwsh
         run: |
