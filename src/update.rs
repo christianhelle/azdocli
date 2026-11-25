@@ -128,6 +128,7 @@ pub enum PackageManager {
     Chocolatey,
     WinGet,
     Scoop,
+    ScoopGlobal,
 }
 
 impl PackageManager {
@@ -140,6 +141,7 @@ impl PackageManager {
             PackageManager::Chocolatey => "choco upgrade azdocli",
             PackageManager::WinGet => "winget upgrade ChristianHelle.AzureDevOpsCLI",
             PackageManager::Scoop => "scoop update azdocli",
+            PackageManager::ScoopGlobal => "scoop update azdocli --global",
         }
     }
 }
@@ -174,11 +176,20 @@ pub fn package_manager(exe: &Path, cargo_bin: Option<&Path>) -> Option<PackageMa
         Some(PackageManager::Chocolatey)
     } else if path.contains("/microsoft/winget/") {
         Some(PackageManager::WinGet)
-    } else if path.contains("/scoop/apps/") {
+    } else if path.contains("/programdata/scoop/apps/") {
+        Some(PackageManager::ScoopGlobal)
+    } else if path.contains("/scoop/apps/") || installed_by_scoop(exe) {
         Some(PackageManager::Scoop)
     } else {
         None
     }
+}
+
+/// Scoop writes `install.json` next to the binaries of every app it installs,
+/// whatever root directory it was given.
+fn installed_by_scoop(exe: &Path) -> bool {
+    exe.parent()
+        .is_some_and(|dir| dir.join("install.json").is_file())
 }
 
 /// Fails unless `bytes` match GitHub's `digest` of them. An asset without a
@@ -569,6 +580,10 @@ mod tests {
                 r"C:\Users\u\scoop\apps\azdocli\current\azdocli.exe",
                 PackageManager::Scoop,
             ),
+            (
+                r"C:\ProgramData\scoop\apps\azdocli\0.8.0\azdocli.exe",
+                PackageManager::ScoopGlobal,
+            ),
         ] {
             assert_eq!(
                 package_manager(Path::new(exe), None),
@@ -576,6 +591,26 @@ mod tests {
                 "{exe}"
             );
         }
+    }
+
+    #[test]
+    fn a_binary_in_a_custom_scoop_root_is_scoops() {
+        let root = tempfile::tempdir().unwrap();
+        let version = root.path().join("apps").join("azdocli").join("0.8.0");
+        std::fs::create_dir_all(&version).unwrap();
+        std::fs::write(version.join("install.json"), "{}").unwrap();
+        assert_eq!(
+            package_manager(&version.join("azdocli.exe"), None),
+            Some(PackageManager::Scoop)
+        );
+    }
+
+    #[test]
+    fn scoop_global_installs_update_globally() {
+        assert_eq!(
+            PackageManager::ScoopGlobal.update_command(),
+            "scoop update azdocli --global"
+        );
     }
 
     #[test]
