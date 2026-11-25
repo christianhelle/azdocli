@@ -19,9 +19,9 @@ mkdir -p "$OUTPUT_DIR"
 
 # Create Homebrew formula
 cp "$DIST_DIR/azdocli.rb" "$OUTPUT_DIR/azdocli-$VERSION.rb"
-sed -i "s/VERSION_PLACEHOLDER/$VERSION/g" "$OUTPUT_DIR/azdocli-$VERSION.rb"
-sed -i "s/SHA256_X64_PLACEHOLDER/$MACOS_X64_SHA/g" "$OUTPUT_DIR/azdocli-$VERSION.rb"
-sed -i "s/SHA256_ARM64_PLACEHOLDER/$MACOS_ARM64_SHA/g" "$OUTPUT_DIR/azdocli-$VERSION.rb"
+sed -i.bak "s/VERSION_PLACEHOLDER/$VERSION/g" "$OUTPUT_DIR/azdocli-$VERSION.rb" && rm -f "$OUTPUT_DIR/azdocli-$VERSION.rb".bak
+sed -i.bak "s/SHA256_X64_PLACEHOLDER/$MACOS_X64_SHA/g" "$OUTPUT_DIR/azdocli-$VERSION.rb" && rm -f "$OUTPUT_DIR/azdocli-$VERSION.rb".bak
+sed -i.bak "s/SHA256_ARM64_PLACEHOLDER/$MACOS_ARM64_SHA/g" "$OUTPUT_DIR/azdocli-$VERSION.rb" && rm -f "$OUTPUT_DIR/azdocli-$VERSION.rb".bak
 
 echo "Homebrew formula created: $OUTPUT_DIR/azdocli-$VERSION.rb"
 cat "$OUTPUT_DIR/azdocli-$VERSION.rb"
