@@ -42,12 +42,13 @@ jobs:
           echo "Resolved version: $VERSION"
 
   homebrew:
-    name: Generate & validate Homebrew formula
+    name: Generate, validate & publish Homebrew formula
     needs: prepare
     runs-on: macos-latest
     env:
       GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.prepare.outputs.version }}
+      PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
     steps:
       - uses: actions/checkout@v6
       - name: Download release assets
@@ -56,25 +57,52 @@ jobs:
             --repo "${{ github.repository }}" \
             --pattern "macos-x64.zip" \
             --pattern "macos-arm64.zip" \
+            --pattern "linux-x64.zip" \
+            --pattern "linux-arm64.zip" \
             --dir assets
       - name: Calculate SHA256 checksums
         id: checksums
         run: |
           echo "macos_x64_sha=$(shasum -a 256 assets/macos-x64.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
           echo "macos_arm64_sha=$(shasum -a 256 assets/macos-arm64.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "linux_x64_sha=$(shasum -a 256 assets/linux-x64.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "linux_arm64_sha=$(shasum -a 256 assets/linux-arm64.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
       - name: Generate Homebrew formula
         run: |
           ./scripts/generate-homebrew.sh "$VERSION" \
             "${{ steps.checksums.outputs.macos_x64_sha }}" \
-            "${{ steps.checksums.outputs.macos_arm64_sha }}"
-      - name: Validate formula (brew style)
+            "${{ steps.checksums.outputs.macos_arm64_sha }}" \
+            "${{ steps.checksums.outputs.linux_x64_sha }}" \
+            "${{ steps.checksums.outputs.linux_arm64_sha }}"
+      - name: Validate formula (brew style, install, test)
         run: |
-          brew style "output/homebrew/azdocli-$VERSION.rb"
+          brew tap-new --no-git local/test
+          mkdir -p "$(brew --repository local/test)/Formula"
+          cp output/homebrew/azdocli.rb "$(brew --repository local/test)/Formula/azdocli.rb"
+          brew style local/test
+          brew install --formula local/test/azdocli
+          brew test local/test/azdocli
       - name: Upload Homebrew artifact
         uses: actions/upload-artifact@v7
         with:
           name: homebrew-formula
-          path: output/homebrew/azdocli-${{ env.VERSION }}.rb
+          path: output/homebrew/azdocli.rb
+      - name: Publish formula to homebrew-tap
+        if: env.PACKAGES_TOKEN != ''
+        run: |
+          git clone "https://x-access-token:${PACKAGES_TOKEN}@github.com/christianhelle/homebrew-tap" tap
+          mkdir -p tap/Formula
+          cp output/homebrew/azdocli.rb tap/Formula/azdocli.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/azdocli.rb
+          if git diff --cached --quiet; then
+            echo "Formula unchanged"
+          else
+            git commit -m "azdocli $VERSION"
+            git push
+          fi
 
   chocolatey:
     name: Generate & validate Chocolatey package
