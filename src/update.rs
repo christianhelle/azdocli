@@ -144,6 +144,11 @@ impl PackageManager {
             PackageManager::ScoopGlobal => "scoop update azdocli --global",
         }
     }
+
+    /// Whether `update_command` must run from an elevated (administrator) shell.
+    pub fn needs_elevation(self) -> bool {
+        matches!(self, PackageManager::ScoopGlobal)
+    }
 }
 
 /// Where `cargo install` puts binaries: `$CARGO_HOME/bin`, or `~/.cargo/bin`.
@@ -158,6 +163,19 @@ pub fn cargo_bin() -> Option<PathBuf> {
 /// The package manager that installed `exe`, if any. `cargo_bin` is where
 /// Cargo puts the binaries it installs.
 pub fn package_manager(exe: &Path, cargo_bin: Option<&Path>) -> Option<PackageManager> {
+    let scoop_global = std::env::var_os("SCOOP_GLOBAL")
+        .filter(|root| !root.is_empty())
+        .map(PathBuf::from);
+    package_manager_in(exe, cargo_bin, scoop_global.as_deref())
+}
+
+/// As `package_manager`, with `scoop_global` the custom root Scoop installs
+/// global apps under, if one is configured.
+fn package_manager_in(
+    exe: &Path,
+    cargo_bin: Option<&Path>,
+    scoop_global: Option<&Path>,
+) -> Option<PackageManager> {
     let canonical = |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.into());
     if let (Some(dir), Some(bin)) = (exe.parent(), cargo_bin) {
         if canonical(dir) == canonical(bin) {
@@ -176,7 +194,12 @@ pub fn package_manager(exe: &Path, cargo_bin: Option<&Path>) -> Option<PackageMa
         Some(PackageManager::Chocolatey)
     } else if path.contains("/microsoft/winget/") {
         Some(PackageManager::WinGet)
-    } else if path.contains("/programdata/scoop/apps/") {
+    } else if path.contains("/programdata/scoop/apps/")
+        || scoop_global.is_some_and(|root| {
+            exe.parent()
+                .is_some_and(|dir| canonical(dir).starts_with(canonical(root)))
+        })
+    {
         Some(PackageManager::ScoopGlobal)
     } else if path.contains("/scoop/apps/") || installed_by_scoop(exe) {
         Some(PackageManager::Scoop)
@@ -424,8 +447,13 @@ pub async fn update_running(client: &Client, base_url: &str, path: &Path) -> Res
     let exe = std::env::current_exe().context("could not find the running azdocli")?;
     if let Some(manager) = package_manager(&exe, cargo_bin().as_deref()) {
         bail!(
-            "{manager:?} installed azdocli; update it with `{}`",
-            manager.update_command()
+            "{manager:?} installed azdocli; update it with `{}`{}",
+            manager.update_command(),
+            if manager.needs_elevation() {
+                " from an elevated shell"
+            } else {
+                ""
+            }
         );
     }
     let current = current();
@@ -610,6 +638,20 @@ mod tests {
         assert_eq!(
             PackageManager::ScoopGlobal.update_command(),
             "scoop update azdocli --global"
+        );
+        assert!(PackageManager::ScoopGlobal.needs_elevation());
+        assert!(!PackageManager::Scoop.needs_elevation());
+    }
+
+    #[test]
+    fn a_binary_in_a_custom_global_scoop_root_is_scoops_global() {
+        let root = tempfile::tempdir().unwrap();
+        let version = root.path().join("apps").join("azdocli").join("0.8.0");
+        std::fs::create_dir_all(&version).unwrap();
+        std::fs::write(version.join("install.json"), "{}").unwrap();
+        assert_eq!(
+            package_manager_in(&version.join("azdocli.exe"), None, Some(root.path())),
+            Some(PackageManager::ScoopGlobal)
         );
     }
 
