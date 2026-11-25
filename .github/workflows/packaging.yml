@@ -252,6 +252,7 @@ jobs:
           path: output/scoop/azdocli.json
       - name: Publish manifest to scoop-bucket
         if: env.PACKAGES_TOKEN != ''
+        shell: bash
         run: |
           git clone "https://x-access-token:${PACKAGES_TOKEN}@github.com/christianhelle/scoop-bucket" bucket
           mkdir -p bucket/bucket
