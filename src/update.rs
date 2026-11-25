@@ -163,19 +163,6 @@ pub fn cargo_bin() -> Option<PathBuf> {
 /// The package manager that installed `exe`, if any. `cargo_bin` is where
 /// Cargo puts the binaries it installs.
 pub fn package_manager(exe: &Path, cargo_bin: Option<&Path>) -> Option<PackageManager> {
-    let scoop_global = std::env::var_os("SCOOP_GLOBAL")
-        .filter(|root| !root.is_empty())
-        .map(PathBuf::from);
-    package_manager_in(exe, cargo_bin, scoop_global.as_deref())
-}
-
-/// As `package_manager`, with `scoop_global` the custom root Scoop installs
-/// global apps under, if one is configured.
-fn package_manager_in(
-    exe: &Path,
-    cargo_bin: Option<&Path>,
-    scoop_global: Option<&Path>,
-) -> Option<PackageManager> {
     let canonical = |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.into());
     if let (Some(dir), Some(bin)) = (exe.parent(), cargo_bin) {
         if canonical(dir) == canonical(bin) {
@@ -194,25 +181,33 @@ fn package_manager_in(
         Some(PackageManager::Chocolatey)
     } else if path.contains("/microsoft/winget/") {
         Some(PackageManager::WinGet)
-    } else if path.contains("/programdata/scoop/apps/")
-        || scoop_global.is_some_and(|root| {
-            exe.parent()
-                .is_some_and(|dir| canonical(dir).starts_with(canonical(root)))
-        })
-    {
+    } else if path.contains("/programdata/scoop/apps/") {
         Some(PackageManager::ScoopGlobal)
-    } else if path.contains("/scoop/apps/") || installed_by_scoop(exe) {
+    } else if let Some(manager) = scoop(exe) {
+        Some(manager)
+    } else if path.contains("/scoop/apps/") {
         Some(PackageManager::Scoop)
     } else {
         None
     }
 }
 
-/// Scoop writes `install.json` next to the binaries of every app it installs,
-/// whatever root directory it was given.
-fn installed_by_scoop(exe: &Path) -> bool {
-    exe.parent()
-        .is_some_and(|dir| dir.join("install.json").is_file())
+/// Whether Scoop installed `exe`, in whatever root it was given, and if so,
+/// whether globally. Scoop writes `install.json` next to the binaries of every
+/// app it installs, at `<root>/apps/<app>/<version>/`. Scoop installs itself
+/// into the local root only, so a root without `apps/scoop` is the global one,
+/// whether it was set by `SCOOP_GLOBAL` or Scoop's `global_path` config.
+fn scoop(exe: &Path) -> Option<PackageManager> {
+    let dir = exe.parent()?;
+    if !dir.join("install.json").is_file() {
+        return None;
+    }
+    let apps = dir.parent()?.parent()?;
+    if apps.join("scoop").is_dir() {
+        Some(PackageManager::Scoop)
+    } else {
+        Some(PackageManager::ScoopGlobal)
+    }
 }
 
 /// Fails unless `bytes` match GitHub's `digest` of them. An asset without a
@@ -621,15 +616,32 @@ mod tests {
         }
     }
 
-    #[test]
-    fn a_binary_in_a_custom_scoop_root_is_scoops() {
+    /// A Scoop root under a temp dir with azdocli installed in it, and Scoop
+    /// itself too when `local`. Returns the root and azdocli's binary.
+    fn scoop_root(local: bool) -> (tempfile::TempDir, PathBuf) {
         let root = tempfile::tempdir().unwrap();
-        let version = root.path().join("apps").join("azdocli").join("0.8.0");
+        let apps = root.path().join("apps");
+        let version = apps.join("azdocli").join("0.8.0");
         std::fs::create_dir_all(&version).unwrap();
         std::fs::write(version.join("install.json"), "{}").unwrap();
+        if local {
+            std::fs::create_dir_all(apps.join("scoop").join("current")).unwrap();
+        }
+        (root, version.join("azdocli.exe"))
+    }
+
+    #[test]
+    fn a_binary_in_a_custom_scoop_root_is_scoops() {
+        let (_root, exe) = scoop_root(true);
+        assert_eq!(package_manager(&exe, None), Some(PackageManager::Scoop));
+    }
+
+    #[test]
+    fn a_binary_in_a_custom_global_scoop_root_is_scoops_global() {
+        let (_root, exe) = scoop_root(false);
         assert_eq!(
-            package_manager(&version.join("azdocli.exe"), None),
-            Some(PackageManager::Scoop)
+            package_manager(&exe, None),
+            Some(PackageManager::ScoopGlobal)
         );
     }
 
@@ -641,18 +653,6 @@ mod tests {
         );
         assert!(PackageManager::ScoopGlobal.needs_elevation());
         assert!(!PackageManager::Scoop.needs_elevation());
-    }
-
-    #[test]
-    fn a_binary_in_a_custom_global_scoop_root_is_scoops_global() {
-        let root = tempfile::tempdir().unwrap();
-        let version = root.path().join("apps").join("azdocli").join("0.8.0");
-        std::fs::create_dir_all(&version).unwrap();
-        std::fs::write(version.join("install.json"), "{}").unwrap();
-        assert_eq!(
-            package_manager_in(&version.join("azdocli.exe"), None, Some(root.path())),
-            Some(PackageManager::ScoopGlobal)
-        );
     }
 
     #[test]
