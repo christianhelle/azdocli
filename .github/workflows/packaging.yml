@@ -1,9 +1,9 @@
-name: Packaging
-
-# Generates validated package manager artifacts (Homebrew, Chocolatey, WinGet)
-# from a published GitHub release. WinGet is auto-submitted to winget-pkgs when
-# the WINGET_TOKEN secret is set; the rest are NOT auto-published and are
-# uploaded as workflow artifacts for manual submission to the respective
+# Generates and validates package manager artifacts (Homebrew, Chocolatey,
+# WinGet, Scoop, Snap) from a published GitHub release. Each channel publishes
+# only when its secret is set: WINGET_TOKEN (winget-pkgs PR), CHOCOLATEY_API_KEY
+# (push.chocolatey.org), PACKAGES_TOKEN (homebrew-tap and scoop-bucket) and
+# SNAPCRAFT_STORE_CREDENTIALS (Snap Store). Without a secret the job still
+# validates and uploads its workflow artifact. See dist/README.md.
 # package managers.
 
 on:
