@@ -13,8 +13,6 @@ $packageArgs = @{
   checksumType64 = $checksumType64
 }
 
+# Chocolatey shims the azdocli.exe in the tools directory automatically, so
+# the install directory does not need to be added to PATH.
 Install-ChocolateyZipPackage @packageArgs
-
-# Create shim for the executable
-$installDir = "$(Split-Path -parent $MyInvocation.MyCommand.Definition)"
-Install-ChocolateyPath $installDir
