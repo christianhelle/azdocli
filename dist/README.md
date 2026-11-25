@@ -7,7 +7,7 @@ to `output/` (git-ignored).
 
 | Channel | Template | Generator | Published to | Job in `packaging.yml` | Secret |
 |---|---|---|---|---|---|
-| crates.io | `Cargo.toml` | - | crates.io (`publish-crates` in `release.yml`) | - | `CARGO_REGISTRY_TOKEN` |
+| crates.io | `Cargo.toml` | - | crates.io (`publish-crates` in `release.yml`) | - | `CRATES_TOKEN` |
 | WinGet | `dist/winget/*.yaml` | `scripts/generate-winget.sh` | microsoft/winget-pkgs PR (winget-releaser) | `winget` | `WINGET_TOKEN` |
 | Chocolatey | `dist/chocolatey/` | `scripts/generate-chocolatey.sh` | push.chocolatey.org | `chocolatey` | `CHOCOLATEY_API_KEY` |
 | Homebrew | `dist/homebrew/azdocli.rb` | `scripts/generate-homebrew.sh` | christianhelle/homebrew-tap `Formula/` | `homebrew` | `PACKAGES_TOKEN` |
