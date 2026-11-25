@@ -22,11 +22,16 @@ mkdir -p "$OUTPUT_DIR"
 
 # Create Homebrew formula (file name must match the class name)
 cp "$DIST_DIR/azdocli.rb" "$FORMULA"
-sed -i.bak "s/VERSION_PLACEHOLDER/$VERSION/g" "$FORMULA" && rm -f "$FORMULA".bak
-sed -i.bak "s/SHA256_MACOS_X64_PLACEHOLDER/$MACOS_X64_SHA/g" "$FORMULA" && rm -f "$FORMULA".bak
-sed -i.bak "s/SHA256_MACOS_ARM64_PLACEHOLDER/$MACOS_ARM64_SHA/g" "$FORMULA" && rm -f "$FORMULA".bak
-sed -i.bak "s/SHA256_LINUX_X64_PLACEHOLDER/$LINUX_X64_SHA/g" "$FORMULA" && rm -f "$FORMULA".bak
-sed -i.bak "s/SHA256_LINUX_ARM64_PLACEHOLDER/$LINUX_ARM64_SHA/g" "$FORMULA" && rm -f "$FORMULA".bak
+sed -i.bak "s/VERSION_PLACEHOLDER/$VERSION/g" "$FORMULA"
+rm -f "$FORMULA".bak
+sed -i.bak "s/SHA256_MACOS_X64_PLACEHOLDER/$MACOS_X64_SHA/g" "$FORMULA"
+rm -f "$FORMULA".bak
+sed -i.bak "s/SHA256_MACOS_ARM64_PLACEHOLDER/$MACOS_ARM64_SHA/g" "$FORMULA"
+rm -f "$FORMULA".bak
+sed -i.bak "s/SHA256_LINUX_X64_PLACEHOLDER/$LINUX_X64_SHA/g" "$FORMULA"
+rm -f "$FORMULA".bak
+sed -i.bak "s/SHA256_LINUX_ARM64_PLACEHOLDER/$LINUX_ARM64_SHA/g" "$FORMULA"
+rm -f "$FORMULA".bak
 
 echo "Homebrew formula created: $FORMULA"
 cat "$FORMULA"

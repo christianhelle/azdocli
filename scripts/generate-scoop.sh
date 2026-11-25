@@ -20,9 +20,12 @@ mkdir -p "$OUTPUT_DIR"
 
 # Create Scoop manifest
 cp "$DIST_DIR/azdocli.json" "$MANIFEST"
-sed -i.bak "s/VERSION_PLACEHOLDER/$VERSION/g" "$MANIFEST" && rm -f "$MANIFEST".bak
-sed -i.bak "s/SHA256_X64_PLACEHOLDER/$WIN_X64_SHA/g" "$MANIFEST" && rm -f "$MANIFEST".bak
-sed -i.bak "s/SHA256_ARM64_PLACEHOLDER/$WIN_ARM64_SHA/g" "$MANIFEST" && rm -f "$MANIFEST".bak
+sed -i.bak "s/VERSION_PLACEHOLDER/$VERSION/g" "$MANIFEST"
+rm -f "$MANIFEST".bak
+sed -i.bak "s/SHA256_X64_PLACEHOLDER/$WIN_X64_SHA/g" "$MANIFEST"
+rm -f "$MANIFEST".bak
+sed -i.bak "s/SHA256_ARM64_PLACEHOLDER/$WIN_ARM64_SHA/g" "$MANIFEST"
+rm -f "$MANIFEST".bak
 
 echo "Scoop manifest created: $MANIFEST"
 cat "$MANIFEST"

@@ -21,9 +21,12 @@ mkdir -p "$OUTPUT_DIR"
 cp -r "$DIST_DIR/." "$OUTPUT_DIR/"
 
 # Update version and SHA256
-sed -i.bak "s/VERSION_PLACEHOLDER/$VERSION/g" "$OUTPUT_DIR/azdocli.nuspec" && rm -f "$OUTPUT_DIR/azdocli.nuspec".bak
-sed -i.bak "s/VERSION_PLACEHOLDER/$VERSION/g" "$OUTPUT_DIR/tools/chocolateyinstall.ps1" && rm -f "$OUTPUT_DIR/tools/chocolateyinstall.ps1".bak
-sed -i.bak "s/SHA256_X64_PLACEHOLDER/$WIN_X64_SHA/g" "$OUTPUT_DIR/tools/chocolateyinstall.ps1" && rm -f "$OUTPUT_DIR/tools/chocolateyinstall.ps1".bak
+sed -i.bak "s/VERSION_PLACEHOLDER/$VERSION/g" "$OUTPUT_DIR/azdocli.nuspec"
+rm -f "$OUTPUT_DIR/azdocli.nuspec".bak
+sed -i.bak "s/VERSION_PLACEHOLDER/$VERSION/g" "$OUTPUT_DIR/tools/chocolateyinstall.ps1"
+rm -f "$OUTPUT_DIR/tools/chocolateyinstall.ps1".bak
+sed -i.bak "s/SHA256_X64_PLACEHOLDER/$WIN_X64_SHA/g" "$OUTPUT_DIR/tools/chocolateyinstall.ps1"
+rm -f "$OUTPUT_DIR/tools/chocolateyinstall.ps1".bak
 
 echo "Chocolatey package created in $OUTPUT_DIR/"
 ls -la "$OUTPUT_DIR/"
